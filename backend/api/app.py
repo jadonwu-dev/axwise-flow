@@ -2,13 +2,15 @@
 FastAPI application for handling interview data and analysis.
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, Form, Body
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
+from backend.services.external.auth_middleware import get_current_user
 from typing import Dict, Any, List, Literal
 import logging
 import json
 import asyncio
+import os
 from sqlalchemy.orm import Session
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -24,9 +26,6 @@ from config import validate_config, LLM_CONFIG
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Define security scheme
-security = HTTPBearer()
 
 # Define request models
 class UserInfo(BaseModel):
@@ -87,13 +86,18 @@ app = FastAPI(
     security=[{"bearerAuth": []}]
 )
 
+# Get CORS settings from environment or use defaults
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+CORS_METHODS = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
+CORS_HEADERS = os.getenv("CORS_HEADERS", "*").split(",")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins in development
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=CORS_METHODS,
+    allow_headers=CORS_HEADERS,
 )
 
 # Initialize database tables
@@ -105,16 +109,15 @@ async def upload_data(
     user_info: str = Form(description="User information in JSON format. Example: {\"user_id\": \"test_user_123\", \"email\": \"test@example.com\"}"),
     file: UploadFile = File(description="JSON file containing interview data"),
     db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Handles interview data upload (JSON format only in Phase 1).
     """
     try:
         try:
-            user_info_dict = json.loads(user_info)
-            logger.info(f"Received user_info: {user_info_dict}")
-        except json.JSONDecodeError:
+            user_info_dict = json.loads(user_info) if isinstance(user_info, str) else user_info
+        except (json.JSONDecodeError, TypeError):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid user_info format. Must be a valid JSON string."
@@ -148,27 +151,24 @@ async def upload_data(
                 detail="Invalid JSON format in uploaded file."
             )
 
-        # Ensure user exists in database
-        user = db.query(User).filter(User.user_id == user_id).first()
-        if not user:
-            user = User(
-                user_id=user_id,
-                email=user_info_dict.get('email')
-            )
-            db.add(user)
-            db.commit()
-            logger.info(f"Created new user: {user_id}")
-
         # Create interview data record
-        interview_data = InterviewData(
-            user_id=user_id,
-            input_type="json",
-            original_data=data,
-            filename=file.filename
-        )
-        db.add(interview_data)
-        db.commit()
-        db.refresh(interview_data)
+        try:
+            interview_data = InterviewData(
+                user_id=user_id,
+                input_type="json",
+                original_data=data,
+                filename=file.filename
+            )
+            db.add(interview_data)
+            db.commit()
+            db.refresh(interview_data)
+        except Exception as db_error:
+            logger.error(f"Database error: {str(db_error)}")
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error: {str(db_error)}"
+            )
 
         data_id = interview_data.data_id
         logger.info(f"Data uploaded successfully for user {user_id}. Data ID: {data_id}")
@@ -192,16 +192,12 @@ async def analyze_data(
     request: Request,
     analysis_request: AnalysisRequest,
     db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Triggers analysis of uploaded data.
     """
     try:
-        # For testing, we'll use test_user_123 as the user_id
-        user_id = "test_user_123"
-        logger.info(f"Starting analysis for user: {user_id}")
-
         # Validate configuration
         validate_config()
 
@@ -229,11 +225,11 @@ async def analyze_data(
         # Retrieve interview data
         interview_data = db.query(InterviewData).filter(
             InterviewData.data_id == data_id,
-            InterviewData.user_id == user_id
+            InterviewData.user_id == current_user.user_id
         ).first()
 
         if not interview_data:
-            logger.error(f"Interview data not found - data_id: {data_id}, user_id: {user_id}")
+            logger.error(f"Interview data not found - data_id: {data_id}, user_id: {current_user.user_id}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Interview data not found for data_id: {data_id}. Make sure you're using the correct data_id from the upload response."
@@ -315,26 +311,22 @@ async def get_results(
     result_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Retrieves analysis results.
     """
     try:
-        # For testing, we'll use test_user_123 as the user_id
-        user_id = "test_user_123"
-        logger.info(f"Fetching results for result_id: {result_id}, user: {user_id}")
-
         # Query for results with user authorization check
         analysis_result = db.query(AnalysisResult).join(
             InterviewData
         ).filter(
             AnalysisResult.result_id == result_id,
-            InterviewData.user_id == user_id
+            InterviewData.user_id == current_user.user_id
         ).first()
 
         if not analysis_result:
-            logger.error(f"Results not found - result_id: {result_id}, user_id: {user_id}")
+            logger.error(f"Results not found - result_id: {result_id}, user_id: {current_user.user_id}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Results not found for result_id: {result_id}"
