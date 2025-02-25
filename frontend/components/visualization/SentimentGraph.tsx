@@ -49,10 +49,17 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   showLegend = true,
   className,
 }) => {
+  // Ensure data has all required properties with defaults
+  const sentimentData = {
+    positive: data?.positive ?? 0.33,
+    neutral: data?.neutral ?? 0.34,
+    negative: data?.negative ?? 0.33
+  };
+  
   // Calculate percentages for display
-  const positivePercent = Math.round(data.positive * 100);
-  const neutralPercent = Math.round(data.neutral * 100);
-  const negativePercent = Math.round(data.negative * 100);
+  const positivePercent = Math.round(sentimentData.positive * 100);
+  const neutralPercent = Math.round(sentimentData.neutral * 100);
+  const negativePercent = Math.round(sentimentData.negative * 100);
 
   // Transform data for the pie chart
   const pieData = useMemo(() => [

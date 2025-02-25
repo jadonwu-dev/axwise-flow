@@ -97,6 +97,58 @@ export default function ExamplePage() {
       // Set auth token
       apiClient.setAuthToken(authToken);
       
+      try {
+        // Fetch results
+        const resultData = await apiClient.getAnalysisById(String(analysisResponse.result_id), !useMockData);
+        
+        // Ensure the data has the expected structure
+        if (resultData) {
+          // Ensure sentimentOverview exists
+          if (!resultData.sentimentOverview) {
+            resultData.sentimentOverview = {
+              positive: 0.33,
+              neutral: 0.34,
+              negative: 0.33
+            };
+          }
+          
+          // Ensure patterns have category field
+          if (resultData.patterns) {
+            resultData.patterns = resultData.patterns.map((pattern: any) => {
+              if (pattern.type && !pattern.category) {
+                return { ...pattern, category: pattern.type };
+              }
+              return pattern;
+            });
+          }
+        }
+        
+        setResults(resultData);
+      } catch (err) {
+        setError(`Failed to fetch results: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(`Failed to fetch results: ${err instanceof Error ? err.message : String(err)}`);
+      setLoading(false);
+    }
+  };
+  
+  // Handle fetching results (old version - keeping for reference)
+  const handleGetResultsOld = async () => {
+    if (!analysisResponse) {
+      setError('Please analyze the data first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Set auth token
+      apiClient.setAuthToken(authToken);
+      
       // Fetch results
       const resultData = await apiClient.getAnalysisById(String(analysisResponse.result_id), !useMockData);
       setResults(resultData);
@@ -277,7 +329,7 @@ export default function ExamplePage() {
                 </div>
                 
                 <div className="py-4">
-                  {activeTab === 'themes' && <ThemeChart data={results.themes} />}
+                  {activeTab === 'themes' && results.themes && <ThemeChart data={results.themes} />}
                   {activeTab === 'patterns' && <PatternList data={results.patterns} />}
                   {activeTab === 'sentiment' && (
                     <SentimentGraph 
