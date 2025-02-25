@@ -2,6 +2,15 @@
 
 import React, { useMemo } from 'react';
 import type {
+  BarChart as BarChartType,
+  CartesianGrid as CartesianGridType,
+  XAxis as XAxisType,
+  YAxis as YAxisType,
+  Tooltip as TooltipType,
+  Bar as BarType,
+  Cell as CellType,
+  ReferenceLine as ReferenceLineType,
+  Legend as LegendType,
 } from 'recharts';
 import { Theme } from '@/types/api';
 import {
@@ -11,6 +20,16 @@ import {
   ChartLegend,
   createLegendItems,
 } from './common';
+import {
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Bar,
+  Cell,
+  ReferenceLine,
+} from 'recharts';
 
 /**
  * Props for the ThemeChart component
@@ -111,52 +130,35 @@ export const ThemeChart: React.FC<ThemeChartProps> = ({
 
   return (
     <div className={className}>
-      {/* 
-        Note: We're using a div with custom styling instead of recharts components
-        to avoid TypeScript errors. In a real implementation, you would use:
-        
-        <ResponsiveContainer height={height}>
-          <BarChart
- data={chartData}
- margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
->
-    
-        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-            <XAxis
- dataKey="name"
- angle={-45} textAnchor="end" height={80} />  
-          <YAxis
- label={{ value: 'Frequency (%)', angle: -90, position: 'insideLeft' }} />
-            <Tooltip content={customTooltip} />
-            <ReferenceLine y={0} stroke="#666" />
-            <Bar
- dataKey="frequency"
- name="Frequency" onClick={handleBarClick}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getBarColor(entry.sentiment)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      */}
       <ResponsiveContainer height={height}>
-        <div className="w-full h-full flex flex-col">
-          <div className="flex-1 flex items-end">
-            {chartData.map((item, index) => (
-              <div 
-                key={index}
-                className="flex flex-col items-center mx-1 cursor-pointer"
-                onClick={() => handleBarClick(item)}
-              >
-                <div 
-                  className="w-12 transition-all hover:opacity-80"
-                  style={{ height: `${item.frequency * 2}px`, backgroundColor: getBarColor(item.sentiment) }}
-                />
-                <div className="text-xs mt-2 transform -rotate-45 origin-top-left w-20 truncate">{item.name}</div>
-              </div>
+        <BarChart
+          data={chartData}
+          margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+          <XAxis
+            dataKey="name"
+            angle={-45}
+            textAnchor="end"
+            height={80}
+            tick={{ fontSize: 12 }}
+          />
+          <YAxis
+            label={{ value: 'Frequency (%)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+            tick={{ fontSize: 12 }}
+          />
+          <Tooltip content={customTooltip} />
+          <ReferenceLine y={0} stroke="#666" />
+          <Bar
+            dataKey="frequency"
+            name="Frequency"
+            onClick={handleBarClick}
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={getBarColor(entry.sentiment)} />
             ))}
-          </div>
-        </div>
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
 
       {showLegend && (

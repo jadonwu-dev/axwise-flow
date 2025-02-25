@@ -2,7 +2,16 @@
 
 import React, { useMemo } from 'react';
 import { SentimentOverview, SentimentData } from '@/types/api';
-import { ResponsiveContainer, ChartLegend } from './common';
+import { ResponsiveContainer, ChartLegend, createCustomTooltip } from './common';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  Sector,
+  ResponsiveContainer as RechartsResponsiveContainer
+} from 'recharts';
 
 /**
  * Props for the SentimentGraph component
@@ -45,6 +54,18 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   const neutralPercent = Math.round(data.neutral * 100);
   const negativePercent = Math.round(data.negative * 100);
 
+  // Transform data for the pie chart
+  const pieData = useMemo(() => [
+    { name: 'Positive', value: positivePercent, color: SENTIMENT_COLORS.positive },
+    { name: 'Neutral', value: neutralPercent, color: SENTIMENT_COLORS.neutral },
+    { name: 'Negative', value: negativePercent, color: SENTIMENT_COLORS.negative },
+  ], [positivePercent, neutralPercent, negativePercent]);
+
+  // Active sector state for hover effect
+  const [activeIndex, setActiveIndex] = React.useState<number | undefined>(undefined);
+  const onPieEnter = (_: any, index: number) => setActiveIndex(index);
+  const onPieLeave = () => setActiveIndex(undefined);
+  
   // Create legend items
   const legendItems = useMemo(() => {
     return [
@@ -54,19 +75,40 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
     ];
   }, [positivePercent, neutralPercent, negativePercent]);
 
-  // Calculate the pie chart segments
-  const calculateStrokeDasharray = (percent: number) => {
-    const circumference = 2 * Math.PI * 50; // 50 is the radius
-    return `${(percent / 100) * circumference} ${circumference}`;
-  };
+  // Custom tooltip
+  const customTooltip = useMemo(
+    () =>
+      createCustomTooltip({
+        formatter: (value) => `${value}%`,
+        labelFormatter: (label) => <span className="font-medium">{label}</span>,
+      }),
+    []
+  );
 
-  // Calculate the starting position for each segment
-  const calculateStrokeDashoffset = (
-    percent: number,
-    previousPercents: number
-  ) => {
-    const circumference = 2 * Math.PI * 50;
-    return circumference - (previousPercents / 100) * circumference;
+  // Render active shape with hover effect
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value } = props;
+    
+    return (
+      <g>
+        <text x={cx} y={cy} dy={-20} textAnchor="middle" fill={fill} className="text-sm font-medium">
+          {payload.name}
+        </text>
+        <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} className="text-lg font-bold">
+          {value}%
+        </text>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + 6}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          opacity={0.8}
+        />
+      </g>
+    );
   };
 
   return (
@@ -74,58 +116,35 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
       <div className="flex flex-col md:flex-row items-center justify-between">
         <div className="w-full md:w-1/2">
           <ResponsiveContainer height={height}>
-            <div className="relative w-full h-full flex items-center justify-center">
-              {/* SVG Pie Chart */}
-              <svg viewBox="0 0 120 120" className="w-full max-w-xs">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  fill="none"
-                  stroke={SENTIMENT_COLORS.positive}
-                  strokeWidth="20"
-                  strokeDasharray={calculateStrokeDasharray(positivePercent)}
-                  className="origin-center -rotate-90"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  fill="none"
-                  stroke={SENTIMENT_COLORS.neutral}
-                  strokeWidth="20"
-                  strokeDasharray={calculateStrokeDasharray(neutralPercent)}
-                  strokeDashoffset={calculateStrokeDashoffset(
-                    neutralPercent,
-                    positivePercent
-                  )}
-                  className="origin-center -rotate-90"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  fill="none"
-                  stroke={SENTIMENT_COLORS.negative}
-                  strokeWidth="20"
-                  strokeDasharray={calculateStrokeDasharray(negativePercent)}
-                  strokeDashoffset={calculateStrokeDashoffset(
-                    negativePercent,
-                    positivePercent + neutralPercent
-                  )}
-                  className="origin-center -rotate-90"
-                />
-                <text
-                  x="60"
-                  y="60"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="text-lg font-semibold fill-foreground"
-                >
-                  Sentiment
-                </text>
-              </svg>
-            </div>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={2}
+                dataKey="value"
+                activeIndex={activeIndex}
+                activeShape={renderActiveShape}
+                onMouseEnter={onPieEnter}
+                onMouseLeave={onPieLeave}
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <text 
+                x="50%" 
+                y="50%" 
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className="text-lg font-semibold fill-foreground"
+              >
+                Sentiment
+              </text>
+              <Tooltip content={customTooltip} />
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
