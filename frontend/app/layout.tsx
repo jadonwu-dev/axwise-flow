@@ -8,13 +8,18 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Interview Analysis',
-  description: 'Analyze interview data with AI',
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: [
+  description: 'Analyze interview data with AI'
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1
+};
+
+export const themeColor = [
     { media: '(prefers-color-scheme: light)', color: 'white' },
     { media: '(prefers-color-scheme: dark)', color: '#000' },
-  ],
-};
+];
 
 interface RootLayoutProps {
   children: React.ReactNode;
