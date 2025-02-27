@@ -45,6 +45,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEFAULT_SENTIMENT_OVERVIEW = {
+    "positive": 0.33,
+    "neutral": 0.34,
+    "negative": 0.33
+}
+
+def transform_analysis_results(results):
+    """
+    Transform analysis results to conform to the DetailedAnalysisResult schema.
+    Keep this function fast for initial response - detailed processing happens in run_analysis
+    """
+    if not results:
+        return results
+        
+    import copy
+    transformed = copy.deepcopy(results)
+    
+    # Quick validation and default values - keep this fast
+    if "patterns" not in transformed or not isinstance(transformed["patterns"], list):
+        transformed["patterns"] = []
+    
+    if "themes" not in transformed or not isinstance(transformed["themes"], list):
+        transformed["themes"] = []
+        
+    if "sentiment" not in transformed or not isinstance(transformed["sentiment"], dict):
+        transformed["sentiment"] = {}
+        
+    if "sentimentOverview" not in transformed:
+        transformed["sentimentOverview"] = DEFAULT_SENTIMENT_OVERVIEW
+        
+    return transformed
+
 # Initialize FastAPI with security scheme
 app = FastAPI(
     title="Interview Analysis API",
@@ -71,18 +103,7 @@ app = FastAPI(
     license_info={
         "name": "Private",
         "url": "https://example.com/license",
-    },
-    components={
-        "securitySchemes": {
-            "bearerAuth": {
-                "type": "http",
-                "scheme": "bearer",
-                "bearerFormat": "JWT",
-                "description": "Enter your bearer token (any value for testing)",
-            }
-        }
-    },
-    security=[{"bearerAuth": []}]
+    }
 )
 
 # Get CORS settings from environment or use defaults
@@ -242,7 +263,7 @@ async def analyze_data(
         except json.JSONDecodeError as je:
             logger.error(f"JSON decode error: {str(je)}")
             raise HTTPException(
-                status_code=500,
+                status_code=500, 
                 detail="Stored data is not valid JSON."
             )
 
@@ -262,15 +283,20 @@ async def analyze_data(
         )
         try:
             db.add(analysis_result)
+            db.commit()
+            db.refresh(analysis_result)
         except Exception as db_error:
             logger.error(f"Database error creating analysis result: {str(db_error)}")
-        db.commit()
-        db.refresh(analysis_result)
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error: {str(db_error)}"
+            )
 
         result_id = analysis_result.result_id
         logger.info(f"Created analysis result record. Result ID: {result_id}")
 
-        # Run analysis asynchronously
+        # Start the analysis task
         async def run_analysis(result_id: int):
             try:
                 # Create a new session for this async task
@@ -278,6 +304,45 @@ async def analyze_data(
                 task_db = SessionLocal()
                 
                 results = await process_data(nlp_processor, llm_service, data)
+                
+                # Now do the detailed transformations here, after the initial processing
+                if results:
+                    # Process patterns
+                    for pattern in results.get("patterns", []):
+                        if isinstance(pattern, dict):
+                            if "type" in pattern and "category" not in pattern:
+                                pattern["category"] = pattern["type"]
+                            if "frequency" in pattern and isinstance(pattern["frequency"], str):
+                                try:
+                                    pattern["frequency"] = float(pattern["frequency"])
+                                except ValueError:
+                                    pattern["frequency"] = 0.5
+                            if "sentiment" in pattern:
+                                pattern["sentiment"] = (pattern["sentiment"] - 0.5) * 2
+                            if "evidence" not in pattern:
+                                pattern["evidence"] = pattern.get("examples", [])
+
+                    # Process themes
+                    for theme in results.get("themes", []):
+                        if isinstance(theme, dict):
+                            if "sentiment" in theme:
+                                theme["sentiment"] = (theme["sentiment"] - 0.5) * 2
+                            if "statements" not in theme:
+                                theme["statements"] = theme.get("examples", [])
+
+                    # Process sentiment
+                    if "sentiment" in results and isinstance(results["sentiment"], dict):
+                        sentiment_data = results["sentiment"]
+                        results["sentimentOverview"] = sentiment_data.get("breakdown", DEFAULT_SENTIMENT_OVERVIEW)
+                        if "overall" in sentiment_data:
+                            sentiment_data["overall"] = (sentiment_data["overall"] - 0.5) * 2
+                        if "supporting_statements" not in sentiment_data:
+                            sentiment_data["supporting_statements"] = {
+                                "positive": [], 
+                                "neutral": [], 
+                                "negative": []
+                            }
+                        results["sentiment"] = sentiment_data.get("details", [])
                 
                 # Update analysis result with the actual results
                 db_result = task_db.query(AnalysisResult).filter(
@@ -326,7 +391,6 @@ async def analyze_data(
             result_id=result_id,
             message=f"Analysis started. Use result_id: {result_id} to check results."
         )
-
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -335,60 +399,6 @@ async def analyze_data(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
-
-def transform_analysis_results(results):
-    """
-    Transform analysis results to conform to the DetailedAnalysisResult schema.
-    This middleware function ensures that the data from the LLM service is properly
-    formatted before validation against the Pydantic model.
-    
-    Args:
-        results (dict): The raw results from the LLM service
-        
-    Returns:
-        dict: Transformed results that conform to the DetailedAnalysisResult schema
-    """
-    if not results:
-        return results
-        
-    # Make a deep copy to avoid modifying the original
-    import copy
-    transformed = copy.deepcopy(results)
-    
-    # Fix patterns: ensure each pattern has a category field
-    if "patterns" in transformed and isinstance(transformed["patterns"], list):
-        for i, pattern in enumerate(transformed["patterns"]):
-            # If pattern has type but no category, copy type to category
-            if isinstance(pattern, dict):
-                if "type" in pattern and "category" not in pattern:
-                    pattern["category"] = pattern["type"]
-                    logger.info(f"Transformed pattern {i}: Added category from type '{pattern['type']}'")
-                
-                # Ensure frequency is a float between 0 and 1
-                if "frequency" in pattern:
-                    if isinstance(pattern["frequency"], str):
-                        try:
-                            pattern["frequency"] = float(pattern["frequency"])
-                        except ValueError:
-                            pattern["frequency"] = 0.5  # Default value
-                    
-                    # Normalize if greater than 1
-                    if pattern["frequency"] and pattern["frequency"] > 1:
-                        pattern["frequency"] = pattern["frequency"] / 100
-    
-    # Fix sentiment: ensure it's a list
-    if "sentiment" in transformed:
-        if not isinstance(transformed["sentiment"], list):
-            # If it's a dict, wrap it in a list
-            if isinstance(transformed["sentiment"], dict):
-                transformed["sentiment"] = [transformed["sentiment"]]
-                logger.info("Transformed sentiment: Converted object to array")
-            else:
-                # If it's something else, create an empty list
-                transformed["sentiment"] = []
-                logger.info("Transformed sentiment: Replaced with empty array")
-    
-    return transformed
 
 @app.get(
     "/api/results/{result_id}",
@@ -438,7 +448,6 @@ async def get_results(
             )
 
         # Format the results to match the DetailedAnalysisResult schema
-        # This makes it easier for the frontend to consume
         formatted_results = None
         if analysis_result.results:
             try:
@@ -454,8 +463,6 @@ async def get_results(
                         pass
 
                 # Format into the expected structure
-                
-                # Apply transformation middleware to ensure data conforms to schema
                 results = transform_analysis_results(results)
                 
                 formatted_results = {
@@ -466,16 +473,16 @@ async def get_results(
                     "fileSize": None,  # We don't store this currently
                     "themes": results.get("themes", []),
                     "patterns": results.get("patterns", []),
-                    "sentimentOverview": results.get("sentimentOverview", {
-                        "positive": 0.0,
-                        "neutral": 0.0,
-                        "negative": 0.0
-                    }),
-                    "sentiment": results.get("sentiment", [])
+                    "sentimentOverview": results.get("sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW),
+                    "sentiment": results.get("sentiment", []),
+                    "sentimentStatements": results.get("sentimentStatements", {
+                        "positive": [],
+                        "neutral": [],
+                        "negative": []
+                    })
                 }
                 
                 # Validate against the schema
-                # This will raise an exception if the structure doesn't match
                 DetailedAnalysisResult(**formatted_results)
                 
             except Exception as e:
@@ -489,32 +496,3 @@ async def get_results(
             result_id=analysis_result.result_id,
             analysis_date=analysis_result.analysis_date,
             results=formatted_results,
-            llm_provider=analysis_result.llm_provider,
-            llm_model=analysis_result.llm_model
-        )
-
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error retrieving results: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
-
-@app.get(
-    "/health",
-    response_model=HealthCheckResponse,
-    tags=["System"],
-    summary="Health check",
-    description="Simple health check endpoint to verify the API is running.",
-    include_in_schema=True
-)
-async def health_check():
-    """
-    Simple health check endpoint.
-    """
-    return HealthCheckResponse(
-        status="healthy",
-        timestamp=datetime.utcnow()
-    )
