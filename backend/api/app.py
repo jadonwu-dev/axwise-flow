@@ -148,69 +148,66 @@ async def upload_data(
     Handles interview data upload (JSON format only in Phase 1/2).
     """
     try:
-        # Validate file type
-        if file.content_type != "application/json":
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid file type. Must be JSON."
-            )
-
-        # Read and decode file content
-        data = await file.read()
-        if isinstance(data, bytes):
-            data = data.decode()
-
-        # Validate JSON format
+        # Read file content
+        content = await file.read()
+        
+        # Basic validation - Try to parse as JSON
         try:
-            json.loads(data)  # Just to validate JSON format
+            data = json.loads(content.decode("utf-8"))
         except json.JSONDecodeError:
             raise HTTPException(
-                status_code=400, 
-                detail="Invalid JSON format in uploaded file."
+                status_code=400,
+                detail="Invalid JSON format. Please upload a valid JSON file."
             )
-
-        # Create interview data record
-        try:
-            interview_data = InterviewData(
-                user_id=current_user.user_id,
-                input_type="json",
-                original_data=data,
-                filename=file.filename
-            )
-            db.add(interview_data)
-            db.commit()
-            db.refresh(interview_data)
-        except Exception as db_error:
-            logger.error(f"Database error: {str(db_error)}")
-            db.rollback()
+        
+        # Determine input type
+        if isinstance(data, list):
+            input_type = "json_array"
+        elif isinstance(data, dict):
+            input_type = "json_object"
+        else:
             raise HTTPException(
-                status_code=500,
-                detail=f"Database error: {str(db_error)}"
+                status_code=400,
+                detail="Unsupported JSON structure. Expected array or object."
             )
-
-        data_id = interview_data.data_id
-        logger.info(f"Data uploaded successfully for user {current_user.user_id}. Data ID: {data_id}")
-
-        return UploadResponse(
-            data_id=data_id,
-            message=f"Data uploaded successfully. Use data_id: {data_id} for analysis."
+            
+        # Save to database
+        interview_data = InterviewData(
+            user_id=current_user.user_id,
+            filename=file.filename,
+            input_type=input_type,
+            original_data=content.decode("utf-8")
         )
-
-    except HTTPException as he:
-        raise he
+        
+        db.add(interview_data)
+        db.commit()
+        db.refresh(interview_data)
+        
+        logger.info(f"Data uploaded successfully for user {current_user.user_id}. Data ID: {interview_data.data_id}")
+        
+        # Return response
+        return UploadResponse(
+            success=True,
+            message="Data uploaded successfully",
+            data_id=interview_data.data_id
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error uploading data: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            detail=f"Server error: {str(e)}"
         )
 
 @app.post(
     "/api/analyze",
     response_model=AnalysisResponse,
     tags=["Analysis"],
-    summary="Trigger data analysis",
-    description="Trigger analysis of previously uploaded interview data."
+    summary="Analyze uploaded data",
+    description="Trigger analysis of previously uploaded data using the specified LLM provider."
 )
 async def analyze_data(
     request: Request,
@@ -218,188 +215,150 @@ async def analyze_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Triggers analysis of uploaded data.
-    """
+    """Triggers analysis of uploaded data."""
     try:
         # Validate configuration
-        validate_config()
+        try:
+            validate_config()
+        except Exception as e:
+            logger.error(f"Configuration validation error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"LLM configuration error: {str(e)}"
+            )
 
-        # Get required parameters
+        # Get and validate parameters
         data_id = analysis_request.data_id
         llm_provider = analysis_request.llm_provider
         llm_model = analysis_request.llm_model or (
             "gpt-4o-2024-08-06" if llm_provider == "openai" else "gemini-2.0-flash"
         )
-
+        
         logger.info(f"Analysis parameters - data_id: {data_id}, provider: {llm_provider}, model: {llm_model}")
 
-        # Validate model name
-        if llm_provider == "openai" and llm_model != "gpt-4o-2024-08-06":
+        # Initialize services
+        try:
+            llm_service = LLMServiceFactory.create(llm_provider, LLM_CONFIG[llm_provider])
+            nlp_processor = get_nlp_processor()()
+        except Exception as e:
+            logger.error(f"Error initializing services: {str(e)}")
             raise HTTPException(
-                status_code=400,
-                detail="Invalid model name for OpenAI. Use 'gpt-4o-2024-08-06'"
-            )
-        elif llm_provider == "gemini" and llm_model != "gemini-2.0-flash":
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid model name for Google. Use 'gemini-2.0-flash'"
+                status_code=500,
+                detail=f"Failed to initialize analysis services: {str(e)}"
             )
 
-        # Retrieve interview data
+        # Get interview data
         interview_data = db.query(InterviewData).filter(
             InterviewData.data_id == data_id,
             InterviewData.user_id == current_user.user_id
         ).first()
 
         if not interview_data:
-            logger.error(f"Interview data not found - data_id: {data_id}, user_id: {current_user.user_id}")
-            raise HTTPException(
-                status_code=404,
-                detail=f"Interview data not found for data_id: {data_id}. Make sure you're using the correct data_id from the upload response."
-            )
+            raise HTTPException(status_code=404, detail="Interview data not found")
 
-        # Parse the stored JSON data
+        # Parse data
         try:
             data = json.loads(interview_data.original_data)
-            # Ensure data is a list of dictionaries
             if not isinstance(data, list):
-                data = [data]  # Wrap single object in list
-            for item in data:
-                if not isinstance(item, dict):
-                    raise ValueError("Data must be a list of dictionaries")
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON decode error: {str(je)}")
+                data = [data]
+        except Exception as e:
+            logger.error(f"Error parsing interview data: {str(e)}")
             raise HTTPException(
-                status_code=500, 
-                detail="Stored data is not valid JSON."
+                status_code=500,
+                detail="Failed to parse interview data"
             )
 
-        # Initialize services
-        llm_service = LLMServiceFactory.create(
-            llm_provider, 
-            LLM_CONFIG[llm_provider]
-        )
-        
-        nlp_processor = get_nlp_processor()()
-
-        # Create analysis result record
+        # Create initial analysis record
         analysis_result = AnalysisResult(
             data_id=data_id,
             status='processing',
             llm_provider=llm_provider,
-            llm_model=llm_model
+            llm_model=llm_model,
+            results=json.dumps({
+                "status": "processing",
+                "message": "Analysis has been initiated",
+                "progress": 0
+            })
         )
-        try:
-            db.add(analysis_result)
-            db.commit()
-            db.refresh(analysis_result)
-            result_id = analysis_result.result_id
-            logger.info(f"Created analysis result record. Result ID: {result_id}")
-        except Exception as db_error:
-            logger.error(f"Database error creating analysis result: {str(db_error)}")
-            db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database error: {str(db_error)}"
-            )
+        db.add(analysis_result)
+        db.commit()
+        db.refresh(analysis_result)
+        logger.info(f"Created analysis result record. Result ID: {analysis_result.result_id}")
 
-        # Run analysis asynchronously
-        async def run_analysis(result_id: int):
+        # Start processing in background task
+        async def process_data_task():
             try:
-                # Create a new session for this async task
-                from backend.database import SessionLocal
-                task_db = SessionLocal()
+                logger.info(f"Starting data processing for result_id: {analysis_result.result_id}")
                 
-                results = await process_data(nlp_processor, llm_service, data)
+                # Create a new session for the background task to avoid session binding issues
+                async_db = next(get_db())
+                # Get a fresh reference to the analysis result
+                task_result = async_db.query(AnalysisResult).get(analysis_result.result_id)
                 
-                # Now do the detailed transformations here, after the initial processing
-                if results:
-                    # Process patterns
-                    for pattern in results.get("patterns", []):
-                        if isinstance(pattern, dict):
-                            if "type" in pattern and "category" not in pattern:
-                                pattern["category"] = pattern["type"]
-                            if "frequency" in pattern and isinstance(pattern["frequency"], str):
-                                try:
-                                    pattern["frequency"] = float(pattern["frequency"])
-                                except ValueError:
-                                    pattern["frequency"] = 0.5
-                            if "sentiment" in pattern:
-                                pattern["sentiment"] = (pattern["sentiment"] - 0.5) * 2
-                            if "evidence" not in pattern:
-                                pattern["evidence"] = pattern.get("examples", [])
-
-                    # Process themes
-                    for theme in results.get("themes", []):
-                        if isinstance(theme, dict):
-                            if "sentiment" in theme:
-                                theme["sentiment"] = (theme["sentiment"] - 0.5) * 2
-                            if "statements" not in theme:
-                                theme["statements"] = theme.get("examples", [])
-
-                    # Process sentiment
-                    if "sentiment" in results and isinstance(results["sentiment"], dict):
-                        sentiment_data = results["sentiment"]
-                        results["sentimentOverview"] = sentiment_data.get("breakdown", DEFAULT_SENTIMENT_OVERVIEW)
-                        # Store supporting statements separately to match frontend schema
-                        results["sentimentStatements"] = sentiment_data.get("supporting_statements", {
-                            "positive": [], 
-                            "neutral": [], 
-                            "negative": []
-                        })
-                        if "overall" in sentiment_data:
-                            sentiment_data["overall"] = (sentiment_data["overall"] - 0.5) * 2
-                        # Extract details for sentiment timeline
-                        results["sentiment"] = sentiment_data.get("details", [])
+                # Update status to in-progress with 5% completion
+                task_result.results = json.dumps({
+                    "status": "processing",
+                    "message": "Analysis in progress",
+                    "progress": 5
+                })
+                async_db.commit()
                 
-                # Update analysis result with the actual results
-                db_result = task_db.query(AnalysisResult).filter(
-                    AnalysisResult.result_id == result_id,
-                    AnalysisResult.status != 'failed'  # Only update if not failed
-                ).first()
-                if db_result:
-                    db_result.results = results
-                    db_result.status = 'completed'
-                    db_result.completed_at = datetime.utcnow()
-                    task_db.commit()  # Use synchronous commit
-                    logger.info(f"Analysis completed for result_id: {result_id}")
+                # Process data
+                result = await process_data(
+                    data=data,
+                    llm_service=llm_service,
+                    nlp_processor=nlp_processor
+                )
                 
-                # Close the session
-                task_db.close()
-                    
-                return results
+                # Update database record with results
+                task_result.results = json.dumps(result)
+                task_result.status = "completed"
+                task_result.completed_at = datetime.utcnow()
+                async_db.commit()
+                logger.info(f"Analysis completed for result_id: {task_result.result_id}")
+                
             except Exception as e:
                 logger.error(f"Error during analysis: {str(e)}")
-                if result_id:
-                    # Update result status to error
-                    task_db = next(get_db())
-                    result = task_db.query(AnalysisResult).filter(AnalysisResult.result_id == result_id).first()
-                    if result:
-                        result.status = "error"
-                        result.error_message = str(e)
-                        task_db.commit()
+                try:
+                    # Create a new session if needed
+                    if not 'async_db' in locals():
+                        async_db = next(get_db())
+                        task_result = async_db.query(AnalysisResult).get(analysis_result.result_id)
+                    
+                    # Update database record with error
+                    task_result.results = json.dumps({
+                        "status": "error",
+                        "message": f"Analysis failed: {str(e)}",
+                        "error_details": str(e)
+                    })
+                    task_result.status = "failed"
+                    task_result.completed_at = datetime.utcnow()
+                    async_db.commit()
+                except Exception as inner_e:
+                    logger.error(f"Failed to update error status: {str(inner_e)}")
             finally:
-                if 'task_db' in locals() and task_db:
-                    try:
-                        task_db.close()
-                    except:
-                        pass
-            
-        # Start the analysis task
-        asyncio.create_task(run_analysis(result_id))
+                # Ensure the session is closed
+                if 'async_db' in locals():
+                    async_db.close()
 
+        # Start background task
+        asyncio.create_task(process_data_task())
+
+        # Return response
         return AnalysisResponse(
-            result_id=result_id,
-            message=f"Analysis started. Use result_id: {result_id} to check results."
+            success=True,
+            message="Analysis started",
+            result_id=analysis_result.result_id
         )
-    except HTTPException as he:
-        raise he
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        logger.error(f"Error triggering analysis: {str(e)}")
+        logger.error(f"Error initiating analysis: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            detail=f"Server error: {str(e)}"
         )
 
 @app.get(
@@ -497,9 +456,9 @@ async def get_results(
         # Map API status to schema status values for consistent response
         status = "completed"
         if analysis_result.status == 'processing':
-            status = "pending"
+            status = "processing"
         elif analysis_result.status == 'error':
-            status = "failed"
+            status = "error"
             
         return ResultResponse(
             status=status,
@@ -621,9 +580,9 @@ async def list_analyses(
                 
             # Map API status to schema status values
             if result.status == 'processing':
-                formatted_result["status"] = "pending"
+                formatted_result["status"] = "pending"  # This needs to stay as "pending" for DetailedAnalysisResult schema
             elif result.status == 'error':
-                formatted_result["status"] = "failed"
+                formatted_result["status"] = "failed"  # This needs to stay as "failed" for DetailedAnalysisResult schema
                 
             formatted_results.append(formatted_result)
             

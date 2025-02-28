@@ -1,8 +1,10 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.pool import QueuePool
 import os
 import logging
+from urllib.parse import quote_plus
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -11,12 +13,40 @@ logger = logging.getLogger(__name__)
 # Create Base instance
 Base = declarative_base()
 
-# PostgreSQL URL
-REDACTED_DATABASE_URL=***REDACTED***
+# Get database configuration from environment variables
+db_user = os.getenv("DB_USER", "postgres")
+db_REDACTED_PASSWORD = os.getenv("DB_PASSWORD", "")
+db_host = os.getenv("DB_HOST", "localhost")
+db_port = os.getenv("DB_PORT", "5432")
+db_name = os.getenv("DB_NAME", "interview_insights")
 
+# Construct database URL
+if db_REDACTED_PASSWORD:
+    safe_REDACTED_PASSWORD = quote_plus(db_REDACTED_PASSWORD)
+    REDACTED_DATABASE_URL=***REDACTED***
+else:
+    REDACTED_DATABASE_URL=***REDACTED***
+
+# Override with full URL if provided
+REDACTED_DATABASE_URL=***REDACTED*** REDACTED_DATABASE_URL)
+
+***REMOVED*** engine configuration
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+
+# Engine creation
 try:
-    # Create engine for PostgreSQL
-    engine = create_engine(REDACTED_DATABASE_URL)
+    # Create engine for PostgreSQL with connection pooling
+    engine = create_engine(
+        REDACTED_DATABASE_URL,
+        poolclass=QueuePool,
+        pool_size=DB_POOL_SIZE,
+        max_overflow=DB_MAX_OVERFLOW,
+        pool_timeout=DB_POOL_TIMEOUT,
+        pool_pre_ping=True,  # Verify connections before using them
+        connect_args={"application_name": "DesignAId Backend"}
+    )
 
     # Test the connection
     with engine.connect() as conn:
@@ -33,6 +63,9 @@ def get_db():
     """
     Dependency function to get a database session.
     Used with FastAPI's dependency injection system.
+    
+    Yields:
+        Session: A SQLAlchemy database session
     """
     db = SessionLocal()
     try:
@@ -44,20 +77,36 @@ def create_tables():
     """
     Creates all tables defined in the models.
     Should be called when the application starts.
+    
+    Returns:
+        bool: True if tables were created successfully, False otherwise
     """
     try:
         # Import models here to avoid circular imports
         from .models import User, InterviewData, AnalysisResult, Persona  # noqa
         
+        # Create tables
         Base.metadata.create_all(bind=engine)
         logger.info("Successfully created all database tables")
+        return True
     except Exception as e:
-        logger.error(f"Error creating tables: {str(e)}")
-        raise
+        logger.error(f"Error creating database tables: {str(e)}")
+        return False
 
 def init_db():
     """
-    Initialize the database, creating all tables.
-    Call this when setting up the application.
+    Initialize the database connection and tables.
+    
+    Returns:
+        bool: True if initialization was successful, False otherwise
     """
-    create_tables()
+    try:
+        # Test the database connection
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        # Create the tables
+        return create_tables()
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        return False

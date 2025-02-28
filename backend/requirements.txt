@@ -1,0 +1,30 @@
+# FastAPI and web server
+fastapi==0.109.1
+uvicorn[standard]==0.25.0
+python-multipart==0.0.6
+
+***REMOVED***
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+httpx==0.25.2
+requests==2.31.0
+
+# LLM Services
+openai==1.12.0
+google-generativeai==0.3.2
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.5.3
+numpy==1.26.3
+pandas==2.1.4
+beautifulsoup4==4.12.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.23.2
+pytest-mock==3.12.0 

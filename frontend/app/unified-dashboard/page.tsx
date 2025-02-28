@@ -8,10 +8,25 @@ import { useToast } from '@/components/providers/toast-provider';
 import UnifiedVisualization from '@/components/visualization/UnifiedVisualization';
 import { apiClient } from '@/lib/apiClient';
 import { UploadResponse, AnalysisResponse, DetailedAnalysisResult } from '@/types/api';
+import { useAuth } from '@clerk/nextjs';
+import { redirect } from 'next/navigation';
 
 export default function UnifiedDashboard() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { userId, isLoaded } = useAuth();
+  
+  // Handle authentication redirection within useEffect
+  useEffect(() => {
+    if (isLoaded && !userId) {
+      router.push('/sign-in');
+    }
+  }, [isLoaded, userId, router]);
+  
+  // If still loading auth state, show spinner
+  if (!isLoaded) {
+    return <LoadingSpinner />;
+  }
   
   // State for active tab
   const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
