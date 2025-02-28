@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from './providers';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { AppLayout } from '@/components/layout/AppLayout';
 import '@/styles/globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -30,7 +31,11 @@ export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ErrorBoundary>
-          <Providers>{children}</Providers>
+          <Providers>
+            <AppLayout>
+              {children}
+            </AppLayout>
+          </Providers>
         </ErrorBoundary>
       </body>
     </html>

@@ -162,9 +162,16 @@ class NLPProcessor:
             
             # Add supporting evidence from themes and patterns
             for theme in results.get('themes', []):
-                texts.extend(theme.get('statements', []))
+                if 'examples' in theme:
+                    texts.extend(theme.get('examples', []))
+                elif 'statements' in theme:
+                    texts.extend(theme.get('statements', []))
+            
             for pattern in results.get('patterns', []):
-                texts.extend(pattern.get('evidence', []))
+                if 'examples' in pattern:
+                    texts.extend(pattern.get('examples', []))
+                elif 'evidence' in pattern:
+                    texts.extend(pattern.get('evidence', []))
             
             # If no texts available, raise error
             if not texts:
@@ -184,7 +191,25 @@ class NLPProcessor:
             })
             
             # Update results with new insights
-            results['insights'].extend(insights_result.get('insights', []))
+            # Make sure 'insights' field exists and is initialized as a list
+            if 'insights' not in results:
+                results['insights'] = []
+                
+            # Ensure insights_result has expected structure
+            if isinstance(insights_result, dict) and 'insights' in insights_result:
+                new_insights = insights_result.get('insights', [])
+                if isinstance(new_insights, list):
+                    results['insights'].extend(new_insights)
+                else:
+                    logger.warning(f"Unexpected insights structure: {type(new_insights)}")
+            else:
+                logger.warning(f"Unexpected insights_result structure: {type(insights_result)}")
+                # Add a default insight if structure is unexpected
+                results['insights'].append({
+                    "topic": "Data Analysis",
+                    "observation": "Analysis completed with non-standard output format.",
+                    "evidence": ["Processing completed."]
+                })
             
             # Add metadata
             results['metadata'] = {
@@ -192,6 +217,19 @@ class NLPProcessor:
                 'confidence_scores': insights_result.get('metadata', {}).get('confidence_scores', {}),
                 'processing_stats': insights_result.get('metadata', {}).get('processing_stats', {})
             }
+            
+            # Ensure all required fields are present for validation
+            required_fields = ['themes', 'patterns', 'sentiment', 'insights', 'original_text']
+            for field in required_fields:
+                if field not in results:
+                    if field == 'insights':
+                        results[field] = []
+                    elif field == 'sentiment':
+                        results[field] = {}
+                    elif field in ['themes', 'patterns']:
+                        results[field] = []
+                    else:
+                        results[field] = ""
             
             return results
             

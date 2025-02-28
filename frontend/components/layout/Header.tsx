@@ -1,18 +1,27 @@
 'use client';
 
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { UserProfile } from '../user-profile';
+import { useClerk, SignedIn } from '@clerk/nextjs';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 /**
  * Application header component containing navigation, theme controls, and user authentication
  */
 export function Header(): JSX.Element {
   const { theme, setTheme } = useTheme();
+  const { signOut } = useClerk();
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  const handleSignOut = () => {
+    signOut(() => {
+      window.location.href = '/sign-in';
+    });
   };
 
   return (
@@ -33,11 +42,26 @@ export function Header(): JSX.Element {
           <Link href="/unified-dashboard?tab=history" className="text-foreground/80 hover:text-foreground">
             History
           </Link>
+          <Link href="/unified-dashboard?tab=documentation" className="text-foreground/80 hover:text-foreground">
+            Documentation
+          </Link>
         </nav>
 
         {/* Right side: User profile and theme toggle */}
         <div className="flex items-center space-x-4">
           <UserProfile />
+          
+          <SignedIn>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleSignOut}
+              className="flex items-center gap-1"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden md:inline">Logout</span>
+            </Button>
+          </SignedIn>
           
           {/* Theme Toggle */}
           <button

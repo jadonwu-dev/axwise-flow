@@ -28,8 +28,29 @@ export default function UnifiedDashboard() {
     return <LoadingSpinner />;
   }
   
+  // Get tab from URL query parameter
+  useEffect(() => {
+    // Check for URL parameters
+    const searchParams = new URLSearchParams(window.location.search);
+    const tabParam = searchParams.get('tab');
+    
+    if (tabParam) {
+      // Set the active tab based on URL parameter
+      if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload') {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
+  
   // State for active tab
   const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
+  
+  // Update URL when tab changes
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', activeTab);
+    window.history.pushState({}, '', url);
+  }, [activeTab]);
   
   // State for visualization sub-tab
   const [visualizationTab, setVisualizationTab] = useState<'themes' | 'patterns' | 'sentiment'>('themes');
@@ -322,26 +343,6 @@ export default function UnifiedDashboard() {
           disabled={!results}
         >
           Visualize Results
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-medium ${
-            activeTab === 'history'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Analysis History
-        </button>
-        <button
-          onClick={() => setActiveTab('documentation')}
-          className={`px-4 py-2 font-medium ${
-            activeTab === 'documentation'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Documentation
         </button>
       </div>
 
