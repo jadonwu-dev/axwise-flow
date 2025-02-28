@@ -2,14 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { useToast } from '@/components/providers/toast-provider';
 import UnifiedVisualization from '@/components/visualization/UnifiedVisualization';
 import { apiClient } from '@/lib/apiClient';
 import { UploadResponse, AnalysisResponse, DetailedAnalysisResult } from '@/types/api';
 import { useAuth } from '@clerk/nextjs';
-import { redirect } from 'next/navigation';
 
 export default function UnifiedDashboard() {
   const router = useRouter();
@@ -37,7 +35,7 @@ export default function UnifiedDashboard() {
     if (tabParam) {
       // Set the active tab based on URL parameter
       if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload') {
-        setActiveTab(tabParam);
+        setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
       }
     }
   }, []);
@@ -317,6 +315,15 @@ export default function UnifiedDashboard() {
       }
     });
 
+  // Debug logging for sentiment visualization
+  useEffect(() => {
+    if (results && visualizationTab === 'sentiment') {
+      console.log('Results object for sentiment visualization:', results);
+      console.log('SentimentStatements in results:', results.sentimentStatements);
+      console.log('Sentiment overview:', results.sentimentOverview);
+    }
+  }, [results, visualizationTab]);
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-bold mb-8">Interview Insight Analyst</h1>
@@ -343,6 +350,26 @@ export default function UnifiedDashboard() {
           disabled={!results}
         >
           Visualize Results
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`px-4 py-2 font-medium ${
+            activeTab === 'history'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          History
+        </button>
+        <button
+          onClick={() => setActiveTab('documentation')}
+          className={`px-4 py-2 font-medium ${
+            activeTab === 'documentation'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Documentation
         </button>
       </div>
 
@@ -553,9 +580,9 @@ export default function UnifiedDashboard() {
                       overview: results.sentimentOverview,
                       details: results.sentiment,
                       statements: results.sentimentStatements || {
-                        positive: results.sentiment.filter(s => s.score > 0.2).map(s => s.text).slice(0, 5),
-                        neutral: results.sentiment.filter(s => s.score >= -0.2 && s.score <= 0.2).map(s => s.text).slice(0, 5),
-                        negative: results.sentiment.filter(s => s.score < -0.2).map(s => s.text).slice(0, 5)
+                        positive: [],
+                        neutral: [],
+                        negative: []
                       }
                     }}
                     className="mt-4"

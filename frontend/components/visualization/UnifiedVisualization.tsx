@@ -86,7 +86,18 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
 
   // Get supporting statements for sentiment data
   const sentimentStatements = useMemo(() => {
-    return sentimentData.statements || { positive: [], neutral: [], negative: [] };
+    // Add logging to debug statement extraction
+    console.log("Received sentiment statements from props:", sentimentData.statements);
+    
+    const result = sentimentData.statements || { positive: [], neutral: [], negative: [] };
+    
+    // Log the processed statements
+    console.log("Sentiment statements to be used:", result);
+    console.log("Positive statements count:", result.positive?.length || 0);
+    console.log("Neutral statements count:", result.neutral?.length || 0);
+    console.log("Negative statements count:", result.negative?.length || 0);
+    
+    return result;
   }, [sentimentData.statements]);
 
   // Summary chart data (for the top visualization)
@@ -200,21 +211,27 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
 
   // Render sentiment statements
   const renderSentimentItems = (statements: string[], sentimentType: 'positive' | 'neutral' | 'negative') => {
-    if (statements.length === 0) {
+    console.log(`Rendering ${sentimentType} sentiment statements:`, statements);
+    
+    if (!statements || statements.length === 0) {
+      console.log(`No ${sentimentType} statements found`);
       return <p className="text-sm text-gray-500 italic">No {sentimentType} statements found</p>;
     }
 
     return (
       <ul className="space-y-2">
-        {statements.map((statement, idx) => (
-          <li 
-            key={idx}
-            className="p-3 rounded-md text-sm"
-            style={{ backgroundColor: `${SENTIMENT_COLORS[sentimentType]}15` }}
-          >
-            {statement}
-          </li>
-        ))}
+        {statements.map((statement, idx) => {
+          console.log(`Rendering statement ${idx}:`, statement);
+          return (
+            <li 
+              key={idx}
+              className="p-3 rounded-md text-sm"
+              style={{ backgroundColor: `${SENTIMENT_COLORS[sentimentType]}15` }}
+            >
+              {statement}
+            </li>
+          );
+        })}
       </ul>
     );
   };

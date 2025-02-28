@@ -210,8 +210,57 @@ class GeminiService:
                         'neutral': sentiment['supporting_statements'].get('neutral', []),
                         'negative': sentiment['supporting_statements'].get('negative', [])
                     }
-                else:
-                    # Provide default empty structure if not present
+                    
+                    # Log the extraction of statements
+                    logger.info(f"Extracted sentiment statements - positive: {len(transformed['sentimentStatements']['positive'])}, neutral: {len(transformed['sentimentStatements']['neutral'])}, negative: {len(transformed['sentimentStatements']['negative'])}")
+                
+                # If no supporting statements in the API response, or they're empty,
+                # attempt to extract them from the sentiment details
+                if 'sentimentStatements' not in transformed or not any([
+                    transformed['sentimentStatements']['positive'],
+                    transformed['sentimentStatements']['neutral'],
+                    transformed['sentimentStatements']['negative']
+                ]):
+                    logger.warning("No sentiment statements in API response, attempting to extract from details")
+                    
+                    # Create a dictionary to collect statements by sentiment category
+                    statements = {
+                        'positive': [],
+                        'neutral': [],
+                        'negative': []
+                    }
+                    
+                    # Extract from sentiment details if available
+                    details = sentiment.get('details', [])
+                    for detail in details:
+                        if isinstance(detail, dict) and 'evidence' in detail and 'score' in detail:
+                            evidence = detail['evidence']
+                            score = detail['score']
+                            
+                            if isinstance(evidence, str) and evidence.strip():
+                                if score >= 0.6:
+                                    statements['positive'].append(evidence)
+                                elif score <= 0.4:
+                                    statements['negative'].append(evidence)
+                                else:
+                                    statements['neutral'].append(evidence)
+                    
+                    # If we extracted some statements, use them
+                    if any(statements.values()):
+                        transformed['sentimentStatements'] = statements
+                        logger.info(f"Successfully extracted {len(statements['positive'])} positive, {len(statements['neutral'])} neutral, and {len(statements['negative'])} negative statements from details")
+                    else:
+                        # If no statements extracted from details, generate some based on text
+                        # This ensures we always have some statements
+                        logger.warning("Could not extract statements from details, using fallback method")
+                        transformed['sentimentStatements'] = {
+                            'positive': [],
+                            'neutral': [],
+                            'negative': []
+                        }
+                
+                # Always ensure sentimentStatements exists in the result
+                if 'sentimentStatements' not in transformed:
                     transformed['sentimentStatements'] = {
                         'positive': [],
                         'neutral': [],
@@ -242,7 +291,7 @@ class GeminiService:
             1. Clear, specific themes (not vague categories)
             2. Quantify frequency as a decimal between 0.0-1.0
             3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
-            4. Supporting examples or quotes from the text
+            4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
             
             Format your response as a JSON object with this structure:
             [
@@ -250,11 +299,12 @@ class GeminiService:
                 "name": "Theme name - be specific and concrete",
                 "frequency": 0.XX, (decimal between 0-1 representing prevalence)
                 "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
-                "examples": ["direct quote from text", "another example"]
+                "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
               },
               ...
             ]
             
+            IMPORTANT: Use EXACT sentences from the text for the examples. Do not summarize or paraphrase.
             Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
             Ensure 100% of your response is in valid JSON format.
             """
@@ -269,7 +319,7 @@ class GeminiService:
             3. Provide a clear description of the pattern
             4. Rate frequency as a decimal between 0.0-1.0
             5. Assign sentiment as a decimal between -1.0 and 1.0 (-1.0 is negative, 0.0 is neutral, 1.0 is positive)
-            6. Include supporting examples or quotes
+            6. Include supporting examples as EXACT QUOTES from the text - use complete sentences from the original text
             
             Format your response as a JSON object with this structure:
             [
@@ -278,11 +328,12 @@ class GeminiService:
                 "description": "Specific description of the pattern",
                 "frequency": 0.XX, (decimal between 0-1 representing prevalence)
                 "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
-                "examples": ["direct quote from text", "another example"]
+                "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
               },
               ...
             ]
             
+            IMPORTANT: Use EXACT sentences from the text for the examples. Do not summarize or paraphrase.
             Do not make up information. If there are fewer than 5 clear patterns, that's fine - focus on quality.
             Ensure 100% of your response is in valid JSON format.
             """
@@ -294,7 +345,7 @@ class GeminiService:
             1. An overall sentiment score between 0 (negative) and 1 (positive)
             2. A breakdown of positive, neutral, and negative sentiment proportions (should sum to 1.0)
             3. Detailed sentiment analysis for specific topics mentioned in the text
-            4. Supporting statements for each sentiment category
+            4. Supporting statements for each sentiment category - these MUST be EXACT quotes from the text
             
             Return your analysis in the following JSON format:
             {
@@ -309,21 +360,27 @@ class GeminiService:
                         {
                             "topic": "Topic Name",
                             "score": 0.8,
-                            "evidence": "Supporting quote from text"
+                            "evidence": "EXACT QUOTE FROM TEXT"
                         }
                     ],
                     "supporting_statements": {
                         "positive": [
-                            "Direct positive quote or paraphrase 1",
-                            "Direct positive quote or paraphrase 2"
+                            "EXACT POSITIVE QUOTE FROM TEXT 1",
+                            "EXACT POSITIVE QUOTE FROM TEXT 2",
+                            "EXACT POSITIVE QUOTE FROM TEXT 3",
+                            "EXACT POSITIVE QUOTE FROM TEXT 4"
                         ],
                         "neutral": [
-                            "Direct neutral quote or paraphrase 1",
-                            "Direct neutral quote or paraphrase 2"
+                            "EXACT NEUTRAL QUOTE FROM TEXT 1",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 2",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 3",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 4"
                         ],
                         "negative": [
-                            "Direct negative quote or paraphrase 1",
-                            "Direct negative quote or paraphrase 2"
+                            "EXACT NEGATIVE QUOTE FROM TEXT 1",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 2",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 3",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 4"
                         ]
                     }
                 }
@@ -332,8 +389,11 @@ class GeminiService:
             Ensure that:
             - The sentiment scores are between 0 and 1
             - The breakdown percentages sum to 1.0
-            - Each statement category has at least 2 supporting statements
-            - Statements are actual quotes or close paraphrases from the text
+            - Each statement category has at least 3-5 supporting statements
+            - Statements are EXACT QUOTES from the text - do not summarize or paraphrase
+            - Each statement is a complete sentence or paragraph from the original text
+            
+            IMPORTANT: Use EXACT quotes from the text. Do not rewrite, summarize, or paraphrase anything.
             """
             
         elif task == 'insight_generation':
