@@ -33,12 +33,16 @@ class OpenAIService:
         """Analyze data using OpenAI."""
         task = data.get('task', '')
         text = data.get('text', '')
+        use_answer_only = data.get('use_answer_only', False)
         
         if not text:
             logger.warning("Empty text provided for analysis")
             return {'error': 'No text provided'}
 
-        logger.info(f"Running {task} on text length: {len(text)}")
+        if use_answer_only:
+            logger.info(f"Running {task} on answer-only text length: {len(text)}")
+        else:
+            logger.info(f"Running {task} on text length: {len(text)}")
         
         try:
             # Prepare system message based on task
@@ -134,39 +138,60 @@ class OpenAIService:
             return {"error": f"OpenAI API error: {str(e)}"}
     
     def _get_system_message(self, task: str, data: Dict[str, Any]) -> str:
-        """Get the system message for the OpenAI API based on the task."""
+        """Get system message for OpenAI based on task"""
+        use_answer_only = data.get('use_answer_only', False)
+        
         if task == 'theme_analysis':
-            return """
-            You are an expert interview analyst. Analyze the provided interview text and identify the main themes.
-            For each theme, provide:
-            1. A descriptive name that clearly captures the theme's essence
-            2. A frequency score between 0 and 1 indicating how prevalent the theme is
-            3. A list of keywords associated with the theme
-            4. A sentiment score between 0 and 1 (0 being very negative, 0.5 being neutral, 1 being very positive)
-            5. A list of 2-3 relevant supporting statements from the text
-            
-            Return your analysis in the following JSON format:
-            {
-                "themes": [
-                    {
-                        "name": "Theme Name",
-                        "frequency": 0.75,
-                        "keywords": ["keyword1", "keyword2", "keyword3"],
-                        "sentiment": 0.8,
-                        "statements": [
-                            "Direct quote or paraphrase from text 1",
-                            "Direct quote or paraphrase from text 2"
-                        ]
-                    }
+            if use_answer_only:
+                return """
+                Analyze the interview responses to identify key themes. Your analysis should be comprehensive and based EXCLUSIVELY on the ANSWER-ONLY content provided, which contains only the original responses without questions or contextual text.
+                
+                Focus on extracting:
+                1. Clear, specific themes (not vague categories)
+                2. Quantify frequency as a decimal between 0.0-1.0
+                3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
+                4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
+                
+                Format your response as a JSON object with this structure:
+                [
+                  {
+                    "name": "Theme name - be specific and concrete",
+                    "frequency": 0.XX, (decimal between 0-1 representing prevalence)
+                    "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
+                    "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
+                  },
+                  ...
                 ]
-            }
-            
-            Ensure that:
-            - Theme names are concise but descriptive
-            - Frequency scores accurately reflect theme prevalence
-            - Sentiment scores reflect the emotional tone (0 negative, 0.5 neutral, 1 positive)
-            - Supporting statements are actual quotes or close paraphrases
-            """
+                
+                IMPORTANT: Use EXACT sentences from the ORIGINAL ANSWERS for the examples. Do not summarize or paraphrase.
+                Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
+                Ensure 100% of your response is in valid JSON format.
+                """
+            else:
+                return """
+                Analyze the interview transcripts to identify key themes. Your analysis should be comprehensive and based on actual content from the transcripts.
+                
+                Focus on extracting:
+                1. Clear, specific themes (not vague categories)
+                2. Quantify frequency as a decimal between 0.0-1.0
+                3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
+                4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
+                
+                Format your response as a JSON object with this structure:
+                [
+                  {
+                    "name": "Theme name - be specific and concrete",
+                    "frequency": 0.XX, (decimal between 0-1 representing prevalence)
+                    "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
+                    "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
+                  },
+                  ...
+                ]
+                
+                IMPORTANT: Use EXACT sentences from the text for the examples. Do not summarize or paraphrase.
+                Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
+                Ensure 100% of your response is in valid JSON format.
+                """
             
         elif task == 'pattern_recognition':
             return """

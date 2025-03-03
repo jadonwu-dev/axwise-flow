@@ -55,12 +55,16 @@ class GeminiService:
         """
         task = data.get('task', '')
         text = data.get('text', '')
+        use_answer_only = data.get('use_answer_only', False)
         
         if not text:
             logger.warning("Empty text provided for analysis")
             return {'error': 'No text provided'}
 
-        logger.info(f"Running {task} on text length: {len(text)}")
+        if use_answer_only:
+            logger.info(f"Running {task} on answer-only text length: {len(text)}")
+        else:
+            logger.info(f"Running {task} on text length: {len(text)}")
         
         try:
             # Prepare system message based on task
@@ -283,31 +287,59 @@ class GeminiService:
     
     def _get_system_message(self, task: str, data: Dict[str, Any]) -> str:
         """Get identical prompts as OpenAI service for consistent responses"""
+        use_answer_only = data.get('use_answer_only', False)
+        
         if task == 'theme_analysis':
-            return """
-            Analyze the interview transcripts to identify key themes. Your analysis should be comprehensive and based on actual content from the transcripts.
-            
-            Focus on extracting:
-            1. Clear, specific themes (not vague categories)
-            2. Quantify frequency as a decimal between 0.0-1.0
-            3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
-            4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
-            
-            Format your response as a JSON object with this structure:
-            [
-              {
-                "name": "Theme name - be specific and concrete",
-                "frequency": 0.XX, (decimal between 0-1 representing prevalence)
-                "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
-                "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
-              },
-              ...
-            ]
-            
-            IMPORTANT: Use EXACT sentences from the text for the examples. Do not summarize or paraphrase.
-            Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
-            Ensure 100% of your response is in valid JSON format.
-            """
+            if use_answer_only:
+                return """
+                Analyze the interview responses to identify key themes. Your analysis should be comprehensive and based EXCLUSIVELY on the ANSWER-ONLY content provided, which contains only the original responses without questions or contextual text.
+                
+                Focus on extracting:
+                1. Clear, specific themes (not vague categories)
+                2. Quantify frequency as a decimal between 0.0-1.0
+                3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
+                4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
+                
+                Format your response as a JSON object with this structure:
+                [
+                  {
+                    "name": "Theme name - be specific and concrete",
+                    "frequency": 0.XX, (decimal between 0-1 representing prevalence)
+                    "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
+                    "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
+                  },
+                  ...
+                ]
+                
+                IMPORTANT: Use EXACT sentences from the ORIGINAL ANSWERS for the examples. Do not summarize or paraphrase.
+                Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
+                Ensure 100% of your response is in valid JSON format.
+                """
+            else:
+                return """
+                Analyze the interview transcripts to identify key themes. Your analysis should be comprehensive and based on actual content from the transcripts.
+                
+                Focus on extracting:
+                1. Clear, specific themes (not vague categories)
+                2. Quantify frequency as a decimal between 0.0-1.0
+                3. Sentiment association with each theme (as a decimal between -1.0 and 1.0, where -1.0 is negative, 0.0 is neutral, and 1.0 is positive)
+                4. Supporting examples as DIRECT QUOTES from the text - use exact sentences, not summarized or paraphrased versions
+                
+                Format your response as a JSON object with this structure:
+                [
+                  {
+                    "name": "Theme name - be specific and concrete",
+                    "frequency": 0.XX, (decimal between 0-1 representing prevalence)
+                    "sentiment": X.XX, (decimal between -1 and 1, where -1 is negative, 0 is neutral, 1 is positive)
+                    "examples": ["EXACT QUOTE FROM TEXT", "ANOTHER EXACT QUOTE"]
+                  },
+                  ...
+                ]
+                
+                IMPORTANT: Use EXACT sentences from the text for the examples. Do not summarize or paraphrase.
+                Do not make up information. If there are fewer than 5 clear themes, that's fine - focus on quality. 
+                Ensure 100% of your response is in valid JSON format.
+                """
             
         elif task == 'pattern_recognition':
             return """
@@ -496,16 +528,33 @@ class GeminiService:
         # Extract text from interview data
         texts = []
         for item in data:
-            if 'responses' in item:
+            # Direct question-answer format (flat format)
+            if 'question' in item and 'answer' in item:
+                question = item.get('question', '')
+                answer = item.get('answer', '')
+                if question and answer:
+                    texts.append(f"Q: {question}\nA: {answer}")
+            # Nested responses format
+            elif 'responses' in item:
                 for response in item['responses']:
                     question = response.get('question', '')
                     answer = response.get('answer', '')
                     if question and answer:
                         texts.append(f"Q: {question}\nA: {answer}")
-            # Only use text field if no responses are available
+            # Only use text field if no question/answer or responses structure
             elif 'text' in item:
                 texts.append(item['text'])
         
+        if not texts:
+            logger.warning("No text content found in data for analysis")
+            return {
+                "themes": [],
+                "patterns": [],
+                "sentimentOverview": {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
+                "sentiment": [],
+                "insights": []
+            }
+            
         combined_text = "\n\n".join(texts)
         
         # Run theme, pattern, and sentiment analysis in parallel

@@ -18,8 +18,31 @@ class NLPProcessor:
         try:
             # Extract text content
             texts = []
-            if isinstance(data, dict):
+            answer_texts = []  # Explicitly track answer-only content for theme analysis
+            
+            # Handle different data formats
+            if isinstance(data, list):
+                # Handle flat format (list of question-answer pairs)
+                logger.info("Processing flat format data (list of items)")
+                for item in data:
+                    if isinstance(item, dict):
+                        question = item.get('question', '')
+                        answer = item.get('answer', '')
+                        if question and answer:
+                            combined_text = f"Q: {question}\nA: {answer}"
+                            texts.append(combined_text)
+                            # Store answer-only version for theme analysis
+                            answer_texts.append(answer)
+                        elif 'text' in item:
+                            # Fallback to text field only if no Q&A structure
+                            texts.append(item['text'])
+                            # Add to answer_texts as fallback, but log this case
+                            logger.warning(f"Using text field as fallback for theme analysis: {item['text'][:50]}...")
+                            answer_texts.append(item['text'])
+            elif isinstance(data, dict):
+                # Handle nested format with interviews containing responses
                 if 'interviews' in data:
+                    logger.info("Processing nested format data with 'interviews' field")
                     for interview in data['interviews']:
                         if 'responses' in interview:
                             for response in interview['responses']:
@@ -28,43 +51,53 @@ class NLPProcessor:
                                 answer = response.get('answer', '')
                                 # Only use answer field, completely ignore text field
                                 if question and answer:
-                                    texts.append(f"Q: {question}\nA: {answer}")
+                                    combined_text = f"Q: {question}\nA: {answer}"
+                                    texts.append(combined_text)
+                                    # Store answer-only version for theme analysis
+                                    answer_texts.append(answer)
                         # Use text only if no responses
                         elif 'text' in interview:
                             texts.append(interview['text'])
+                            # Add to answer_texts as fallback, but log this case
+                            logger.warning(f"Using text field as fallback for theme analysis: {interview['text'][:50]}...")
+                            answer_texts.append(interview['text'])
+                # Handle direct flat format passed as a dict
+                elif isinstance(data, dict) and 'question' in data and 'answer' in data:
+                    logger.info("Processing single Q&A item")
+                    question = data.get('question', '')
+                    answer = data.get('answer', '')
+                    if question and answer:
+                        combined_text = f"Q: {question}\nA: {answer}"
+                        texts.append(combined_text)
+                        # Store answer-only version for theme analysis
+                        answer_texts.append(answer)
                 # Use text only if no interviews structure
                 elif 'text' in data:
                     texts.append(data['text'])
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict):
-                        if 'responses' in item:
-                            for response in item['responses']:
-                                # Combine question and answer for better context
-                                question = response.get('question', '')
-                                answer = response.get('answer', '')
-                                # Only use answer field, completely ignore text field
-                                if question and answer:
-                                    texts.append(f"Q: {question}\nA: {answer}")
-                        # Use text only if no responses
-                        elif 'text' in item:
-                            texts.append(item['text'])
+                    # Add to answer_texts as fallback, but log this case
+                    logger.warning(f"Using text field as fallback for theme analysis: {data['text'][:50]}...")
+                    answer_texts.append(data['text'])
             
             if not texts:
-                logger.warning(f"No text content found in data. Data structure: {data}")
+                logger.error(f"No text content found in data. Data structure: {data}")
                 raise ValueError("No text content found in data")
             
             # Process with LLM
             combined_text = "\n\n".join(filter(None, texts))
-            logger.info(f"Processing {len(texts)} text segments")
+            # Create answer-only combined text for theme analysis
+            answer_only_text = "\n\n".join(filter(None, answer_texts))
+            
+            logger.info(f"Processing {len(texts)} text segments and {len(answer_texts)} answer-only segments")
             
             start_time = asyncio.get_event_loop().time()
             logger.info("Starting parallel analysis")
             
             # Run theme, pattern, and sentiment analysis in parallel
+            # For theme analysis, use answer_only_text
             themes_task = llm_service.analyze({
                 'task': 'theme_analysis',
-                'text': combined_text
+                'text': answer_only_text,  # Use answer-only text for themes
+                'use_answer_only': True  # Flag to indicate answer-only processing
             })
             patterns_task = llm_service.analyze({
                 'task': 'pattern_recognition',
