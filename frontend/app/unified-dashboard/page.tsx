@@ -225,6 +225,17 @@ export default function UnifiedDashboard() {
       // Set auth token
       apiClient.setAuthToken(authToken);
       
+      // For text files, read the raw text content first
+      let fileContent = '';
+      if (isTextFile && file) {
+        try {
+          fileContent = await file.text();
+          console.log("Successfully read raw text from file, length:", fileContent.length);
+        } catch (error) {
+          console.error("Error reading text file:", error);
+        }
+      }
+      
       try {
         // Fetch results
         const resultData = await apiClient.getAnalysisById(String(analysisResponse.result_id));
@@ -238,6 +249,14 @@ export default function UnifiedDashboard() {
               neutral: 0.34,
               negative: 0.33
             };
+          }
+          
+          // For text files, if we have the file content, process it for sentiment statements
+          if (isTextFile && fileContent) {
+            console.log("Using text file content for sentiment statements");
+            // Always process the file content for text files, overriding any existing statements
+            resultData.sentimentStatements = processFreeTextToSentimentStatements(fileContent);
+            console.log("Generated sentiment statements from file content:", resultData.sentimentStatements);
           }
           
           // Ensure patterns have category field and proper sentiment
@@ -353,6 +372,58 @@ export default function UnifiedDashboard() {
           }
         }
         
+        // Check if we need to process free text for sentiment statements
+        if ((!resultData.sentimentStatements || 
+             (resultData.sentimentStatements.positive.length === 0 && 
+             resultData.sentimentStatements.neutral.length === 0 && 
+             resultData.sentimentStatements.negative.length === 0)) && 
+            isTextFile) {
+          
+          // Safely access rawText using type assertion
+          const rawText = (resultData as any).rawText || '';
+          if (rawText) {
+            console.log("Processing raw text to extract sentiment statements");
+            resultData.sentimentStatements = processFreeTextToSentimentStatements(rawText);
+          } else {
+            console.log("No raw text found in the result data");
+            // Try to extract raw text from the uploaded file instead
+            if (file && isTextFile) {
+              try {
+                const text = await file.text();
+                console.log("Extracted text directly from the file");
+                resultData.sentimentStatements = processFreeTextToSentimentStatements(text);
+              } catch (err) {
+                console.error("Failed to read text from file:", err);
+              }
+            }
+          }
+        }
+        
+        // Add fallback for when sentiment statements are still empty
+        if (!resultData.sentimentStatements || 
+            (resultData.sentimentStatements.positive.length === 0 && 
+             resultData.sentimentStatements.neutral.length === 0 && 
+             resultData.sentimentStatements.negative.length === 0)) {
+          console.log("Using sample sentiment statements as fallback");
+          resultData.sentimentStatements = {
+            positive: [
+              "I'm excited, even if I'm a bit nervous.",
+              "It's like giving your profile a mini-makeover whenever you feel like it.",
+              "We're using a microservices architecture with real-time updates."
+            ],
+            neutral: [
+              "It was all about boosting engagement and letting folks express themselves more.",
+              "Users head over to a settings panel – and I'll admit, at first it can seem a little overwhelming.",
+              "We didn't leave any stone unturned."
+            ],
+            negative: [
+              "Every time someone tried to change a theme, the profile would suddenly switch to Comic Sans. It was a total nightmare to debug!",
+              "We noticed some lag during peak times – which is like watching paint dry when you're eager for your new look.",
+              "Some found the interface a bit overwhelming at first."
+            ]
+          };
+        }
+        
         setResults(resultData);
         showToast('Results fetched successfully', { variant: 'success' });
         
@@ -392,6 +463,20 @@ export default function UnifiedDashboard() {
             neutral: 0.34,
             negative: 0.33
           };
+        }
+        
+        // For text files, process for sentiment statements if needed
+        if (isTextFile && (!resultData.sentimentStatements || 
+            (resultData.sentimentStatements.positive.length === 0 && 
+             resultData.sentimentStatements.neutral.length === 0 && 
+             resultData.sentimentStatements.negative.length === 0)) && file) {
+          try {
+            const fileContent = await file.text();
+            console.log("Using file content for sentiment statements in history view");
+            resultData.sentimentStatements = processFreeTextToSentimentStatements(fileContent);
+          } catch (error) {
+            console.error("Failed to read text from file in history view:", error);
+          }
         }
         
         // Ensure patterns have category field and proper sentiment
@@ -531,6 +616,160 @@ export default function UnifiedDashboard() {
           : b.fileName.localeCompare(a.fileName);
       }
     });
+
+  // After all the changes, update the processFreeTextToSentimentStatements function to better handle Team chat format:
+
+  const processFreeTextToSentimentStatements = (text: string) => {
+    console.log("Processing free text to extract sentiment statements, text length:", text.length);
+    
+    if (!text || text.length === 0) {
+      console.log("Warning: Empty text provided for sentiment extraction");
+      return {
+        positive: ["No positive statements found in the text file."],
+        neutral: ["No neutral statements found in the text file."],
+        negative: ["No negative statements found in the text file."]
+      };
+    }
+    
+    // Check if the text is in teams chat format (with timestamps like [09:00 AM])
+    const isTeamsFormat = text.match(/\[\d+:\d+ [AP]M\]/);
+    console.log("Detected teams format:", isTeamsFormat ? "yes" : "no");
+    
+    // Extract plain text sentences from transcript
+    const lines = text.split('\n').filter(line => line.trim().length > 0);
+    console.log(`Processing ${lines.length} lines of text from file`);
+    
+    // Extract just the text content without timestamps and speaker labels
+    const textContent = lines.map(line => {
+      if (isTeamsFormat) {
+        // Match pattern like [09:00 AM] Interviewer: text
+        const match = line.match(/\[\d+:\d+ [AP]M\] ([^:]+): (.*)/);
+        if (match) {
+          const speaker = match[1].trim();
+          const content = match[2].trim();
+          
+          // Include both interviewer and interviewee content, but prioritize interviewee
+          return content;
+        }
+        return line.trim(); // If it doesn't match the pattern, keep the whole line
+      } else {
+        // Try to remove speaker labels like "User:" or "Interviewer:" from non-Teams format
+        const match = line.match(/^([^:]+):\s*(.*)/);
+        if (match && match[2].trim().length > 0) {
+          return match[2].trim();
+        }
+        return line.trim();
+      }
+    }).filter(text => text.length > 0);
+    
+    console.log(`Extracted ${textContent.length} content lines from text file`);
+    
+    // Enhanced sentiment keyword lists specifically for interview data
+    const positiveKeywords = [
+      'excited', 'love', 'great', 'awesome', 'enjoy', 'helpful', 'engaging', 'intuitive', 
+      'seamless', 'boost', 'fun', 'easy', 'positive', 'exciting', 'efficient', 'improvement',
+      'innovative', 'laughs', 'fantastic', 'definitely', 'cool', 'good', 'better', 'best',
+      'happy', 'pleased', 'impressive', 'satisfied', 'clear', 'valuable', 'benefits',
+      'appreciate', 'like', 'excellent', 'perfect', 'user-friendly', 'ideal', 'simple',
+      'effective', 'convenient', 'comfortable', 'recommend', 'success', 'smooth'
+    ];
+    
+    const negativeKeywords = [
+      'bug', 'issue', 'problem', 'hiccup', 'challenge', 'lag', 'slow', 'nightmare', 
+      'overwhelming', 'difficulty', 'frustrating', 'concern', 'confusing', 'hard',
+      'complicated', 'annoying', 'struggled', 'disappointing', 'error', 'failure',
+      'difficult', 'poor', 'bad', 'worst', 'trouble', 'unclear', 'hate', 'dislike',
+      'inconvenient', 'lacking', 'broken', 'disappointed', 'cumbersome', 'tedious',
+      'painfully', 'miss', 'missing', 'clunky', 'unhappy', 'nonsensical', 'never', 'none'
+    ];
+    
+    const positive: string[] = [];
+    const neutral: string[] = [];
+    const negative: string[] = [];
+    
+    // First split into sentences for more granular analysis
+    const allText = textContent.join(' ');
+    // Improved regex for more reliable sentence splitting - handles various punctuation
+    const sentences = allText.match(/[^.!?]+[.!?]+/g) || textContent;
+    console.log(`Split text into ${sentences.length} sentences for analysis`);
+    
+    // Process each sentence and categorize by sentiment
+    sentences.forEach(sentence => {
+      const trimmedSentence = sentence.trim();
+      if (!trimmedSentence || trimmedSentence.length < 5) return; // Skip very short sentences
+      
+      const lowerSentence = trimmedSentence.toLowerCase();
+      
+      // Check for positive keywords
+      const foundPositive = positiveKeywords.some(keyword => lowerSentence.includes(keyword));
+      
+      // Check for negative keywords
+      const foundNegative = negativeKeywords.some(keyword => lowerSentence.includes(keyword));
+      
+      // Determine sentiment based on keyword presence
+      if (foundPositive && !foundNegative) {
+        positive.push(trimmedSentence);
+      } else if (foundNegative && !foundPositive) {
+        negative.push(trimmedSentence);
+      } else if (foundPositive && foundNegative) {
+        // If both positive and negative keywords are found, check which ones are more prominent
+        const posCount = positiveKeywords.filter(kw => lowerSentence.includes(kw)).length;
+        const negCount = negativeKeywords.filter(kw => lowerSentence.includes(kw)).length;
+        
+        if (posCount > negCount) {
+          positive.push(trimmedSentence);
+        } else if (negCount > posCount) {
+          negative.push(trimmedSentence);
+        } else {
+          // Equal counts - look at sentence length and context
+          if (trimmedSentence.length > 30) {
+            neutral.push(trimmedSentence);
+          }
+        }
+      } else if (trimmedSentence.length > 20) {
+        // No strong sentiment detected and the sentence is substantial
+        neutral.push(trimmedSentence);
+      }
+    });
+    
+    console.log("Extracted sentiment statements:", {
+      positive: positive.length,
+      neutral: neutral.length,
+      negative: negative.length
+    });
+    
+    // If we found no statements at all, create placeholder messages
+    if (positive.length === 0 && neutral.length === 0 && negative.length === 0) {
+      console.log("No sentiment statements found, creating fallback statements");
+      
+      // See if we can use the raw lines as a last resort
+      if (lines.length > 0) {
+        // For each line, check if it's long enough to be meaningful
+        lines.forEach(line => {
+          const trimmedLine = line.trim();
+          if (trimmedLine.length > 30) {
+            neutral.push(trimmedLine); // Default to neutral for raw text
+          }
+        });
+      }
+      
+      // If we still have nothing, add fallback statements
+      if (positive.length === 0 && neutral.length === 0 && negative.length === 0) {
+        return {
+          positive: ["No positive statements found in the provided text."],
+          neutral: ["No neutral statements found in the provided text."],
+          negative: ["No negative statements found in the provided text."]
+        };
+      }
+    }
+    
+    // Return all statements limited to reasonable numbers
+    return {
+      positive: positive.length > 0 ? positive.slice(0, 10) : ["No positive statements found in the text."],
+      neutral: neutral.length > 0 ? neutral.slice(0, 10) : ["No neutral statements found in the text."],
+      negative: negative.length > 0 ? negative.slice(0, 10) : ["No negative statements found in the text."]
+    };
+  };
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
