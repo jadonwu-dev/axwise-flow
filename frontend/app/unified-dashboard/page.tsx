@@ -251,6 +251,37 @@ export default function UnifiedDashboard() {
               text: item.text || ''
             };
           });
+          
+          // Ensure sentimentStatements exist or create them from sentiment data
+          if (!resultData.sentimentStatements) {
+            console.log('Generating sentiment statements from sentiment data');
+            
+            // Group sentiment data by score into positive, neutral, and negative
+            const positive: string[] = [];
+            const neutral: string[] = [];
+            const negative: string[] = [];
+            
+            resultData.sentiment.forEach((item: any) => {
+              const text = item.text || '';
+              if (!text) return; // Skip empty statements
+              
+              const score = item.score || 0;
+              if (score >= 0.2) positive.push(text);
+              else if (score <= -0.2) negative.push(text);
+              else neutral.push(text);
+            });
+            
+            resultData.sentimentStatements = {
+              positive,
+              neutral,
+              negative
+            };
+            
+            console.log('Generated sentiment statements:', resultData.sentimentStatements);
+          } else {
+            // Keep existing sentiment statements unedited
+            console.log('Using existing sentiment statements from API');
+          }
         }
         
         setResults(resultData);
@@ -282,6 +313,82 @@ export default function UnifiedDashboard() {
       
       // Fetch results
       const resultData = await apiClient.getAnalysisById(id);
+      
+      // Ensure the data has the expected structure
+      if (resultData) {
+        // Ensure sentimentOverview exists
+        if (!resultData.sentimentOverview) {
+          resultData.sentimentOverview = {
+            positive: 0.33,
+            neutral: 0.34,
+            negative: 0.33
+          };
+        }
+        
+        // Ensure patterns have category field and proper sentiment
+        if (resultData.patterns) {
+          resultData.patterns = resultData.patterns.map((pattern: any) => {
+            // Use pattern.type as category if missing
+            if (pattern.type && !pattern.category) {
+              pattern.category = pattern.type;
+            }
+            
+            // Ensure sentiment is normalized between -1 and 1
+            if (typeof pattern.sentiment === 'number') {
+              if (pattern.sentiment > 1) pattern.sentiment = 1;
+              if (pattern.sentiment < -1) pattern.sentiment = -1;
+            }
+            
+            return pattern;
+          });
+        }
+        
+        // Ensure sentiment is always an array
+        if (!Array.isArray(resultData.sentiment)) {
+          resultData.sentiment = [];
+        }
+        
+        // Process sentiment data to ensure proper formatting for visualization
+        resultData.sentiment = resultData.sentiment.map((item: any) => {
+          return {
+            ...item,
+            score: typeof item.score === 'number' ? item.score : 0,
+            text: item.text || ''
+          };
+        });
+        
+        // Ensure sentimentStatements exist or create them from sentiment data
+        if (!resultData.sentimentStatements) {
+          console.log('Generating sentiment statements from sentiment data');
+          
+          // Group sentiment data by score into positive, neutral, and negative
+          const positive: string[] = [];
+          const neutral: string[] = [];
+          const negative: string[] = [];
+          
+          resultData.sentiment.forEach((item: any) => {
+            const text = item.text || '';
+            if (!text) return; // Skip empty statements
+            
+            const score = item.score || 0;
+            if (score >= 0.2) positive.push(text);
+            else if (score <= -0.2) negative.push(text);
+            else neutral.push(text);
+          });
+          
+          resultData.sentimentStatements = {
+            positive,
+            neutral,
+            negative
+          };
+          
+          console.log('Generated sentiment statements:', resultData.sentimentStatements);
+        } else {
+          // Keep existing sentiment statements unedited
+          console.log('Using existing sentiment statements from API');
+        }
+      }
+      
       setResults(resultData);
       showToast('Analysis loaded successfully', { variant: 'success' });
       

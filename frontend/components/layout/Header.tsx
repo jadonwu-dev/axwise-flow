@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 /**
- * Application header component containing navigation, theme controls, and user authentication
+ * Application header component containing theme controls and user authentication
+ * Navigation links have been temporarily removed as they were not working properly
  */
 export function Header(): JSX.Element {
   const { theme, setTheme } = useTheme();
@@ -34,18 +35,7 @@ export function Header(): JSX.Element {
           </h1>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="hidden md:flex items-center space-x-6">
-          <Link href="/unified-dashboard" className="text-foreground/80 hover:text-foreground">
-            Dashboard
-          </Link>
-          <Link href="/unified-dashboard?tab=history" className="text-foreground/80 hover:text-foreground">
-            History
-          </Link>
-          <Link href="/unified-dashboard?tab=documentation" className="text-foreground/80 hover:text-foreground">
-            Documentation
-          </Link>
-        </nav>
+        {/* Navigation Links removed as they were not working correctly */}
 
         {/* Right side: User profile and theme toggle */}
         <div className="flex items-center space-x-4">
