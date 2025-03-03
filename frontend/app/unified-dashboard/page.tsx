@@ -14,41 +14,8 @@ export default function UnifiedDashboard() {
   const { showToast } = useToast();
   const { userId, isLoaded } = useAuth();
   
-  // Handle authentication redirection within useEffect
-  useEffect(() => {
-    if (isLoaded && !userId) {
-      router.push('/sign-in');
-    }
-  }, [isLoaded, userId, router]);
-  
-  // If still loading auth state, show spinner
-  if (!isLoaded) {
-    return <LoadingSpinner />;
-  }
-  
-  // Get tab from URL query parameter
-  useEffect(() => {
-    // Check for URL parameters
-    const searchParams = new URLSearchParams(window.location.search);
-    const tabParam = searchParams.get('tab');
-    
-    if (tabParam) {
-      // Set the active tab based on URL parameter
-      if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload') {
-        setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
-      }
-    }
-  }, []);
-  
   // State for active tab
   const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
-  
-  // Update URL when tab changes
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', activeTab);
-    window.history.pushState({}, '', url);
-  }, [activeTab]);
   
   // State for visualization sub-tab
   const [visualizationTab, setVisualizationTab] = useState<'themes' | 'patterns' | 'sentiment'>('themes');
@@ -70,7 +37,94 @@ export default function UnifiedDashboard() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<Error | null>(null);
+  
+  // Handle authentication redirection within useEffect
+  useEffect(() => {
+    if (isLoaded && !userId) {
+      router.push('/sign-in');
+    }
+  }, [isLoaded, userId, router]);
+  
+  // Get tab from URL query parameter
+  useEffect(() => {
+    // Only run on the client side
+    if (typeof window !== 'undefined') {
+      // Check for URL parameters
+      const searchParams = new URLSearchParams(window.location.search);
+      const tabParam = searchParams.get('tab');
+      
+      if (tabParam) {
+        // Set the active tab based on URL parameter
+        if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload') {
+          setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
+        }
+      }
+    }
+  }, []);
+  
+  // Update URL when tab changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', activeTab);
+      window.history.pushState({}, '', url);
+    }
+  }, [activeTab]);
+  
+  // Fetch analysis history
+  useEffect(() => {
+    async function fetchAnalyses() {
+      try {
+        setHistoryLoading(true);
+        setHistoryError(null);
+        
+        // Set auth token
+        apiClient.setAuthToken(authToken);
+        
+        // Use the API client to fetch real data
+        try {
+          const apiParams = {
+            sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
+            sortDirection: sortDirection,
+            status: filterStatus === 'all' ? undefined : filterStatus,
+          };
+          
+          const data = await apiClient.listAnalyses(apiParams);
+          setAnalyses(data);
+        } catch (apiError) {
+          console.error('API error:', apiError);
+          setHistoryError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
+          showToast('Failed to fetch analysis history', { variant: 'error' });
+        }
+        
+        setHistoryLoading(false);
+      } catch (err) {
+        console.error('Error fetching analyses:', err);
+        setHistoryError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
+        setHistoryLoading(false);
+        showToast('Failed to load analyses', { variant: 'error' });
+      }
+    }
 
+    if (activeTab === 'history') {
+      fetchAnalyses();
+    }
+  }, [activeTab, showToast, sortBy, sortDirection, filterStatus, authToken]);
+  
+  // Debug logging for sentiment visualization
+  useEffect(() => {
+    if (results && visualizationTab === 'sentiment') {
+      console.log('Results object for sentiment visualization:', results);
+      console.log('SentimentStatements in results:', results.sentimentStatements);
+      console.log('Sentiment overview:', results.sentimentOverview);
+    }
+  }, [results, visualizationTab]);
+  
+  // If still loading auth state, show spinner
+  if (!isLoaded) {
+    return <LoadingSpinner />;
+  }
+  
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -217,46 +271,6 @@ export default function UnifiedDashboard() {
     }
   };
 
-  // Fetch analysis history
-  useEffect(() => {
-    async function fetchAnalyses() {
-      try {
-        setHistoryLoading(true);
-        setHistoryError(null);
-        
-        // Set auth token
-        apiClient.setAuthToken(authToken);
-        
-        // Use the API client to fetch real data
-        try {
-          const apiParams = {
-            sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
-            sortDirection: sortDirection,
-            status: filterStatus === 'all' ? undefined : filterStatus,
-          };
-          
-          const data = await apiClient.listAnalyses(apiParams);
-          setAnalyses(data);
-        } catch (apiError) {
-          console.error('API error:', apiError);
-          setHistoryError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
-          showToast('Failed to fetch analysis history', { variant: 'error' });
-        }
-        
-        setHistoryLoading(false);
-      } catch (err) {
-        console.error('Error fetching analyses:', err);
-        setHistoryError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
-        setHistoryLoading(false);
-        showToast('Failed to load analyses', { variant: 'error' });
-      }
-    }
-
-    if (activeTab === 'history') {
-      fetchAnalyses();
-    }
-  }, [activeTab, showToast, sortBy, sortDirection, filterStatus, authToken]);
-
   // Load an analysis from history
   const loadAnalysisFromHistory = async (id: string) => {
     try {
@@ -314,15 +328,6 @@ export default function UnifiedDashboard() {
           : b.fileName.localeCompare(a.fileName);
       }
     });
-
-  // Debug logging for sentiment visualization
-  useEffect(() => {
-    if (results && visualizationTab === 'sentiment') {
-      console.log('Results object for sentiment visualization:', results);
-      console.log('SentimentStatements in results:', results.sentimentStatements);
-      console.log('Sentiment overview:', results.sentimentOverview);
-    }
-  }, [results, visualizationTab]);
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
