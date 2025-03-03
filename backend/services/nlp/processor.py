@@ -21,35 +21,34 @@ class NLPProcessor:
             if isinstance(data, dict):
                 if 'interviews' in data:
                     for interview in data['interviews']:
-                        if 'text' in interview:
-                            texts.append(interview['text'])
-                        elif 'responses' in interview:
+                        if 'responses' in interview:
                             for response in interview['responses']:
                                 # Combine question and answer for better context
                                 question = response.get('question', '')
                                 answer = response.get('answer', '')
-                                text = response.get('text', '')
+                                # Only use answer field, completely ignore text field
                                 if question and answer:
                                     texts.append(f"Q: {question}\nA: {answer}")
-                                if text:
-                                    texts.append(text)
+                        # Use text only if no responses
+                        elif 'text' in interview:
+                            texts.append(interview['text'])
+                # Use text only if no interviews structure
                 elif 'text' in data:
                     texts.append(data['text'])
             elif isinstance(data, list):
                 for item in data:
                     if isinstance(item, dict):
-                        if 'text' in item:
-                            texts.append(item['text'])
-                        elif 'responses' in item:
+                        if 'responses' in item:
                             for response in item['responses']:
                                 # Combine question and answer for better context
                                 question = response.get('question', '')
                                 answer = response.get('answer', '')
-                                text = response.get('text', '')
+                                # Only use answer field, completely ignore text field
                                 if question and answer:
                                     texts.append(f"Q: {question}\nA: {answer}")
-                                if text:
-                                    texts.append(text)
+                        # Use text only if no responses
+                        elif 'text' in item:
+                            texts.append(item['text'])
             
             if not texts:
                 logger.warning(f"No text content found in data. Data structure: {data}")

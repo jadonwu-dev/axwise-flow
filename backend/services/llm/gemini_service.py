@@ -496,14 +496,15 @@ class GeminiService:
         # Extract text from interview data
         texts = []
         for item in data:
-            if 'text' in item:
-                texts.append(item['text'])
-            elif 'responses' in item:
+            if 'responses' in item:
                 for response in item['responses']:
                     question = response.get('question', '')
                     answer = response.get('answer', '')
                     if question and answer:
                         texts.append(f"Q: {question}\nA: {answer}")
+            # Only use text field if no responses are available
+            elif 'text' in item:
+                texts.append(item['text'])
         
         combined_text = "\n\n".join(texts)
         
