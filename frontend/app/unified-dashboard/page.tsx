@@ -8,6 +8,10 @@ import UnifiedVisualization from '@/components/visualization/UnifiedVisualizatio
 import { apiClient } from '@/lib/apiClient';
 import { UploadResponse, AnalysisResponse, DetailedAnalysisResult } from '@/types/api';
 import { useAuth } from '@clerk/nextjs';
+import { ThemeChart } from '@/components/visualization/ThemeChart';
+import { PatternList } from '@/components/visualization/PatternList';
+import { SentimentGraph } from '@/components/visualization/SentimentGraph';
+import { PersonaList } from '@/components/visualization/PersonaList';
 
 export default function UnifiedDashboard() {
   const router = useRouter();
@@ -15,10 +19,10 @@ export default function UnifiedDashboard() {
   const { userId, isLoaded } = useAuth();
   
   // State for active tab
-  const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation' | 'personas'>('upload');
   
   // State for visualization sub-tab
-  const [visualizationTab, setVisualizationTab] = useState<'themes' | 'patterns' | 'sentiment'>('themes');
+  const [visualizationTab, setVisualizationTab] = useState<'themes' | 'patterns' | 'sentiment' | 'personas'>('themes');
   
   // Upload and analysis state
   const [file, setFile] = useState<File | null>(null);
@@ -56,8 +60,8 @@ export default function UnifiedDashboard() {
       
       if (tabParam) {
         // Set the active tab based on URL parameter
-        if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload') {
-          setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
+        if (tabParam === 'history' || tabParam === 'documentation' || tabParam === 'visualize' || tabParam === 'upload' || tabParam === 'personas') {
+          setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation' | 'personas');
         }
       }
     }
@@ -880,6 +884,16 @@ export default function UnifiedDashboard() {
         >
           Documentation
         </button>
+        <button
+          onClick={() => setActiveTab('personas')}
+          className={`px-4 py-2 font-medium ${
+            activeTab === 'personas'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Personas
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -1063,6 +1077,16 @@ export default function UnifiedDashboard() {
                   >
                     Sentiment
                   </button>
+                  <button
+                    onClick={() => setVisualizationTab('personas')}
+                    className={`px-4 py-2 font-medium ${
+                      visualizationTab === 'personas'
+                        ? 'text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Personas
+                  </button>
                 </div>
 
                 {/* Visualization Content */}
@@ -1070,7 +1094,6 @@ export default function UnifiedDashboard() {
                   <UnifiedVisualization
                     type="themes"
                     themesData={results.themes}
-                    className="mt-4"
                   />
                 )}
                 
@@ -1078,7 +1101,6 @@ export default function UnifiedDashboard() {
                   <UnifiedVisualization
                     type="patterns"
                     patternsData={results.patterns}
-                    className="mt-4"
                   />
                 )}
                 
@@ -1089,12 +1111,18 @@ export default function UnifiedDashboard() {
                       overview: results.sentimentOverview,
                       details: results.sentiment,
                       statements: results.sentimentStatements || {
-                        positive: [],
-                        neutral: [],
-                        negative: []
+                        positive: results.sentiment.filter(s => s.score > 0.2).map(s => s.text).slice(0, 5),
+                        neutral: results.sentiment.filter(s => s.score >= -0.2 && s.score <= 0.2).map(s => s.text).slice(0, 5),
+                        negative: results.sentiment.filter(s => s.score < -0.2).map(s => s.text).slice(0, 5)
                       }
                     }}
-                    className="mt-4"
+                  />
+                )}
+
+                {visualizationTab === 'personas' && (
+                  <UnifiedVisualization
+                    type="personas"
+                    personasData={results.personas || []}
                   />
                 )}
               </div>

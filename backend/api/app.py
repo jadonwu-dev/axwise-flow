@@ -482,66 +482,42 @@ async def get_results(
 
         # Format the results to match the DetailedAnalysisResult schema
         formatted_results = None
-        if analysis_result.results:
-            try:
-                # Ensure results have the expected structure
-                results = analysis_result.results
-
-                # If results is a string (e.g., JSON string), try to parse it
-                if isinstance(results, str):
-                    try:
-                        results = json.loads(results)
-                    except json.JSONDecodeError:
-                        # If it's not valid JSON, use as is
-                        pass
-
-                # Format into the expected structure
-                results = transform_analysis_results(results)
-                
-                formatted_results = {
-                    "id": str(analysis_result.result_id),
-                    "status": "completed",
-                    "createdAt": analysis_result.analysis_date.isoformat(),
-                    "fileName": getattr(analysis_result.interview_data, 'filename', 'Unknown'),
-                    "fileSize": None,  # We don't store this currently
-                    "themes": results.get("themes", []),
-                    "patterns": results.get("patterns", []),
-                    "sentimentOverview": results.get("sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW),
-                    "sentiment": results.get("sentiment", []),
-                    "sentimentStatements": results.get("sentimentStatements",  {
-                        "positive": [],
-                        "neutral": [],
-                        "negative": []
-                    })
-                }
-                
-                # Validate against the schema
-                DetailedAnalysisResult(**formatted_results)
-                
-            except Exception as e:
-                logger.warning(f"Error formatting results: {str(e)}")
-                # Fall back to the raw results if formatting fails
-                formatted_results = analysis_result.results
-
-        logger.info(f"Successfully retrieved results for result_id: {result_id}")
         
-        # Map API status to schema status values for consistent response
-        status = "completed"
-        if analysis_result.status == 'processing':
-            status = "processing"
-        elif analysis_result.status == 'error':
-            status = "error"
+        try:
+            # Parse stored results to Python dict
+            results_dict = (
+                json.loads(analysis_result.results) 
+                if isinstance(analysis_result.results, str)
+                else analysis_result.results
+            )
             
-        return ResultResponse(
-            status=status,
-            result_id=analysis_result.result_id,
-            analysis_date=analysis_result.analysis_date,
-            results=formatted_results,
-            llm_provider=analysis_result.llm_provider,
-        )
-
-    except HTTPException as he:
-        raise he
+            # Create formatted response
+            formatted_results = {
+                "status": "completed",
+                "result_id": analysis_result.result_id,
+                "analysis_date": analysis_result.analysis_date,
+                "results": {
+                    "themes": results_dict.get("themes", []),
+                    "patterns": results_dict.get("patterns", []),
+                    "sentiment": results_dict.get("sentiment", []),
+                    "sentimentOverview": results_dict.get("sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW),
+                    "insights": results_dict.get("insights", []),
+                    "personas": results_dict.get("personas", []),  # Include personas in response
+                },
+                "llm_provider": analysis_result.llm_provider,
+                "llm_model": analysis_result.llm_model
+            }
+            
+            return formatted_results
+            
+        except (json.JSONDecodeError, AttributeError, KeyError) as e:
+            logger.error(f"Error formatting results: {str(e)}")
+            return ResultResponse(
+                status="error",
+                result_id=analysis_result.result_id,
+                error=f"Error formatting results: {str(e)}"
+            )
+            
     except Exception as e:
         logger.error(f"Error retrieving results: {str(e)}")
         raise HTTPException(
@@ -582,7 +558,7 @@ async def list_analyses(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Lists all analyses performed by the current user.
+    Retrieves a list of analyses performed by the user.
     """
     try:
         # Build the query with user authorization check
@@ -631,6 +607,7 @@ async def list_analyses(
                 "patterns": [],
                 "sentimentOverview": DEFAULT_SENTIMENT_OVERVIEW,
                 "sentiment": [],
+                "personas": [],  # Initialize empty personas list
             }
             
             # Add results data if available
@@ -645,6 +622,9 @@ async def list_analyses(
                     formatted_result["sentimentOverview"] = results_data["sentimentOverview"]
                 if "sentiment" in results_data:
                     formatted_result["sentiment"] = results_data["sentiment"] if isinstance(results_data["sentiment"], list) else []
+                # Add personas if available
+                if "personas" in results_data:
+                    formatted_result["personas"] = results_data["personas"] if isinstance(results_data["personas"], list) else []
             
             # Add error info if available - fixed to use the results dict for error
             if result.status == 'failed' and result.results and isinstance(result.results, dict) and "error" in result.results:

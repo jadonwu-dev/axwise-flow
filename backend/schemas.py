@@ -136,6 +136,87 @@ class SentimentOverview(BaseModel):
         return v
 
 
+class PersonaTrait(BaseModel):
+    """
+    Model representing a trait of a persona with evidence and confidence.
+    """
+    value: str
+    confidence: float
+    evidence: List[str]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "value": "Frequently uses collaboration tools",
+                "confidence": 0.85,
+                "evidence": ["Uses Slack daily", "Coordinates with team members using Trello"]
+            }
+        }
+
+
+class Persona(BaseModel):
+    """
+    Model representing a user persona derived from interview analysis.
+    """
+    name: str
+    description: str
+    role_context: PersonaTrait
+    key_responsibilities: PersonaTrait
+    tools_used: PersonaTrait
+    collaboration_style: PersonaTrait
+    analysis_approach: PersonaTrait
+    pain_points: PersonaTrait
+    patterns: List[str]
+    confidence: float
+    evidence: List[str]
+    metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Data-Driven Product Manager",
+                "description": "Experienced product manager who relies heavily on data analytics for decision-making",
+                "role_context": {
+                    "value": "Product development and roadmap planning",
+                    "confidence": 0.9,
+                    "evidence": ["Mentions roadmap planning sessions", "Discusses product prioritization"]
+                },
+                "key_responsibilities": {
+                    "value": "Market research, feature prioritization, and coordinating with development teams",
+                    "confidence": 0.85,
+                    "evidence": ["Conducts competitor analysis", "Prioritizes backlog items"]
+                },
+                "tools_used": {
+                    "value": "Jira, Google Analytics, and Tableau",
+                    "confidence": 0.8,
+                    "evidence": ["Uses Jira for tracking", "Analyzes data using Tableau"]
+                },
+                "collaboration_style": {
+                    "value": "Highly collaborative with regular cross-functional meetings",
+                    "confidence": 0.75,
+                    "evidence": ["Weekly sync meetings", "Collaborates with design and development"]
+                },
+                "analysis_approach": {
+                    "value": "Balances quantitative metrics with qualitative user feedback",
+                    "confidence": 0.8,
+                    "evidence": ["Reviews usage metrics", "Considers user feedback in decisions"]
+                },
+                "pain_points": {
+                    "value": "Insufficient data on user behavior and slow development cycles",
+                    "confidence": 0.7,
+                    "evidence": ["Mentions lack of user insights", "Frustrated with slow release cycles"]
+                },
+                "patterns": ["Data-driven decision making", "Cross-functional collaboration"],
+                "confidence": 0.85,
+                "evidence": ["Interview mentions product management activities", "Uses typical PM tools"],
+                "metadata": {
+                    "sample_size": 3,
+                    "timestamp": "2023-10-26T14:30:00Z"
+                }
+            }
+        }
+
+
 class DetailedAnalysisResult(BaseModel):
     """
     Comprehensive model for all analysis results.
@@ -149,6 +230,7 @@ class DetailedAnalysisResult(BaseModel):
     patterns: List[Pattern]
     sentimentOverview: SentimentOverview
     sentiment: Optional[List[Dict[str, Any]]] = None
+    personas: Optional[List[Persona]] = None
     error: Optional[str] = None
 
 

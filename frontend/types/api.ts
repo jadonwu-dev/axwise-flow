@@ -88,6 +88,35 @@ export interface AnalysisResult {
   dataId: number;
 }
 
+export type PersonaTrait = {
+  value: string;
+  confidence: number;
+  evidence: string[];
+};
+
+export type Persona = {
+  name: string;
+  description: string;
+  role_context: PersonaTrait;
+  key_responsibilities: PersonaTrait;
+  tools_used: PersonaTrait;
+  collaboration_style: PersonaTrait;
+  analysis_approach: PersonaTrait;
+  pain_points: PersonaTrait;
+  patterns: string[];
+  confidence: number;
+  evidence: string[];
+  metadata?: {
+    sample_size?: number;
+    timestamp?: string;
+    validation_metrics?: {
+      pattern_confidence?: number;
+      evidence_count?: number;
+      attribute_coverage?: Record<string, number>;
+    };
+  };
+};
+
 /**
  * Detailed analysis result data structure
  */
@@ -102,6 +131,7 @@ export interface DetailedAnalysisResult {
   sentiment: SentimentData[];
   sentimentOverview: SentimentOverview;
   sentimentStatements?: SentimentStatements;  // Supporting statements for sentiment categories
+  personas?: Persona[];
   llmProvider?: string;
   llmModel?: string;
   error?: string;

@@ -4,9 +4,11 @@ import { persist } from 'zustand/middleware';
 /**
  * UI Store State Interface
  */
+type TabValue = 'themes' | 'patterns' | 'sentiment' | 'personas';
+
 interface UIState {
   // Tab selection
-  selectedTab: 'themes' | 'patterns' | 'sentiment';
+  selectedTab: TabValue;
   
   // Filters
   themeFilters: {
@@ -33,7 +35,7 @@ interface UIState {
   sidebarCollapsed: boolean;
   
   // Actions
-  setSelectedTab: (tab: 'themes' | 'patterns' | 'sentiment') => void;
+  setSelectedTab: (tab: TabValue) => void;
   setThemeFilters: (filters: Partial<UIState['themeFilters']>) => void;
   setPatternFilters: (filters: Partial<UIState['patternFilters']>) => void;
   setSentimentFilters: (filters: Partial<UIState['sentimentFilters']>) => void;

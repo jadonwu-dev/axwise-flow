@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { useToast } from '@/components/providers/toast-provider';
@@ -14,11 +15,15 @@ import {
 } from '@/store/useAnalysisStore';
 import { 
   useUIStore, 
-  useSelectedTab 
+  useSelectedTab
 } from '@/store/useUIStore';
 import { ThemeChart, PatternList, SentimentGraph } from '@/components/visualization';
 import UnifiedVisualization from '@/components/visualization/UnifiedVisualization';
+import { PersonaList } from '@/components/visualization/PersonaList';
 import type { DetailedAnalysisResult } from '@/types/api';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export default function AnalysisResultsPage() {
   const params = useParams();
@@ -137,6 +142,59 @@ function AnalysisHeader({ data }: { data: DetailedAnalysisResult }) {
   );
 }
 
+// TabButton component for consistent tab styling
+function TabButton({ isActive, onClick, children }: { 
+  isActive: boolean; 
+  onClick: () => void; 
+  children: React.ReactNode 
+}) {
+  return (
+    <button
+      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+        isActive
+          ? 'border-primary text-primary'
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TabOptions() {
+  const { selectedTab, setSelectedTab } = useUIStore();
+
+  return (
+    <div className="flex space-x-8">
+      <TabButton
+        isActive={selectedTab === 'themes'}
+        onClick={() => setSelectedTab('themes')}
+      >
+        Themes
+      </TabButton>
+      <TabButton
+        isActive={selectedTab === 'patterns'}
+        onClick={() => setSelectedTab('patterns')}
+      >
+        Patterns
+      </TabButton>
+      <TabButton
+        isActive={selectedTab === 'sentiment'}
+        onClick={() => setSelectedTab('sentiment')}
+      >
+        Sentiment
+      </TabButton>
+      <TabButton
+        isActive={selectedTab === 'personas'}
+        onClick={() => setSelectedTab('personas' as any)}
+      >
+        Personas
+      </TabButton>
+    </div>
+  );
+}
+
 function AnalysisTabs({ data }: { data: DetailedAnalysisResult }) {
   const selectedTab = useSelectedTab();
   const setSelectedTab = useUIStore(state => state.setSelectedTab);
@@ -146,134 +204,59 @@ function AnalysisTabs({ data }: { data: DetailedAnalysisResult }) {
       console.log('Sentiment tab selected, data:', {
         sentimentOverview: data.sentimentOverview,
         sentiment: data.sentiment,
-        supportingStatements: data.sentimentStatements
+        statements: data.sentimentStatements
       });
     }
   }, [selectedTab, data]);
 
-  // Toggle for visualization type (classic or unified)
-  const [useUnifiedView, setUseUnifiedView] = useState(true);
-
+  // Always use unified view (removed toggle)
+  
   return (
-    <div>
+    <div className="space-y-4">
       <div className="border-b border-border">
         <nav className="flex space-x-8">
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'themes'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-            onClick={() => setSelectedTab('themes')}
-          >
-            Themes
-          </button>
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'patterns'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-            onClick={() => setSelectedTab('patterns')}
-          >
-            Patterns
-          </button>
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'sentiment'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-            onClick={() => setSelectedTab('sentiment')}
-          >
-            Sentiment
-          </button>
+          <TabOptions />
         </nav>
       </div>
       
-      {/* View Type Toggle */}
-      <div className="mt-4 flex justify-end">
-        <div className="flex space-x-2 items-center">
-          <span className="text-sm text-muted-foreground">View:</span>
-          <button
-            className={`px-3 py-1 text-sm rounded ${
-              !useUnifiedView 
-                ? 'bg-primary text-primary-foreground' 
-                : 'bg-muted text-muted-foreground'
-            }`}
-            onClick={() => setUseUnifiedView(false)}
-          >
-            Classic
-          </button>
-          <button
-            className={`px-3 py-1 text-sm rounded ${
-              useUnifiedView 
-                ? 'bg-primary text-primary-foreground' 
-                : 'bg-muted text-muted-foreground'
-            }`}
-            onClick={() => setUseUnifiedView(true)}
-          >
-            Unified
-          </button>
-        </div>
-      </div>
+      {/* Removed View Type Toggle */}
       
       <div className="py-6">
-        {useUnifiedView ? (
-          // Unified View
-          <div className="mt-4">
-            {selectedTab === 'themes' && (
-              <UnifiedVisualization
-                type="themes"
-                themesData={data.themes}
-              />
-            )}
-            {selectedTab === 'patterns' && (
-              <UnifiedVisualization
-                type="patterns"
-                patternsData={data.patterns}
-              />
-            )}
-            {selectedTab === 'sentiment' && (
-              <UnifiedVisualization
-                type="sentiment"
-                sentimentData={{
-                  overview: data.sentimentOverview,
-                  details: data.sentiment,
-                  statements: data.sentimentStatements || {
-                    positive: data.sentiment.filter(s => s.score > 0.2).map(s => s.text).slice(0, 5),
-                    neutral: data.sentiment.filter(s => s.score >= -0.2 && s.score <= 0.2).map(s => s.text).slice(0, 5),
-                    negative: data.sentiment.filter(s => s.score < -0.2).map(s => s.text).slice(0, 5)
-                  }
-                }}
-              />
-            )}
-          </div>
-        ) : (
-          // Classic View
-          <div className="mt-4">
-            {selectedTab === 'themes' && (
-              <ThemeChart 
-                data={data.themes} 
-                className="mt-4" 
-              />
-            )}
-            {selectedTab === 'patterns' && (
-              <PatternList 
-                data={data.patterns} 
-                className="mt-4" 
-              />
-            )}
-            {selectedTab === 'sentiment' && (
-              <SentimentGraph 
-                data={data.sentimentOverview} 
-                detailedData={data.sentiment}
-                supportingStatements={data.sentimentStatements}
-                className="mt-4" 
-              />
-            )}
-          </div>
-        )}
+        {/* Always use Unified View */}
+        <div className="mt-4">
+          {selectedTab === 'themes' && (
+            <UnifiedVisualization
+              type="themes"
+              themesData={data.themes}
+            />
+          )}
+          {selectedTab === 'patterns' && (
+            <UnifiedVisualization
+              type="patterns"
+              patternsData={data.patterns}
+            />
+          )}
+          {selectedTab === 'sentiment' && (
+            <UnifiedVisualization
+              type="sentiment"
+              sentimentData={{
+                overview: data.sentimentOverview,
+                details: data.sentiment,
+                statements: data.sentimentStatements || {
+                  positive: data.sentiment.filter(s => s.score > 0.2).map(s => s.text).slice(0, 5),
+                  neutral: data.sentiment.filter(s => s.score >= -0.2 && s.score <= 0.2).map(s => s.text).slice(0, 5),
+                  negative: data.sentiment.filter(s => s.score < -0.2).map(s => s.text).slice(0, 5)
+                }
+              }}
+            />
+          )}
+          {selectedTab === 'personas' && (
+            <UnifiedVisualization
+              type="personas"
+              personasData={data.personas || []}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
