@@ -652,7 +652,7 @@ class GeminiService:
         return result
 
     async def generate_persona_from_text(self, interview_text: str) -> Dict[str, Any]:
-        """Generate a persona directly from interview text using the Gemini model with schema-based output.
+        """Generate a persona directly from interview text using the Gemini model.
         
         This method processes raw interview text to create a detailed persona that captures key
         attributes of the interviewee, including role, responsibilities, tools, and pain points.
@@ -666,7 +666,7 @@ class GeminiService:
         try:
             logger.info(f"Generating persona from interview text ({len(interview_text)} chars)")
             
-            # Create prompt for persona generation
+            # Create prompt for persona generation with structured JSON output format
             prompt = f"""
             Given this interview transcript, create a detailed persona profile for the main participant (interviewee).
 
@@ -679,112 +679,135 @@ class GeminiService:
             
             For each trait, include specific evidence from the interview that supports your analysis. 
             Assign a confidence score between 0 and 1 for each trait based on how clearly it's supported in the transcript.
+            
+            Format your response as a JSON object with the following structure:
+            ```json
+            {{
+                "name": "Descriptive role-based name",
+                "description": "Brief summary of who this person is",
+                "role_context": "Their primary job role",
+                "key_responsibilities": "Their main tasks and responsibilities",
+                "tools_used": "Tools they use in their job",
+                "collaboration_style": "How they collaborate with others",
+                "analysis_approach": "How they approach problems and analysis",
+                "pain_points": "Their challenges and pain points"
+            }}
+            ```
+            
+            Make sure the JSON is valid and properly formatted.
             """
             
-            # Enable structured output
-            self.set_structured_output(True)
-            
-            # Run in a thread to avoid blocking the event loop
-            loop = asyncio.get_event_loop()
-            
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config={
-                        'response_mime_type': 'application/json',
-                        'response_schema': PersonaSchema,
-                    }
-                )
-            )
+            # Generate content with the prompt
+            response = await self.client.generate_content_async(prompt)
             
             # Parse and structure the response
             try:
-                # Extract the structured data from the response
-                parsed_response = response.candidates[0].content.parts[0].function_call.parsed_response
+                # Get the text response
+                text_response = response.text
+                logger.info(f"Received response from Gemini: {text_response[:100]}...")
                 
-                # Create structured persona attributes
-                persona_attributes = {
-                    "name": parsed_response.name,
-                    "description": parsed_response.description,
-                    "role_context": parsed_response.role_context,
-                    "role_confidence": 0.8,
-                    "role_evidence": [f"Evidence from transcript: {parsed_response.role_context}"],
-                    
-                    "responsibilities": parsed_response.key_responsibilities,
-                    "resp_confidence": 0.8,
-                    "resp_evidence": [f"Evidence from transcript: {parsed_response.key_responsibilities}"],
-                    
-                    "tools": parsed_response.tools_used,
-                    "tools_confidence": 0.7,
-                    "tools_evidence": [f"Evidence from transcript: {parsed_response.tools_used}"],
-                    
-                    "collaboration": parsed_response.collaboration_style,
-                    "collab_confidence": 0.7,
-                    "collab_evidence": [f"Evidence from transcript: {parsed_response.collaboration_style}"],
-                    
-                    "analysis": parsed_response.analysis_approach,
-                    "analysis_confidence": 0.7,
-                    "analysis_evidence": [f"Evidence from transcript: {parsed_response.analysis_approach}"],
-                    
-                    "pain_points": parsed_response.pain_points,
-                    "pain_confidence": 0.8,
-                    "pain_evidence": [f"Evidence from transcript: {parsed_response.pain_points}"],
-                    
-                    "confidence": 0.8,
-                    "evidence": ["Generated from direct text analysis using Gemini"],
-                    "patterns": [],
-                    "source": "direct_text_analysis"
-                }
+                # Extract JSON data from the response
+                json_data = self._extract_json(text_response)
                 
-                logger.info(f"Successfully generated persona: {persona_attributes['name']}")
-                return persona_attributes
+                if json_data and isinstance(json_data, dict):
+                    # Create structured persona attributes
+                    persona_attributes = {
+                        "name": json_data.get("name", "Interview Participant"),
+                        "description": json_data.get("description", "Persona generated from interview transcript"),
+                        "role_context": json_data.get("role_context", "Role derived from interview analysis"),
+                        "role_confidence": 0.8,
+                        "role_evidence": [f"Evidence from transcript: {json_data.get('role_context', '')}"],
+                        
+                        "responsibilities": json_data.get("key_responsibilities", "Responsibilities mentioned in interview"),
+                        "resp_confidence": 0.8,
+                        "resp_evidence": [f"Evidence from transcript: {json_data.get('key_responsibilities', '')}"],
+                        
+                        "tools": json_data.get("tools_used", "Tools mentioned in interview"),
+                        "tools_confidence": 0.7,
+                        "tools_evidence": [f"Evidence from transcript: {json_data.get('tools_used', '')}"],
+                        
+                        "collaboration": json_data.get("collaboration_style", "Collaboration style implied in interview"),
+                        "collab_confidence": 0.7,
+                        "collab_evidence": [f"Evidence from transcript: {json_data.get('collaboration_style', '')}"],
+                        
+                        "analysis": json_data.get("analysis_approach", "Problem-solving approach mentioned in interview"),
+                        "analysis_confidence": 0.7,
+                        "analysis_evidence": [f"Evidence from transcript: {json_data.get('analysis_approach', '')}"],
+                        
+                        "pain_points": json_data.get("pain_points", "Challenges mentioned in interview"),
+                        "pain_confidence": 0.8,
+                        "pain_evidence": [f"Evidence from transcript: {json_data.get('pain_points', '')}"],
+                        
+                        "confidence": 0.8,
+                        "evidence": ["Generated from direct text analysis using Gemini"],
+                        "patterns": [],
+                        "source": "direct_text_analysis"
+                    }
+                    
+                    logger.info(f"Successfully generated persona: {persona_attributes['name']}")
+                    return persona_attributes
+                else:
+                    # If not valid JSON or not a dictionary, use fallback
+                    logger.warning("Could not extract valid JSON from Gemini response, using fallback")
+                    return self._create_fallback_persona()
                 
             except Exception as parse_error:
                 logger.error(f"Error parsing Gemini persona response: {str(parse_error)}")
-                
-                # Try extraction as plain text
-                try:
-                    text_response = response.text
-                    logger.info(f"Attempting to extract persona from text response: {text_response[:100]}...")
-                    
-                    # Extract JSON data from the response
-                    json_data = self._extract_json(text_response)
-                    
-                    # If successful, return the extracted data
-                    if json_data and isinstance(json_data, dict):
-                        return json_data
-                        
-                    # If not a proper dictionary, create a basic structure
-                    return {
-                        "name": "Interview Participant",
-                        "description": "Persona generated from interview transcript",
-                        "role_context": "Role derived from interview analysis",
-                        "role_confidence": 0.5,
-                        "role_evidence": ["Generated from text analysis fallback"],
-                        "responsibilities": "Responsibilities mentioned in interview",
-                        "resp_confidence": 0.5,
-                        "resp_evidence": ["Generated from text analysis fallback"],
-                        "tools": "Tools mentioned in interview",
-                        "tools_confidence": 0.5,
-                        "tools_evidence": ["Generated from text analysis fallback"],
-                        "collaboration": "Collaboration style implied in interview",
-                        "collab_confidence": 0.5,
-                        "collab_evidence": ["Generated from text analysis fallback"],
-                        "analysis": "Problem-solving approach mentioned in interview",
-                        "analysis_confidence": 0.5,
-                        "analysis_evidence": ["Generated from text analysis fallback"],
-                        "pain_points": "Challenges mentioned in interview",
-                        "pain_confidence": 0.5,
-                        "pain_evidence": ["Generated from text analysis fallback"],
-                        "confidence": 0.5,
-                        "evidence": ["Generated from text analysis fallback"],
-                        "source": "text_fallback"
-                    }
-                except Exception as text_error:
-                    logger.error(f"Text extraction fallback failed: {str(text_error)}")
-                    raise
+                return self._create_fallback_persona()
+            
         except Exception as e:
             logger.error(f"Error generating persona from text: {str(e)}")
             raise
+
+    def _extract_json(self, text):
+        """Extract JSON from text, handling potential markdown code blocks."""
+        try:
+            # First try to parse the text directly as JSON
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # If that fails, try to extract JSON from markdown code blocks
+            import re
+            json_match = re.search(r'```(?:json)?\s*({\s*".*})\s*```', text, re.DOTALL)
+            if json_match:
+                try:
+                    return json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+            
+            # Try another pattern that might capture more JSON formats
+            json_match = re.search(r'{[\s\S]*}', text)
+            if json_match:
+                try:
+                    return json.loads(json_match.group(0))
+                except json.JSONDecodeError:
+                    pass
+            
+            return None
+
+    def _create_fallback_persona(self):
+        """Create a fallback persona when extraction fails."""
+        return {
+            "name": "Interview Participant",
+            "description": "Persona generated from interview transcript",
+            "role_context": "Role derived from interview analysis",
+            "role_confidence": 0.5,
+            "role_evidence": ["Generated from text analysis fallback"],
+            "responsibilities": "Responsibilities mentioned in interview",
+            "resp_confidence": 0.5,
+            "resp_evidence": ["Generated from text analysis fallback"],
+            "tools": "Tools mentioned in interview",
+            "tools_confidence": 0.5,
+            "tools_evidence": ["Generated from text analysis fallback"],
+            "collaboration": "Collaboration style implied in interview",
+            "collab_confidence": 0.5,
+            "collab_evidence": ["Generated from text analysis fallback"],
+            "analysis": "Problem-solving approach mentioned in interview",
+            "analysis_confidence": 0.5,
+            "analysis_evidence": ["Generated from text analysis fallback"],
+            "pain_points": "Challenges mentioned in interview",
+            "pain_confidence": 0.5,
+            "pain_evidence": ["Generated from text analysis fallback"],
+            "confidence": 0.5,
+            "evidence": ["Generated from text analysis fallback"],
+            "source": "text_fallback"
+        }
