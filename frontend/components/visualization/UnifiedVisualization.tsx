@@ -115,6 +115,31 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     }
   }, [sentimentData, type]);
 
+  // Function to filter out basic profile information from sentiment statements
+  const filterMeaninglessSentimentStatements = (statements: string[]): string[] => {
+    if (!statements) return [];
+    
+    // Filter out statements that are likely just names, ages, or very short responses
+    return statements.filter(statement => {
+      // Skip very short statements (likely names, ages, etc.)
+      if (statement.length < 10) return false;
+      
+      // Skip statements that are just providing basic profile info
+      const lowerStatement = statement.toLowerCase();
+      if (
+        lowerStatement.includes("name provided") ||
+        lowerStatement.includes("age provided") ||
+        lowerStatement.includes("occupation") ||
+        lowerStatement.includes("persona") ||
+        /^\d+$/.test(statement) // Just numbers
+      ) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
   // Get supporting statements for sentiment data
   const sentimentStatements = useMemo(() => {
     // Add more detailed logging to debug statement extraction
@@ -149,6 +174,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
       .filter(statement => statement && typeof statement === 'string')
       .map(statement => statement.trim())
       .filter(statement => statement.length > 0);
+    
+    // Filter out meaningless statements (names, ages, etc.)
+    result.positive = filterMeaninglessSentimentStatements(result.positive);
+    result.neutral = filterMeaninglessSentimentStatements(result.neutral);
+    result.negative = filterMeaninglessSentimentStatements(result.negative);
     
     // Detailed logging
     console.log("Processed sentiment statements:", result);
@@ -389,7 +419,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                   </Avatar>
                   <div>
                     <CardTitle className="text-lg">{defaultPersona.name}</CardTitle>
-                    <CardDescription className="line-clamp-2 mt-1">
+                    <CardDescription className="mt-1">
                       {defaultPersona.description}
                     </CardDescription>
                   </div>
@@ -412,7 +442,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="text-sm space-y-2">
-                        <p>{defaultPersona.role_context.value}</p>
+                        <p>{getPersonaFieldValue(defaultPersona.role_context)}</p>
                         <div className="pt-2">
                           <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
                             {Math.round(defaultPersona.role_context.confidence * 100)}% Confidence
@@ -434,11 +464,13 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       <div className="text-sm space-y-3">
                         <div>
                           <h4 className="font-medium mb-1">Key Responsibilities:</h4>
-                          <p>{defaultPersona.key_responsibilities.value}</p>
+                          <p>{getPersonaFieldValue(defaultPersona.key_responsibilities)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Pain Points:</h4>
-                          <p>{defaultPersona.pain_points.value}</p>
+                          <p className="whitespace-pre-line">
+                            {getPersonaFieldValue(defaultPersona.pain_points)}
+                          </p>
                         </div>
                       </div>
                     </AccordionContent>
@@ -456,15 +488,15 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       <div className="text-sm space-y-3">
                         <div>
                           <h4 className="font-medium mb-1">Tools Used:</h4>
-                          <p>{defaultPersona.tools_used.value}</p>
+                          <p>{getPersonaFieldValue(defaultPersona.tools_used)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Collaboration Style:</h4>
-                          <p>{defaultPersona.collaboration_style.value}</p>
+                          <p>{getPersonaFieldValue(defaultPersona.collaboration_style)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Analysis Approach:</h4>
-                          <p>{defaultPersona.analysis_approach.value}</p>
+                          <p>{getPersonaFieldValue(defaultPersona.analysis_approach)}</p>
                         </div>
                       </div>
                     </AccordionContent>
@@ -508,7 +540,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                   </Avatar>
                   <div>
                     <CardTitle className="text-lg">{persona.name}</CardTitle>
-                    <CardDescription className="line-clamp-2 mt-1">
+                    <CardDescription className="mt-1">
                       {persona.description}
                     </CardDescription>
                   </div>
@@ -527,7 +559,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="text-sm space-y-2">
-                        <p>{persona.role_context?.value || "Not available"}</p>
+                        <p>{getPersonaFieldValue(persona.role_context)}</p>
                         <div className="pt-2">
                           <Badge className="bg-primary/10 text-primary hover:bg-primary/20">
                             {Math.round((persona.role_context?.confidence || 0) * 100)}% Confidence
@@ -549,11 +581,13 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       <div className="text-sm space-y-3">
                         <div>
                           <h4 className="font-medium mb-1">Key Responsibilities:</h4>
-                          <p>{persona.key_responsibilities?.value || "Not available"}</p>
+                          <p>{getPersonaFieldValue(persona.key_responsibilities)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Pain Points:</h4>
-                          <p>{persona.pain_points?.value || "Not available"}</p>
+                          <p className="whitespace-pre-line">
+                            {getPersonaFieldValue(persona.pain_points)}
+                          </p>
                         </div>
                       </div>
                     </AccordionContent>
@@ -571,15 +605,15 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       <div className="text-sm space-y-3">
                         <div>
                           <h4 className="font-medium mb-1">Tools Used:</h4>
-                          <p>{persona.tools_used?.value || "Not available"}</p>
+                          <p>{getPersonaFieldValue(persona.tools_used)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Collaboration Style:</h4>
-                          <p>{persona.collaboration_style?.value || "Not available"}</p>
+                          <p>{getPersonaFieldValue(persona.collaboration_style)}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-1">Analysis Approach:</h4>
-                          <p>{persona.analysis_approach?.value || "Not available"}</p>
+                          <p>{getPersonaFieldValue(persona.analysis_approach)}</p>
                         </div>
                       </div>
                     </AccordionContent>
@@ -734,6 +768,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         
         const totalPatterns = patternsData.length;
         
+        // Get most frequent pattern
+        const topPattern = patternsData.length > 0 
+          ? [...patternsData].sort((a, b) => (b.frequency || 0) - (a.frequency || 0))[0]
+          : null;
+        
         return [
           <div key="pattern-1" className="space-y-1">
             <p className="font-medium">Pattern Distribution</p>
@@ -749,7 +788,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
             </p>
           </div>,
           <div key="pattern-2" className="space-y-1">
-            <p className="font-medium">Dominant Category: {topCategory !== 'None' ? topCategory : 'None Identified'}</p>
+            <p className="font-medium">
+              {topCategory !== 'None' 
+                ? `Dominant Category: ${topCategory}`
+                : 'No Dominant Category'}
+            </p>
             <p className="text-sm">
               {topCategory !== 'None' 
                 ? `${categoryCounts[topCategory] || 0} patterns (${Math.round(((categoryCounts[topCategory] || 0) / totalPatterns) * 100)}% of total)`
@@ -762,16 +805,20 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
             </p>
           </div>,
           <div key="pattern-3" className="space-y-1">
-            <p className="font-medium">Sentiment Analysis</p>
+            <p className="font-medium">
+              {topPattern ? `Key Pattern: ${topPattern.name || 'Unnamed Pattern'}` : 'No Key Pattern'}
+            </p>
             <p className="text-sm">
-              {patternsBySentiment.positive.length} positive, {patternsBySentiment.neutral.length} neutral, and {patternsBySentiment.negative.length} negative patterns.
+              {topPattern 
+                ? `${Math.round((topPattern.frequency || 0) * 100)}% occurrence rate` 
+                : "No significant patterns detected"}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              {patternsBySentiment.positive.length + patternsBySentiment.neutral.length + patternsBySentiment.negative.length > 0 
-                ? (patternsBySentiment.positive.length > patternsBySentiment.negative.length 
-                  ? "Positive patterns predominate, suggesting general satisfaction with core workflows."
-                  : "Negative patterns are significant, indicating friction points to address.")
-                : "No sentiment-categorized patterns found in the analysis."}
+              {topPattern && topPattern.description 
+                ? topPattern.description
+                : (topPattern 
+                  ? "This pattern represents a critical area for product improvement."
+                  : "Consider additional data collection to identify user patterns.")}
             </p>
           </div>
         ];
@@ -810,19 +857,36 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
             </p>
           </div>,
           <div key="sentiment-2" className="space-y-1">
-            <p className="font-medium">Context Analysis</p>
+            <p className="font-medium">Key {predominant.charAt(0).toUpperCase() + predominant.slice(1)} Statement</p>
             <p className="text-sm">
               {total > 0 
-                ? `Sentiment analysis covers ${total} distinct statements from the interview.`
+                ? (predominant === "positive" && sentimentStatements.positive && sentimentStatements.positive.length > 0
+                  ? `"${sentimentStatements.positive[0]}"`
+                  : predominant === "negative" && sentimentStatements.negative && sentimentStatements.negative.length > 0
+                    ? `"${sentimentStatements.negative[0]}"`
+                    : sentimentStatements.neutral && sentimentStatements.neutral.length > 0
+                      ? `"${sentimentStatements.neutral[0]}"`
+                      : "No representative statement found.")
                 : "No sentiment statements found for analysis."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              {total > 0 
-                ? "The distribution provides insight into user satisfaction and pain points."
-                : "Consider reviewing the interview transcript for emotional expressions."}
+              This represents a typical user perspective that should guide product decisions.
             </p>
           </div>,
           <div key="sentiment-3" className="space-y-1">
+            <p className="font-medium">Related Content Analysis</p>
+            <p className="text-sm">
+              {patternsData.length > 0 
+                ? `${patternsBySentiment.positive.length} positive, ${patternsBySentiment.neutral.length} neutral, and ${patternsBySentiment.negative.length} negative patterns identified.`
+                : themesData.length > 0
+                  ? `${themesBySentiment.positive.length} positive, ${themesBySentiment.neutral.length} neutral, and ${themesBySentiment.negative.length} negative themes identified.`
+                  : "No related patterns or themes with sentiment found."}
+            </p>
+            <p className="text-sm text-muted-foreground italic">
+              Sentiment patterns across identified themes and behaviors provide deeper context.
+            </p>
+          </div>,
+          <div key="sentiment-4" className="space-y-1">
             <p className="font-medium">Actionable Insights</p>
             <p className="text-sm">
               {total > 0 
@@ -871,30 +935,30 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         
         return [
           <div key="persona-1" className="space-y-1">
-            <p className="font-medium">Primary Goal</p>
+            <p className="font-medium">User Profile</p>
             <p className="text-sm">
-              {persona.key_responsibilities?.value || 'Not specified in transcript'}
+              {persona.name} - {getPersonaFieldValue(persona.role_context)}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              This represents the core job function that drives their interaction with the product.
+              Primary user archetype based on interview analysis.
             </p>
           </div>,
           <div key="persona-2" className="space-y-1">
-            <p className="font-medium">Core Challenge</p>
-            <p className="text-sm">
-              {persona.pain_points?.value || 'Not specified in transcript'}
+            <p className="font-medium">Key Pain Points</p>
+            <p className="text-sm whitespace-pre-line">
+              {getPersonaFieldValue(persona.pain_points)}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              Addressing these challenges could significantly improve user experience.
+              These challenges represent opportunities for product improvement.
             </p>
           </div>,
           <div key="persona-3" className="space-y-1">
-            <p className="font-medium">Most Used Features</p>
+            <p className="font-medium">Tools & Methods</p>
             <p className="text-sm">
-              {persona.tools_used?.value || 'Not specified in transcript'}
+              {getPersonaFieldValue(persona.tools_used)}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              These tools and features are critical to their workflow and should be prioritized.
+              Current tools that could be replaced or enhanced by your solution.
             </p>
           </div>
         ];
@@ -963,23 +1027,36 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           ];
         }
           
-        return topPatterns.map((pattern, idx) => (
-          <div key={`top-pattern-${idx}`} className="space-y-1">
-            <p className="font-medium">
-              {idx + 1}. {pattern.name || `Pattern ${idx + 1}`}
-            </p>
-            <p className="text-sm">
-              {Math.round((pattern.frequency || 0) * 100)}% occurrence rate
-            </p>
-            <p className="text-sm text-muted-foreground italic">
-              {idx === 0 
-                ? "Critical workflow pattern that should be optimized for efficiency."
-                : idx === 1 
-                  ? "Important behavioral pattern that influences product usage."
-                  : "Significant pattern that provides insight into user needs."}
-            </p>
-          </div>
-        ));
+        return topPatterns.map((pattern, idx) => {
+          // Extract pattern name and ensure it's a descriptive name, not just a placeholder
+          const patternName = pattern.name && pattern.name.trim() !== '' && 
+                             !pattern.name.startsWith('Pattern') ? 
+                             pattern.name : 
+                             (pattern.description && pattern.description.length > 0 ? 
+                               pattern.description : 
+                               `Pattern ${idx + 1}`);
+          
+          return (
+            <div key={`top-pattern-${idx}`} className="space-y-1">
+              <p className="font-medium break-words">
+                {idx + 1}. {patternName}
+              </p>
+              <p className="text-sm">
+                {Math.round((pattern.frequency || 0) * 100)}% occurrence rate
+                {pattern.category ? ` • Category: ${pattern.category}` : ''}
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                {pattern.description && pattern.description.length > 0 ? 
+                  pattern.description : 
+                  (idx === 0 
+                    ? "Critical workflow pattern that should be optimized for efficiency."
+                    : idx === 1 
+                      ? "Important behavioral pattern that influences product usage."
+                      : "Significant pattern that provides insight into user needs.")}
+              </p>
+            </div>
+          );
+        });
       } else if (type === 'sentiment') {
         const hasPositive = sentimentStatements.positive && sentimentStatements.positive.length > 0;
         const hasNegative = sentimentStatements.negative && sentimentStatements.negative.length > 0;
@@ -1067,7 +1144,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="who-they-are" className="space-y-1">
             <p className="font-medium">Who They Are</p>
             <p className="text-sm">
-              {persona.role_context?.value || 'Not specified in transcript'}
+              {getPersonaFieldValue(persona.role_context)}
             </p>
             <p className="text-sm text-muted-foreground italic">
               Understanding their role provides context for their needs and behaviors.
@@ -1076,7 +1153,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="what-they-need" className="space-y-1">
             <p className="font-medium">What They Need</p>
             <p className="text-sm">
-              {persona.key_responsibilities?.value || 'Not specified in transcript'}
+              {getPersonaFieldValue(persona.key_responsibilities)}
             </p>
             <p className="text-sm text-muted-foreground italic">
               These needs should be directly addressed in product functionality.
@@ -1084,8 +1161,8 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           </div>,
           <div key="key-challenge" className="space-y-1">
             <p className="font-medium">Key Challenge</p>
-            <p className="text-sm">
-              {persona.pain_points?.value || 'Not specified in transcript'}
+            <p className="text-sm whitespace-pre-line">
+              {getPersonaFieldValue(persona.pain_points)}
             </p>
             <p className="text-sm text-muted-foreground italic">
               Solving this challenge would significantly improve their experience.
@@ -1138,6 +1215,63 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         </div>
       </div>
     );
+  };
+
+  // Add a debug function to log pattern data
+  React.useEffect(() => {
+    if (type === 'patterns') {
+      console.log('Pattern data for insights:', patternsData.map(p => ({
+        name: p.name,
+        frequency: p.frequency,
+        category: p.category
+      })));
+    }
+  }, [type, patternsData]);
+
+  // Helper function to handle potentially complex persona field values
+  const getPersonaFieldValue = (field: any): string => {
+    if (!field) return 'Not specified in transcript';
+    
+    // If it's a string value property
+    if (typeof field.value === 'string') {
+      return field.value;
+    }
+    
+    // If value is an object with multiple keys (like pain_points sometimes is)
+    if (typeof field.value === 'object' && field.value !== null) {
+      // Try to create a bulleted list of the keys
+      try {
+        // Check if it's an array first
+        if (Array.isArray(field.value)) {
+          return field.value.join('\n• ');
+        }
+        
+        // If it's an object, extract the keys and format them
+        const keys = Object.keys(field.value);
+        if (keys.length === 0) return 'No data available';
+        
+        // If there's only one key and it has a long value, it might be mistakenly parsed as an object
+        if (keys.length === 1 && keys[0].length > 30) {
+          return keys[0];
+        }
+        
+        return '• ' + keys
+          .map(key => {
+            // Convert snake_case to sentence case
+            return key
+              .split('_')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+          })
+          .join('\n• ');
+      } catch (e) {
+        console.error('Error parsing complex persona field:', e);
+        return 'Complex data structure (see details view)';
+      }
+    }
+    
+    // If it's another unexpected format
+    return 'Data available but in unexpected format';
   };
 
   return (
@@ -1217,4 +1351,4 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
   );
 };
 
-export default UnifiedVisualization; 
+export default UnifiedVisualization;
