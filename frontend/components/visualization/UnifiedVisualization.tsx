@@ -666,7 +666,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
   // Near the top of the file, add a new state for the insight mode
   const [insightMode, setInsightMode] = React.useState<'major' | 'minor'>('major');
 
-  // Modify the getKeyFindings function to handle both modes
+  // Modify the getKeyFindings function to fix issues
   const getKeyFindings = () => {
     if (insightMode === 'major') {
       // Data-Driven Insights with Brief Commentary (Major)
@@ -674,6 +674,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         // Find themes with highest frequency or most evidence
         const orderedThemes = [...themesData].sort((a, b) => 
           (b.frequency || 0) - (a.frequency || 0)
+        );
+        
+        // Calculate total supporting statements
+        const totalStatements = themesData.reduce((sum, theme) => 
+          sum + (theme.statements?.length || theme.examples?.length || 0), 0
         );
         
         return [
@@ -684,25 +689,33 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
               and {themesBySentiment.negative.length} negative themes identified.
             </p>
             <p className="text-sm text-muted-foreground italic">
-              Clear sentiment differentiation indicates well-defined user reactions.
+              {themesBySentiment.positive.length + themesBySentiment.neutral.length + themesBySentiment.negative.length > 0 
+                ? "Clear sentiment differentiation indicates well-defined user reactions."
+                : "No themes identified in the analysis."}
             </p>
           </div>,
           <div key="theme-2" className="space-y-1">
-            <p className="font-medium">Key Theme: {orderedThemes[0]?.name || 'N/A'}</p>
+            <p className="font-medium">Key Theme: {orderedThemes[0]?.name || 'None Identified'}</p>
             <p className="text-sm">
-              Mentioned in {Math.round((orderedThemes[0]?.frequency || 0) * 100)}% of responses.
+              {orderedThemes.length > 0 
+                ? `Mentioned in ${Math.round((orderedThemes[0]?.frequency || 0) * 100)}% of responses.`
+                : "No prominent themes identified."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              High frequency suggests this is a central concern for users.
+              {orderedThemes.length > 0 
+                ? "High frequency suggests this is a central concern for users."
+                : "Further analysis may be needed to identify key themes."}
             </p>
           </div>,
           <div key="theme-3" className="space-y-1">
             <p className="font-medium">Evidence Strength</p>
             <p className="text-sm">
-              {themesData.reduce((sum, theme) => sum + (theme.statements?.length || 0), 0)} supporting statements across all themes.
+              {totalStatements} supporting statements across all themes.
             </p>
             <p className="text-sm text-muted-foreground italic">
-              Robust evidence base reinforces the validity of identified themes.
+              {totalStatements > 0 
+                ? "Robust evidence base reinforces the validity of identified themes."
+                : "Limited supporting evidence suggests the need for additional data collection."}
             </p>
           </div>
         ];
@@ -725,19 +738,27 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="pattern-1" className="space-y-1">
             <p className="font-medium">Pattern Distribution</p>
             <p className="text-sm">
-              {totalPatterns} distinct patterns identified in the interview data.
+              {totalPatterns > 0 
+                ? `${totalPatterns} distinct patterns identified in the interview data.`
+                : "No patterns identified in the interview data."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              These patterns represent recurring behaviors that can inform feature priorities.
+              {totalPatterns > 0 
+                ? "These patterns represent recurring behaviors that can inform feature priorities."
+                : "Consider using additional prompts to identify user behavior patterns."}
             </p>
           </div>,
           <div key="pattern-2" className="space-y-1">
-            <p className="font-medium">Dominant Category: {topCategory}</p>
+            <p className="font-medium">Dominant Category: {topCategory !== 'None' ? topCategory : 'None Identified'}</p>
             <p className="text-sm">
-              {categoryCounts[topCategory] || 0} patterns ({Math.round(((categoryCounts[topCategory] || 0) / totalPatterns) * 100)}% of total)
+              {topCategory !== 'None' 
+                ? `${categoryCounts[topCategory] || 0} patterns (${Math.round(((categoryCounts[topCategory] || 0) / totalPatterns) * 100)}% of total)`
+                : "No pattern categories identified."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              High concentration in this category suggests focusing development resources here.
+              {topCategory !== 'None' 
+                ? "High concentration in this category suggests focusing development resources here."
+                : "Consider reviewing the pattern categorization methodology."}
             </p>
           </div>,
           <div key="pattern-3" className="space-y-1">
@@ -746,9 +767,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
               {patternsBySentiment.positive.length} positive, {patternsBySentiment.neutral.length} neutral, and {patternsBySentiment.negative.length} negative patterns.
             </p>
             <p className="text-sm text-muted-foreground italic">
-              {patternsBySentiment.positive.length > patternsBySentiment.negative.length 
-                ? "Positive patterns predominate, suggesting general satisfaction with core workflows."
-                : "Negative patterns are significant, indicating friction points to address."}
+              {patternsBySentiment.positive.length + patternsBySentiment.neutral.length + patternsBySentiment.negative.length > 0 
+                ? (patternsBySentiment.positive.length > patternsBySentiment.negative.length 
+                  ? "Positive patterns predominate, suggesting general satisfaction with core workflows."
+                  : "Negative patterns are significant, indicating friction points to address.")
+                : "No sentiment-categorized patterns found in the analysis."}
             </p>
           </div>
         ];
@@ -770,43 +793,79 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="sentiment-1" className="space-y-1">
             <p className="font-medium">Sentiment Distribution</p>
             <p className="text-sm">
-              {positiveCount} positive ({Math.round((positiveCount / total) * 100)}%), 
-              {neutralCount} neutral ({Math.round((neutralCount / total) * 100)}%), 
-              {negativeCount} negative ({Math.round((negativeCount / total) * 100)}%)
+              {total > 0 
+                ? `${positiveCount} positive (${Math.round((positiveCount / total) * 100)}%), 
+                  ${neutralCount} neutral (${Math.round((neutralCount / total) * 100)}%), 
+                  ${negativeCount} negative (${Math.round((negativeCount / total) * 100)}%)`
+                : "No sentiment statements identified."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              {predominant === "positive" 
-                ? "Positive sentiment primarily tied to user-friendly interface and intuitive workflows."
-                : predominant === "negative"
-                  ? "Negative sentiment largely related to performance concerns and learning curve."
-                  : "Balanced sentiment suggests mixed user experiences."}
+              {total > 0 
+                ? (predominant === "positive" 
+                  ? "Positive sentiment primarily tied to user-friendly interface and intuitive workflows."
+                  : predominant === "negative"
+                    ? "Negative sentiment largely related to performance concerns and learning curve."
+                    : "Balanced sentiment suggests mixed user experiences.")
+                : "Unable to determine sentiment patterns from the available data."}
             </p>
           </div>,
           <div key="sentiment-2" className="space-y-1">
             <p className="font-medium">Context Analysis</p>
             <p className="text-sm">
-              Sentiment analysis covers {total} distinct statements from the interview.
+              {total > 0 
+                ? `Sentiment analysis covers ${total} distinct statements from the interview.`
+                : "No sentiment statements found for analysis."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              The distribution provides insight into user satisfaction and pain points.
+              {total > 0 
+                ? "The distribution provides insight into user satisfaction and pain points."
+                : "Consider reviewing the interview transcript for emotional expressions."}
             </p>
           </div>,
           <div key="sentiment-3" className="space-y-1">
             <p className="font-medium">Actionable Insights</p>
             <p className="text-sm">
-              {predominant === "positive" 
-                ? "Maintain and enhance the aspects generating positive feedback."
-                : predominant === "negative"
-                  ? "Address the most frequently mentioned negative aspects as priorities."
-                  : "Balance improvements between enhancing positives and addressing negatives."}
+              {total > 0 
+                ? (predominant === "positive" 
+                  ? "Maintain and enhance the aspects generating positive feedback."
+                  : predominant === "negative"
+                    ? "Address the most frequently mentioned negative aspects as priorities."
+                    : "Balance improvements between enhancing positives and addressing negatives.")
+                : "Gather more detailed feedback to identify specific improvement areas."}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              Sentiment patterns suggest where to focus development resources.
+              {total > 0 
+                ? "Sentiment patterns suggest where to focus development resources."
+                : "Consider additional interviews with more directed questions."}
             </p>
           </div>
         ];
       } else if (type === 'personas') {
-        if (!personasData.length) return [<div key="no-personas">No personas available</div>];
+        if (!personasData.length) {
+          return [
+            <div key="no-personas-1" className="space-y-1">
+              <p className="font-medium">Persona Status</p>
+              <p className="text-sm">No personas have been generated from the interview data.</p>
+              <p className="text-sm text-muted-foreground italic">
+                Consider running the analysis again with a different model or more detailed transcript.
+              </p>
+            </div>,
+            <div key="no-personas-2" className="space-y-1">
+              <p className="font-medium">Persona Generation</p>
+              <p className="text-sm">Persona generation requires detailed user information in the transcript.</p>
+              <p className="text-sm text-muted-foreground italic">
+                Structured interviews with questions about roles and responsibilities yield better personas.
+              </p>
+            </div>,
+            <div key="no-personas-3" className="space-y-1">
+              <p className="font-medium">Next Steps</p>
+              <p className="text-sm">Consider manual persona creation based on the themes and patterns identified.</p>
+              <p className="text-sm text-muted-foreground italic">
+                Manual curation often complements automated persona generation.
+              </p>
+            </div>
+          ];
+        }
         
         const persona = personasData[0]; // Focus on the first persona
         
@@ -814,7 +873,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="persona-1" className="space-y-1">
             <p className="font-medium">Primary Goal</p>
             <p className="text-sm">
-              {persona.key_responsibilities?.value || 'Not specified'}
+              {persona.key_responsibilities?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               This represents the core job function that drives their interaction with the product.
@@ -823,7 +882,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="persona-2" className="space-y-1">
             <p className="font-medium">Core Challenge</p>
             <p className="text-sm">
-              {persona.pain_points?.value || 'Not specified'}
+              {persona.pain_points?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               Addressing these challenges could significantly improve user experience.
@@ -832,7 +891,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="persona-3" className="space-y-1">
             <p className="font-medium">Most Used Features</p>
             <p className="text-sm">
-              {persona.tools_used?.value || 'Not specified'}
+              {persona.tools_used?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               These tools and features are critical to their workflow and should be prioritized.
@@ -847,11 +906,25 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         const topThemes = [...themesData]
           .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))
           .slice(0, 3);
+        
+        if (topThemes.length === 0) {
+          return [
+            <div key="no-themes" className="space-y-1">
+              <p className="font-medium">No Themes Identified</p>
+              <p className="text-sm">
+                The analysis did not identify any significant themes in the interview data.
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                Consider running the analysis with a different model or a more detailed transcript.
+              </p>
+            </div>
+          ];
+        }
           
         return topThemes.map((theme, idx) => (
           <div key={`top-theme-${idx}`} className="space-y-1">
             <p className="font-medium">
-              {idx + 1}. {theme.name}
+              {idx + 1}. {theme.name || 'Unnamed Theme'}
             </p>
             <p className="text-sm">
               {Math.round((theme.frequency || 0) * 100)}% frequency, 
@@ -875,11 +948,25 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         const topPatterns = [...patternsData]
           .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))
           .slice(0, 3);
+        
+        if (topPatterns.length === 0) {
+          return [
+            <div key="no-patterns" className="space-y-1">
+              <p className="font-medium">No Patterns Identified</p>
+              <p className="text-sm">
+                The analysis did not identify any significant patterns in the interview data.
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                Consider running the analysis with a different model or a more detailed transcript.
+              </p>
+            </div>
+          ];
+        }
           
         return topPatterns.map((pattern, idx) => (
           <div key={`top-pattern-${idx}`} className="space-y-1">
             <p className="font-medium">
-              {idx + 1}. {pattern.name}
+              {idx + 1}. {pattern.name || `Pattern ${idx + 1}`}
             </p>
             <p className="text-sm">
               {Math.round((pattern.frequency || 0) * 100)}% occurrence rate
@@ -894,16 +981,38 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           </div>
         ));
       } else if (type === 'sentiment') {
+        const hasPositive = sentimentStatements.positive && sentimentStatements.positive.length > 0;
+        const hasNegative = sentimentStatements.negative && sentimentStatements.negative.length > 0;
+        const hasNeutral = sentimentStatements.neutral && sentimentStatements.neutral.length > 0;
+        
+        if (!hasPositive && !hasNegative && !hasNeutral) {
+          return [
+            <div key="no-sentiment" className="space-y-1">
+              <p className="font-medium">No Sentiment Data</p>
+              <p className="text-sm">
+                The analysis did not identify any sentiment-categorized statements.
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                Consider running the analysis with a different model or a more detailed transcript.
+              </p>
+            </div>
+          ];
+        }
+        
         return [
           <div key="top-positive" className="space-y-1">
             <p className="font-medium text-emerald-600 dark:text-emerald-400">
               Positive Focus
             </p>
             <p className="text-sm">
-              {sentimentStatements.positive?.[0] || 'No positive statements found'}
+              {hasPositive 
+                ? sentimentStatements.positive[0] 
+                : 'No positive statements found'}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              This represents a strong product advantage to maintain and enhance.
+              {hasPositive 
+                ? "This represents a strong product advantage to maintain and enhance."
+                : "The interview did not reveal significant positive sentiments."}
             </p>
           </div>,
           <div key="top-negative" className="space-y-1">
@@ -911,10 +1020,14 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
               Negative Concern
             </p>
             <p className="text-sm">
-              {sentimentStatements.negative?.[0] || 'No negative statements found'}
+              {hasNegative 
+                ? sentimentStatements.negative[0] 
+                : 'No negative statements found'}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              This highlights a critical pain point that should be addressed.
+              {hasNegative 
+                ? "This highlights a critical pain point that should be addressed."
+                : "The interview did not reveal significant negative sentiments."}
             </p>
           </div>,
           <div key="top-neutral" className="space-y-1">
@@ -922,15 +1035,31 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
               Neutral Observation
             </p>
             <p className="text-sm">
-              {sentimentStatements.neutral?.[0] || 'No neutral statements found'}
+              {hasNeutral 
+                ? sentimentStatements.neutral[0]
+                : 'No neutral statements found'}
             </p>
             <p className="text-sm text-muted-foreground italic">
-              This represents accepted functionality that could be improved.
+              {hasNeutral 
+                ? "This represents accepted functionality that could be improved."
+                : "The interview did not contain significant neutral observations."}
             </p>
           </div>
         ];
       } else if (type === 'personas') {
-        if (!personasData.length) return [<div key="no-personas">No personas available</div>];
+        if (!personasData.length) {
+          return [
+            <div key="no-personas" className="space-y-1">
+              <p className="font-medium">No Personas Generated</p>
+              <p className="text-sm">
+                The analysis did not generate any personas from the interview data.
+              </p>
+              <p className="text-sm text-muted-foreground italic">
+                Consider using a more detailed interview transcript focused on user roles and responsibilities.
+              </p>
+            </div>
+          ];
+        }
         
         const persona = personasData[0]; // Focus on the first persona
         
@@ -938,7 +1067,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="who-they-are" className="space-y-1">
             <p className="font-medium">Who They Are</p>
             <p className="text-sm">
-              {persona.role_context?.value || 'Not specified'}
+              {persona.role_context?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               Understanding their role provides context for their needs and behaviors.
@@ -947,7 +1076,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="what-they-need" className="space-y-1">
             <p className="font-medium">What They Need</p>
             <p className="text-sm">
-              {persona.key_responsibilities?.value || 'Not specified'}
+              {persona.key_responsibilities?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               These needs should be directly addressed in product functionality.
@@ -956,7 +1085,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <div key="key-challenge" className="space-y-1">
             <p className="font-medium">Key Challenge</p>
             <p className="text-sm">
-              {persona.pain_points?.value || 'Not specified'}
+              {persona.pain_points?.value || 'Not specified in transcript'}
             </p>
             <p className="text-sm text-muted-foreground italic">
               Solving this challenge would significantly improve their experience.
@@ -966,7 +1095,7 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
       }
     }
     
-    return [<div key="default">No insights available</div>];
+    return [<div key="default">No insights available for this analysis type.</div>];
   };
   
   // Update the KeyFindings component to include the toggle
