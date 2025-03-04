@@ -70,6 +70,34 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   // Validate and normalize sentiment data
   const sentimentData = useMemo(() => {
     console.log('Received sentiment data:', data);
+    console.log('Supporting statements:', supportingStatements);
+
+    // Check if we have supporting statements to calculate more accurate percentages
+    if (supportingStatements && 
+        Array.isArray(supportingStatements.positive) && 
+        Array.isArray(supportingStatements.neutral) && 
+        Array.isArray(supportingStatements.negative)) {
+      
+      const positiveCount = supportingStatements.positive.length;
+      const neutralCount = supportingStatements.neutral.length;
+      const negativeCount = supportingStatements.negative.length;
+      const total = positiveCount + neutralCount + negativeCount;
+      
+      console.log('Calculating sentiment from statement counts:', {
+        positiveCount,
+        neutralCount,
+        negativeCount,
+        total
+      });
+      
+      if (total > 0) {
+        return {
+          positive: positiveCount / total,
+          neutral: neutralCount / total,
+          negative: negativeCount / total,
+        };
+      }
+    }
 
     // Check if data is undefined or has invalid values
     if (!data || 
@@ -97,7 +125,7 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
     }
 
     return data;
-  }, [data]);
+  }, [data, supportingStatements]);
 
   // Process detailed sentiment data for trends
   const detailedStats = useMemo(() => {

@@ -82,15 +82,38 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
 
   // Calculate sentiment percentages
   const sentimentPercentages = useMemo(() => {
-    const { positive, neutral, negative } = sentimentData.overview;
-    const total = positive + neutral + negative || 1; // Prevent division by zero
-
-    return {
-      positive: Math.round((positive / total) * 100),
-      neutral: Math.round((neutral / total) * 100),
-      negative: Math.round((negative / total) * 100)
-    };
-  }, [sentimentData.overview]);
+    // For sentiment analysis, use actual statement counts instead of overview values
+    if (type === 'sentiment' && sentimentData.statements) {
+      const positiveCount = sentimentData.statements.positive?.length || 0;
+      const neutralCount = sentimentData.statements.neutral?.length || 0;
+      const negativeCount = sentimentData.statements.negative?.length || 0;
+      
+      const total = positiveCount + neutralCount + negativeCount || 1; // Prevent division by zero
+      
+      console.log("Calculating sentiment percentages from actual statement counts:", {
+        positiveCount,
+        neutralCount,
+        negativeCount,
+        total
+      });
+      
+      return {
+        positive: Math.round((positiveCount / total) * 100),
+        neutral: Math.round((neutralCount / total) * 100),
+        negative: Math.round((negativeCount / total) * 100)
+      };
+    } else {
+      // For other types, use the original calculation
+      const { positive, neutral, negative } = sentimentData.overview;
+      const total = positive + neutral + negative || 1; // Prevent division by zero
+      
+      return {
+        positive: Math.round((positive / total) * 100),
+        neutral: Math.round((neutral / total) * 100),
+        negative: Math.round((negative / total) * 100)
+      };
+    }
+  }, [sentimentData, type]);
 
   // Get supporting statements for sentiment data
   const sentimentStatements = useMemo(() => {
@@ -610,12 +633,33 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
         { name: 'Low Confidence', value: negative.length, color: SENTIMENT_COLORS.negative },
       ];
     } else {
-      // Sentiment
-      return [
-        { name: 'Positive', value: sentimentData.overview.positive, color: SENTIMENT_COLORS.positive },
-        { name: 'Neutral', value: sentimentData.overview.neutral, color: SENTIMENT_COLORS.neutral },
-        { name: 'Negative', value: sentimentData.overview.negative, color: SENTIMENT_COLORS.negative },
-      ];
+      // Sentiment - use actual statement counts for more accurate representation
+      if (sentimentData.statements) {
+        return [
+          { 
+            name: 'Positive', 
+            value: sentimentData.statements.positive?.length || 0, 
+            color: SENTIMENT_COLORS.positive 
+          },
+          { 
+            name: 'Neutral', 
+            value: sentimentData.statements.neutral?.length || 0, 
+            color: SENTIMENT_COLORS.neutral 
+          },
+          { 
+            name: 'Negative', 
+            value: sentimentData.statements.negative?.length || 0, 
+            color: SENTIMENT_COLORS.negative 
+          },
+        ];
+      } else {
+        // Fallback to overview values if statements aren't available
+        return [
+          { name: 'Positive', value: sentimentData.overview.positive, color: SENTIMENT_COLORS.positive },
+          { name: 'Neutral', value: sentimentData.overview.neutral, color: SENTIMENT_COLORS.neutral },
+          { name: 'Negative', value: sentimentData.overview.negative, color: SENTIMENT_COLORS.negative },
+        ];
+      }
     }
   };
 
@@ -630,10 +674,10 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           <h2 className="text-xl font-bold mb-6">{getTitle()}</h2>
           
           {/* Chart Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8">
             {/* Pie Chart */}
             <div className="bg-card p-4 rounded-lg shadow-sm">
-              <h3 className="text-lg font-medium mb-4">Distribution</h3>
+              <h3 className="text-lg font-medium mb-4">Sentiment Distribution</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -651,30 +695,8 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => [`${value}${type !== 'sentiment' ? '' : '%'}`]} />
+                    <Tooltip formatter={(value) => [`${value}${type === 'sentiment' ? ' statements' : ''}`]} />
                   </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            
-            {/* Bar Chart */}
-            <div className="bg-card p-4 rounded-lg shadow-sm">
-              <h3 className="text-lg font-medium mb-4">Comparison</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getSummaryChartData()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value) => [`${value}${type !== 'sentiment' ? '' : '%'}`]}
-                    />
-                    <Bar dataKey="value">
-                      {getSummaryChartData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
