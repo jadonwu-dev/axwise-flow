@@ -677,17 +677,74 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     );
   };
 
-  // Update getTitle function
-  const getTitle = () => {
+  // Update getTitle function with improved titles and descriptions
+  const getTitleInfo = () => {
     switch (type) {
       case 'themes':
-        return 'Themes';
+        return {
+          title: 'Theme Analysis',
+          description: 'Key topics and subjects identified in the interview data'
+        };
       case 'patterns':
-        return 'Patterns';
+        return {
+          title: 'Pattern Recognition',
+          description: 'Recurring behaviors and trends identified across responses'
+        };
       case 'sentiment':
-        return 'Sentiment Analysis';
+        return {
+          title: 'Sentiment Analysis',
+          description: 'Distribution of positive, neutral, and negative expressions'
+        };
       case 'personas':
-        return 'Personas';
+        return {
+          title: 'User Personas',
+          description: 'Detailed user profiles generated from interview data'
+        };
+      default:
+        return {
+          title: '',
+          description: ''
+        };
+    }
+  };
+
+  // Get chart label text based on data type
+  const getChartLabel = () => {
+    switch (type) {
+      case 'themes':
+        return 'Theme Distribution by Sentiment';
+      case 'patterns':
+        return 'Pattern Distribution by Sentiment';
+      case 'sentiment':
+        return 'Statement Sentiment Distribution';
+      case 'personas':
+        return 'Persona Distribution by Confidence';
+      default:
+        return 'Sentiment Distribution';
+    }
+  };
+
+  // Get total items count and text description
+  const getTotalItemsText = () => {
+    switch (type) {
+      case 'themes': {
+        const total = themesBySentiment.positive.length + themesBySentiment.neutral.length + themesBySentiment.negative.length;
+        return `${total} theme${total !== 1 ? 's' : ''} identified`;
+      }
+      case 'patterns': {
+        const total = patternsBySentiment.positive.length + patternsBySentiment.neutral.length + patternsBySentiment.negative.length;
+        return `${total} pattern${total !== 1 ? 's' : ''} identified`;
+      }
+      case 'sentiment': {
+        const total = (sentimentStatements.positive?.length || 0) + 
+                     (sentimentStatements.neutral?.length || 0) + 
+                     (sentimentStatements.negative?.length || 0);
+        return `${total} statement${total !== 1 ? 's' : ''} analyzed`;
+      }
+      case 'personas': {
+        const total = personasData.length;
+        return `${total} persona${total !== 1 ? 's' : ''} generated`;
+      }
       default:
         return '';
     }
@@ -1225,47 +1282,35 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     return [<div key="default">No insights available for this analysis type.</div>];
   };
   
-  // Update the KeyFindings component to include the toggle and guidance
+  // Update the KeyFindings component to include the toggle
   const KeyFindings = () => {
     const findings = getKeyFindings();
     
     return (
       <div className="bg-card p-4 rounded-lg shadow-sm h-full flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-medium">Key Insights</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Most important findings from the analysis
-            </p>
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => setInsightMode('minor')}
-                className={`px-2 py-1 text-xs rounded ${
-                  insightMode === 'minor' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-muted text-muted-foreground'
-                }`}
-                title="Show top 3 key points only"
-              >
-                Top 3
-              </button>
-              <button 
-                onClick={() => setInsightMode('major')}
-                className={`px-2 py-1 text-xs rounded ${
-                  insightMode === 'major' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-muted text-muted-foreground'
-                }`}
-                title="Show comprehensive analysis with more details"
-              >
-                Detailed
-              </button>
-            </div>
-            <div className="text-xs text-muted-foreground mt-1 text-right">
-              {insightMode === 'minor' ? 'Quick highlights' : 'In-depth analysis'}
-            </div>
+          <h3 className="text-lg font-medium">Key Insights</h3>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => setInsightMode('minor')}
+              className={`px-2 py-1 text-xs rounded ${
+                insightMode === 'minor' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              Top 3
+            </button>
+            <button 
+              onClick={() => setInsightMode('major')}
+              className={`px-2 py-1 text-xs rounded ${
+                insightMode === 'major' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              Detailed
+            </button>
           </div>
         </div>
         <div className="space-y-5 flex-grow">
@@ -1336,6 +1381,11 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     return 'Data available but in unexpected format';
   };
 
+  // Helper function to check if sorting is applicable for the current type
+  const isSortingApplicable = (currentType: 'themes' | 'patterns' | 'sentiment' | 'personas'): boolean => {
+    return currentType === 'themes' || currentType === 'patterns' || currentType === 'sentiment';
+  };
+
   return (
     <div className={`${className || ''} w-full`}>
       {/* Special handling for personas - no charts, different layout */}
@@ -1344,70 +1394,43 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
       ) : (
         // Standard visualization for themes, patterns, and sentiment
         <>
-          <h2 className="text-xl font-bold mb-6">{getTitle()}</h2>
+          <h2 className="text-xl font-bold mb-6">{getTitleInfo().title}</h2>
           
           {/* Chart Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Pie Chart */}
             <div className="bg-card p-4 rounded-lg shadow-sm">
-              <div className="flex flex-col h-full">
-                <div className="mb-4">
-                  <h3 className="text-lg font-medium">Sentiment Distribution</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {type === 'sentiment' 
-                      ? 'Breakdown of positive, neutral, and negative statements in the interview' 
-                      : type === 'themes'
-                        ? 'Distribution of themes by sentiment'
-                        : 'Distribution of patterns by sentiment'}
-                  </p>
-                </div>
-                <div className="flex-grow h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={getSummaryChartData()}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {getSummaryChartData().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value) => [
-                          `${value}${type === 'sentiment' ? ' statements' : ''}`
-                        ]}
-                        labelFormatter={(name) => {
-                          if (name === 'Positive') return "Positive sentiment - favorable responses";
-                          if (name === 'Neutral') return "Neutral sentiment - balanced responses";
-                          if (name === 'Negative') return "Negative sentiment - concerns or issues";
-                          return name;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 border-t pt-3">
-                  <div className="flex justify-between text-xs">
-                    <div className="flex items-center">
-                      <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.positive }}></div>
-                      <span>Positive: {sentimentPercentages.positive}%</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.neutral }}></div>
-                      <span>Neutral: {sentimentPercentages.neutral}%</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.negative }}></div>
-                      <span>Negative: {sentimentPercentages.negative}%</span>
-                    </div>
-                  </div>
-                </div>
+              <div className="flex flex-col mb-3">
+                <h3 className="text-lg font-medium">{getChartLabel()}</h3>
+                <p className="text-sm text-gray-500 mt-1">{getTitleInfo().description}</p>
+                <p className="text-xs text-gray-400 mt-1">{getTotalItemsText()}</p>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={getSummaryChartData()}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {getSummaryChartData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name) => [
+                        `${value} ${type === 'sentiment' ? 'statements' : type === 'personas' ? 'personas' : type === 'themes' ? 'themes' : 'patterns'}`, 
+                        name
+                      ]} 
+                      labelFormatter={() => 'Distribution'}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
             
@@ -1416,50 +1439,62 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
           </div>
           
           {/* Content Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            <div>
-              <h3 className="text-lg font-medium mb-3 text-emerald-600 dark:text-emerald-400 flex items-center">
-                <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.positive }}></div>
-                Positive
-                <div className="ml-2 text-xs bg-emerald-100 text-emerald-800 rounded-full px-2 py-1">
-                  {type === 'themes' ? themesBySentiment.positive.length : 
-                   type === 'patterns' ? patternsBySentiment.positive.length : 
-                   sentimentStatements.positive.length} items
-                </div>
-              </h3>
-              {type === 'themes' && renderThemeItems(themesBySentiment.positive, 'positive')}
-              {type === 'patterns' && renderPatternItems(patternsBySentiment.positive, 'positive')}
-              {type === 'sentiment' && renderSentimentItems(sentimentStatements.positive, 'positive')}
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Detailed Content</h3>
             </div>
             
-            <div>
-              <h3 className="text-lg font-medium mb-3 text-blue-600 dark:text-blue-400 flex items-center">
-                <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.neutral }}></div>
-                Neutral
-                <div className="ml-2 text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-1">
-                  {type === 'themes' ? themesBySentiment.neutral.length : 
-                   type === 'patterns' ? patternsBySentiment.neutral.length : 
-                   sentimentStatements.neutral.length} items
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6 mt-4">
+              <div>
+                <div className="flex items-center mb-3 px-1">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 mr-2"></div>
+                  <h3 className="text-base font-medium text-emerald-600 dark:text-emerald-400">
+                    Positive
+                  </h3>
+                  <span className="ml-auto text-sm text-gray-500">
+                    {type === 'themes' && themesBySentiment.positive.length > 0 ? `${themesBySentiment.positive.length} themes` : 
+                     type === 'patterns' && patternsBySentiment.positive.length > 0 ? `${patternsBySentiment.positive.length} patterns` :
+                     type === 'sentiment' && sentimentStatements.positive?.length > 0 ? `${sentimentStatements.positive.length} statements` : ''}
+                  </span>
                 </div>
-              </h3>
-              {type === 'themes' && renderThemeItems(themesBySentiment.neutral, 'neutral')}
-              {type === 'patterns' && renderPatternItems(patternsBySentiment.neutral, 'neutral')}
-              {type === 'sentiment' && renderSentimentItems(sentimentStatements.neutral, 'neutral')}
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-medium mb-3 text-rose-600 dark:text-rose-400 flex items-center">
-                <div className="h-3 w-3 rounded-full mr-1" style={{ backgroundColor: SENTIMENT_COLORS.negative }}></div>
-                Negative
-                <div className="ml-2 text-xs bg-rose-100 text-rose-800 rounded-full px-2 py-1">
-                  {type === 'themes' ? themesBySentiment.negative.length : 
-                   type === 'patterns' ? patternsBySentiment.negative.length : 
-                   sentimentStatements.negative.length} items
+                {type === 'themes' && renderThemeItems(themesBySentiment.positive, 'positive')}
+                {type === 'patterns' && renderPatternItems(patternsBySentiment.positive, 'positive')}
+                {type === 'sentiment' && renderSentimentItems(sentimentStatements.positive, 'positive')}
+              </div>
+              
+              <div>
+                <div className="flex items-center mb-3 px-1">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                  <h3 className="text-base font-medium text-blue-600 dark:text-blue-400">
+                    Neutral
+                  </h3>
+                  <span className="ml-auto text-sm text-gray-500">
+                    {type === 'themes' && themesBySentiment.neutral.length > 0 ? `${themesBySentiment.neutral.length} themes` : 
+                     type === 'patterns' && patternsBySentiment.neutral.length > 0 ? `${patternsBySentiment.neutral.length} patterns` :
+                     type === 'sentiment' && sentimentStatements.neutral?.length > 0 ? `${sentimentStatements.neutral.length} statements` : ''}
+                  </span>
                 </div>
-              </h3>
-              {type === 'themes' && renderThemeItems(themesBySentiment.negative, 'negative')}
-              {type === 'patterns' && renderPatternItems(patternsBySentiment.negative, 'negative')}
-              {type === 'sentiment' && renderSentimentItems(sentimentStatements.negative, 'negative')}
+                {type === 'themes' && renderThemeItems(themesBySentiment.neutral, 'neutral')}
+                {type === 'patterns' && renderPatternItems(patternsBySentiment.neutral, 'neutral')}
+                {type === 'sentiment' && renderSentimentItems(sentimentStatements.neutral, 'neutral')}
+              </div>
+              
+              <div>
+                <div className="flex items-center mb-3 px-1">
+                  <div className="w-3 h-3 rounded-full bg-rose-500 mr-2"></div>
+                  <h3 className="text-base font-medium text-rose-600 dark:text-rose-400">
+                    Negative
+                  </h3>
+                  <span className="ml-auto text-sm text-gray-500">
+                    {type === 'themes' && themesBySentiment.negative.length > 0 ? `${themesBySentiment.negative.length} themes` : 
+                     type === 'patterns' && patternsBySentiment.negative.length > 0 ? `${patternsBySentiment.negative.length} patterns` :
+                     type === 'sentiment' && sentimentStatements.negative?.length > 0 ? `${sentimentStatements.negative.length} statements` : ''}
+                  </span>
+                </div>
+                {type === 'themes' && renderThemeItems(themesBySentiment.negative, 'negative')}
+                {type === 'patterns' && renderPatternItems(patternsBySentiment.negative, 'negative')}
+                {type === 'sentiment' && renderSentimentItems(sentimentStatements.negative, 'negative')}
+              </div>
             </div>
           </div>
         </>
