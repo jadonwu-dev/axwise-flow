@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { User, Briefcase, Target, Wrench, InfoIcon } from 'lucide-react';
+import { ThemeChart } from './ThemeChart';
 
 interface UnifiedVisualizationProps {
   type: 'themes' | 'patterns' | 'sentiment' | 'personas';
@@ -83,22 +84,57 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
   const filterMeaninglessSentimentStatements = (statements: string[]): string[] => {
     if (!statements) return [];
     
-    // Filter out statements that are likely just names, ages, or very short responses
+    // Filter out statements that are unlikely to provide meaningful sentiment information
     return statements.filter(statement => {
       // Skip very short statements (likely names, ages, etc.)
-      if (statement.length < 10) return false;
+      if (statement.length < 20) return false;
       
-      // Skip statements that are just providing basic profile info
       const lowerStatement = statement.toLowerCase();
+      
+      // Skip metadata and headers
       if (
-        lowerStatement.includes("name provided") ||
-        lowerStatement.includes("age provided") ||
-        lowerStatement.includes("occupation") ||
-        lowerStatement.includes("persona") ||
-        /^\d+$/.test(statement) // Just numbers
+        lowerStatement.includes("transcript") ||
+        lowerStatement.includes("interview") && (lowerStatement.includes("date") || lowerStatement.includes("time")) ||
+        lowerStatement.match(/^\d{2,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/) || // Date patterns
+        lowerStatement.match(/^\d{1,2}:\d{2}/) || // Time patterns
+        /^\d+$/.test(statement) || // Just numbers
+        lowerStatement.match(/^(interviewer|interviewee|moderator|participant|speaker)\s*:?\s*$/i) // Just role identifiers
       ) {
         return false;
       }
+      
+      // Skip statements that are just providing basic profile info
+      if (
+        lowerStatement.includes("name provided") ||
+        lowerStatement.includes("age provided") ||
+        lowerStatement.includes("occupation:") ||
+        lowerStatement.includes("job title:") ||
+        lowerStatement.includes("years of experience:") ||
+        lowerStatement.includes("persona")
+      ) {
+        return false;
+      }
+      
+      // Skip one-word or extremely simple responses with little context
+      if (
+        lowerStatement.match(/^(yes|no|maybe|ok|okay|sure|thanks|thank you|correct|right|wrong|agreed|disagree)\.?$/i) ||
+        lowerStatement.match(/^(i think so|not really|absolutely|definitely|of course)\.?$/i)
+      ) {
+        return false;
+      }
+
+      // Ensure the statement actually has some meaningful content
+      // Check for the presence of verbs or adjectives, which suggest actual opinions
+      const hasOpinionIndicators = 
+        lowerStatement.includes(" is ") || 
+        lowerStatement.includes(" was ") || 
+        lowerStatement.includes(" feel ") || 
+        lowerStatement.includes(" think ") || 
+        lowerStatement.includes(" found ") || 
+        lowerStatement.includes(" like ") || 
+        lowerStatement.includes(" prefer ");
+        
+      if (!hasOpinionIndicators) return false;
       
       return true;
     });
@@ -1352,25 +1388,30 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
   };
 
   return (
-    <div className={`${className || ''} w-full`}>
-      {/* Special handling for personas - no charts, different layout */}
-      {type === 'personas' ? (
-        renderPersonaDashboard()
-      ) : (
-        // Standard visualization for themes, patterns, and sentiment
-        <>
-          <h2 className="text-xl font-bold mb-6">{getTitleInfo().title}</h2>
-          
-          {/* Chart Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Pie Chart */}
-            <div className="bg-card p-4 rounded-lg shadow-sm">
-              <div className="flex flex-col mb-3">
-                <h3 className="text-lg font-medium">{getChartLabel()}</h3>
-                <p className="text-sm text-gray-500 mt-1">{getTitleInfo().description}</p>
-                <p className="text-xs text-gray-400 mt-1">{getTotalItemsText()}</p>
+    <div className={`space-y-6 ${className}`}>
+      {/* Title & Info */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight">{getTitleInfo().title}</h2>
+          <p className="text-muted-foreground">{getTitleInfo().description}</p>
               </div>
-              <div className="h-64">
+        <div className="flex gap-2">
+          <Badge variant="outline" className="text-xs">
+            {getTotalItemsText()}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Left column - Chart and Key Insights */}
+        <div className="md:col-span-1 space-y-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">{getChartLabel()}</CardTitle>
+              <CardDescription>{type === 'sentiment' ? 'Distribution of expressions' : 'Key topics by sentiment'}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -1378,165 +1419,113 @@ export const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       cx="50%"
                       cy="50%"
                       labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     >
                       {getSummaryChartData().map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value, name) => {
-                        let label = '';
-                        
-                        // Use type guards for each possible value
-                        if (type === 'sentiment') {
-                          label = 'statements';
-                        } else if (type === 'themes') {
-                          label = 'themes';
-                        } else if (type === 'patterns') {
-                          label = 'patterns';
-                        } else {
-                          // this covers the 'personas' case
-                          label = 'personas';
-                        }
-                        
-                        return [`${value} ${label}`, name];
-                      }}
-                      labelFormatter={() => 'Distribution'}
+                      formatter={(value: any) => [`${(value * 100).toFixed(0)}%`, '']}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-            
-            {/* Key Findings */}
+            </CardContent>
+          </Card>
+
+          {/* Key Insights Card */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Key Insights</CardTitle>
+              <CardDescription>
+                Significant findings from the {
+                  type === 'themes' ? 'theme' : 
+                  type === 'patterns' ? 'pattern' : 
+                  type === 'sentiment' ? 'sentiment' : 'persona'
+                } analysis
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
             <KeyFindings />
+            </CardContent>
+          </Card>
           </div>
           
-          {/* Content Row */}
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium">Detailed Content</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6 mt-4">
-              <div>
-                <div className="flex items-center mb-3 px-1">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 mr-2"></div>
-                  <h3 className="text-base font-medium text-emerald-600 dark:text-emerald-400">
-                    Positive
-                  </h3>
-                  <span className="ml-auto text-sm text-gray-500">
-                    {function() {
-                      // Explicitly handle each type separately to avoid type errors
-                      if (type === 'themes') {
-                        return themesBySentiment.positive.length > 0 
-                          ? `${themesBySentiment.positive.length} themes` 
-                          : '';
-                      }
-                      
-                      if (type === 'patterns') {
-                        return patternsBySentiment.positive.length > 0 
-                          ? `${patternsBySentiment.positive.length} patterns` 
-                          : '';
-                      }
-                      
-                      if (type === 'sentiment') {
-                        return sentimentStatements.positive?.length > 0 
-                          ? `${sentimentStatements.positive.length} statements` 
-                          : '';
-                      }
-                      
-                      // Default case for 'personas' or any other type
-                      return '';
-                    }()}
-                  </span>
-                </div>
-                {type === 'themes' && renderThemeItems(themesBySentiment.positive, 'positive')}
+        {/* Right column - Detailed Content */}
+        <div className="md:col-span-2">
+          {/* For Themes, use the enhanced ThemeChart but keep key insights separate */}
+          {type === 'themes' ? (
+            <ThemeChart themes={themesData} />
+          ) : (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className={`pb-2 bg-green-50 dark:bg-green-900/20`}>
+                  <CardTitle className={`text-base font-medium text-green-700 dark:text-green-300`}>
+                    {type === 'patterns' ? 'Positive Patterns' : 
+                     type === 'sentiment' ? 'Positive Expressions' : 'Positive Responses'}
+                  </CardTitle>
+                  <CardDescription>
+                    {type === 'patterns' ? 'Patterns with positive sentiment' :
+                     type === 'sentiment' ? 'Statements with positive sentiment' : 'Personas with positive responses'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
                 {type === 'patterns' && renderPatternItems(patternsBySentiment.positive, 'positive')}
-                {type === 'sentiment' && renderSentimentItems(sentimentStatements.positive, 'positive')}
-              </div>
-              
-              <div>
-                <div className="flex items-center mb-3 px-1">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
-                  <h3 className="text-base font-medium text-blue-600 dark:text-blue-400">
-                    Neutral
-                  </h3>
-                  <span className="ml-auto text-sm text-gray-500">
-                    {function() {
-                      // Explicitly handle each type separately to avoid type errors
-                      if (type === 'themes') {
-                        return themesBySentiment.neutral.length > 0 
-                          ? `${themesBySentiment.neutral.length} themes` 
-                          : '';
-                      }
-                      
-                      if (type === 'patterns') {
-                        return patternsBySentiment.neutral.length > 0 
-                          ? `${patternsBySentiment.neutral.length} patterns` 
-                          : '';
-                      }
-                      
-                      if (type === 'sentiment') {
-                        return sentimentStatements.neutral?.length > 0 
-                          ? `${sentimentStatements.neutral.length} statements` 
-                          : '';
-                      }
-                      
-                      // Default case for 'personas' or any other type
-                      return '';
-                    }()}
-                  </span>
-                </div>
-                {type === 'themes' && renderThemeItems(themesBySentiment.neutral, 'neutral')}
+                  {type === 'sentiment' && renderSentimentItems(
+                    sentimentData?.statements?.positive || [],
+                    'positive'
+                  )}
+                  {type === 'personas' && renderPersonaDashboard()}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className={`pb-2 bg-blue-50 dark:bg-blue-900/20`}>
+                  <CardTitle className={`text-base font-medium text-blue-700 dark:text-blue-300`}>
+                    {type === 'patterns' ? 'Neutral Patterns' : 
+                     type === 'sentiment' ? 'Neutral Expressions' : 'Neutral Responses'}
+                  </CardTitle>
+                  <CardDescription>
+                    {type === 'patterns' ? 'Patterns with neutral sentiment' :
+                     type === 'sentiment' ? 'Statements with neutral sentiment' : 'Personas with neutral responses'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
                 {type === 'patterns' && renderPatternItems(patternsBySentiment.neutral, 'neutral')}
-                {type === 'sentiment' && renderSentimentItems(sentimentStatements.neutral, 'neutral')}
-              </div>
-              
-              <div>
-                <div className="flex items-center mb-3 px-1">
-                  <div className="w-3 h-3 rounded-full bg-rose-500 mr-2"></div>
-                  <h3 className="text-base font-medium text-rose-600 dark:text-rose-400">
-                    Negative
-                  </h3>
-                  <span className="ml-auto text-sm text-gray-500">
-                    {function() {
-                      // Explicitly handle each type separately to avoid type errors
-                      if (type === 'themes') {
-                        return themesBySentiment.negative.length > 0 
-                          ? `${themesBySentiment.negative.length} themes` 
-                          : '';
-                      }
-                      
-                      if (type === 'patterns') {
-                        return patternsBySentiment.negative.length > 0 
-                          ? `${patternsBySentiment.negative.length} patterns` 
-                          : '';
-                      }
-                      
-                      if (type === 'sentiment') {
-                        return sentimentStatements.negative?.length > 0 
-                          ? `${sentimentStatements.negative.length} statements` 
-                          : '';
-                      }
-                      
-                      // Default case for 'personas' or any other type
-                      return '';
-                    }()}
-                  </span>
-                </div>
-                {type === 'themes' && renderThemeItems(themesBySentiment.negative, 'negative')}
+                  {type === 'sentiment' && renderSentimentItems(
+                    sentimentData?.statements?.neutral || [],
+                    'neutral'
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className={`pb-2 bg-red-50 dark:bg-red-900/20`}>
+                  <CardTitle className={`text-base font-medium text-red-700 dark:text-red-300`}>
+                    {type === 'patterns' ? 'Negative Patterns' : 
+                     type === 'sentiment' ? 'Negative Expressions' : 'Negative Responses'}
+                  </CardTitle>
+                  <CardDescription>
+                    {type === 'patterns' ? 'Patterns with negative sentiment' :
+                     type === 'sentiment' ? 'Statements with negative sentiment' : 'Personas with negative responses'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
                 {type === 'patterns' && renderPatternItems(patternsBySentiment.negative, 'negative')}
-                {type === 'sentiment' && renderSentimentItems(sentimentStatements.negative, 'negative')}
+                  {type === 'sentiment' && renderSentimentItems(
+                    sentimentData?.statements?.negative || [],
+                    'negative'
+                  )}
+                </CardContent>
+              </Card>
               </div>
+          )}
             </div>
           </div>
-        </>
-      )}
     </div>
   );
 };

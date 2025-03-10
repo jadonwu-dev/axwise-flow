@@ -4,8 +4,11 @@ import logging
 import asyncio
 import json
 import re
+import copy
 from typing import Dict, Any, List, Tuple
 from domain.interfaces.llm_service import ILLMService
+
+from backend.schemas import DetailedAnalysisResult
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +210,7 @@ class NLPProcessor:
             })
             sentiment_task = llm_service.analyze({
                 'task': 'sentiment_analysis',
-                'text': combined_text
+                'text': self._preprocess_transcript_for_sentiment(combined_text)
             })
             
             # Wait for all parallel tasks to complete
@@ -218,6 +221,35 @@ class NLPProcessor:
             parallel_duration = asyncio.get_event_loop().time() - start_time
             logger.info(f"Parallel analysis completed in {parallel_duration:.2f} seconds")
             
+            # Process and validate sentiment results before including them in the response
+            # This ensures we only return high-quality sentiment data
+            try:
+                processed_sentiment = self._process_sentiment_results(sentiment_result)
+                logger.info(f"Processed sentiment results: positive={len(processed_sentiment.get('positive', []))}, neutral={len(processed_sentiment.get('neutral', []))}, negative={len(processed_sentiment.get('negative', []))}")
+            except Exception as e:
+                logger.error(f"Error processing sentiment results: {str(e)}")
+                # Use empty sentiment data instead of failing completely
+                processed_sentiment = {'positive': [], 'neutral': [], 'negative': []}
+                logger.warning("Using empty sentiment data due to processing error")
+            
+            # Don't return partial results - either return everything or nothing to ensure consistency
+            # This prevents frontend from showing sentiment while other components are still loading
+            try:
+                if len(themes_result.get('themes', [])) == 0 or len(patterns_result.get('patterns', [])) == 0:
+                    logger.warning("Themes or patterns analysis incomplete - returning empty results to ensure consistency")
+                    # Don't return partial results
+                    return {
+                        'status': 'processing',
+                        'message': 'Analysis still in progress. Please try again later.',
+                    }
+            except Exception as e:
+                logger.error(f"Error checking themes/patterns completeness: {str(e)}")
+                # Return a helpful error message instead of crashing
+                return {
+                    'status': 'error',
+                    'message': 'Error during analysis processing. Please try again.',
+                }
+            
             # Generate insights using the results from parallel analysis
             insight_start_time = asyncio.get_event_loop().time()
             insights_result = await llm_service.analyze({
@@ -225,7 +257,7 @@ class NLPProcessor:
                 'text': combined_text,
                 'themes': themes_result.get('themes', []),
                 'patterns': patterns_result.get('patterns', []),
-                'sentiment': sentiment_result.get('sentiment', {})
+                'sentiment': processed_sentiment
             })
             
             insight_duration = asyncio.get_event_loop().time() - insight_start_time
@@ -238,7 +270,7 @@ class NLPProcessor:
             results = {
                 'themes': themes_result.get('themes', []),
                 'patterns': patterns_result.get('patterns', []),
-                'sentiment': sentiment_result.get('sentiment', {}),
+                'sentiment': processed_sentiment,
                 'insights': insights_result.get('insights', []),
                 'validation': {
                     'valid': True,
@@ -370,3 +402,144 @@ class NLPProcessor:
             logger.error(f"Error extracting insights: {str(e)}")
             # Return partial results if available
             return results if isinstance(results, dict) else {}
+
+    def _process_sentiment_results(self, sentiment_result):
+        """Process and validate sentiment results to ensure quality"""
+        try:
+            if not sentiment_result or not isinstance(sentiment_result, dict):
+                logger.warning("Invalid sentiment result format")
+                return {'positive': [], 'neutral': [], 'negative': []}
+            
+            # Extract statements - handle different response formats safely
+            if 'positive' in sentiment_result and 'negative' in sentiment_result:
+                # Direct format
+                positive = sentiment_result.get('positive', [])
+                neutral = sentiment_result.get('neutral', [])
+                negative = sentiment_result.get('negative', [])
+            elif 'sentiment' in sentiment_result and isinstance(sentiment_result['sentiment'], dict):
+                # Nested format
+                sentiment_data = sentiment_result['sentiment']
+                positive = sentiment_data.get('positive', [])
+                neutral = sentiment_data.get('neutral', [])
+                negative = sentiment_data.get('negative', [])
+            else:
+                # Unknown format - log and use empty lists
+                logger.warning(f"Unknown sentiment result format: {type(sentiment_result)}")
+                positive = []
+                neutral = []
+                negative = []
+            
+            # Type checking to prevent errors
+            if not isinstance(positive, list):
+                logger.warning(f"Positive sentiment is not a list: {type(positive)}")
+                positive = []
+            if not isinstance(neutral, list):
+                logger.warning(f"Neutral sentiment is not a list: {type(neutral)}")
+                neutral = []
+            if not isinstance(negative, list):
+                logger.warning(f"Negative sentiment is not a list: {type(negative)}")
+                negative = []
+            
+            # Filter out low-quality statements
+            def filter_low_quality(statements):
+                if not statements:
+                    return []
+                try:
+                    return [s for s in statements if isinstance(s, str) and len(s) > 20 and not s.startswith('Product Designer Interview')]
+                except Exception as e:
+                    logger.error(f"Error filtering statements: {str(e)}")
+                    return []
+            
+            # Process each list safely
+            processed_positive = filter_low_quality(positive)
+            processed_neutral = filter_low_quality(neutral)
+            processed_negative = filter_low_quality(negative)
+            
+            # Log sample statements for debugging
+            if processed_positive and len(processed_positive) > 0:
+                logger.info(f"Sample positive statement: {processed_positive[0][:100]}")
+            if processed_neutral and len(processed_neutral) > 0:
+                logger.info(f"Sample neutral statement: {processed_neutral[0][:100]}")
+            if processed_negative and len(processed_negative) > 0:
+                logger.info(f"Sample negative statement: {processed_negative[0][:100]}")
+            
+            return {
+                'positive': processed_positive,
+                'neutral': processed_neutral,
+                'negative': processed_negative
+            }
+        except Exception as e:
+            # Catch any unexpected errors to prevent 500 responses
+            logger.error(f"Unexpected error processing sentiment results: {str(e)}")
+            return {'positive': [], 'neutral': [], 'negative': []}
+
+    def _preprocess_transcript_for_sentiment(self, text):
+        """Preprocess transcript to make Q&A pairs more identifiable"""
+        try:
+            if not text:
+                return text
+            
+            logger.info("Preprocessing transcript for sentiment analysis")
+            
+            # Split text into lines for processing
+            lines = text.split('\n')
+            processed_lines = []
+            
+            # Track the current speaker and whether they're asking a question
+            current_speaker = None
+            is_question = False
+            current_qa_pair = []
+            
+            for line in lines:
+                # Skip empty lines
+                if not line.strip():
+                    continue
+                
+                # Check if this is a new speaker
+                speaker_match = re.search(r'^([^:]+):\s*(.*)', line)
+                
+                if speaker_match:
+                    speaker = speaker_match.group(1).strip()
+                    content = speaker_match.group(2).strip()
+                    
+                    # If we were building a Q&A pair and now have a new speaker, save the previous one
+                    if current_speaker and current_speaker != speaker and current_qa_pair:
+                        processed_lines.append(' '.join(current_qa_pair))
+                        current_qa_pair = []
+                    
+                    # Determine if this is likely a question (contains ? or starts with question words)
+                    question_words = ['what', 'how', 'why', 'when', 'where', 'who', 'which', 'can', 'could', 'would', 'do', 'does']
+                    is_question = '?' in content or any(content.lower().startswith(word) for word in question_words)
+                    
+                    # Format as Q or A with the content
+                    prefix = "Q: " if is_question else "A: "
+                    
+                    # Start a new Q&A pair or continue the current one
+                    if is_question or not current_qa_pair:
+                        current_qa_pair.append(f"{prefix}{content}")
+                    else:
+                        current_qa_pair.append(f"{prefix}{content}")
+                    
+                    current_speaker = speaker
+                else:
+                    # If no speaker detected, add as continuation of the current speaker
+                    if current_qa_pair:
+                        current_qa_pair[-1] += " " + line.strip()
+                    else:
+                        processed_lines.append(line)
+            
+            # Add any remaining Q&A pair
+            if current_qa_pair:
+                processed_lines.append(' '.join(current_qa_pair))
+            
+            processed_text = '\n'.join(processed_lines)
+            
+            # Log a sample of the processed text
+            sample_length = min(200, len(processed_text))
+            logger.info(f"Processed transcript sample: {processed_text[:sample_length]}...")
+            
+            return processed_text
+        except Exception as e:
+            # If preprocessing fails, return the original text instead of causing an error
+            logger.error(f"Error preprocessing transcript: {str(e)}")
+            return text

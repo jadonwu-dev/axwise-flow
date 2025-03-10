@@ -252,7 +252,24 @@ class ApiClient {
           (results.sentimentStatements.positive.length === 0 && 
            results.sentimentStatements.neutral.length === 0 && 
            results.sentimentStatements.negative.length === 0)) {
-        console.warn("No valid sentimentStatements found, implementing additional extraction methods");
+        
+        // Check if we have preliminary sentiment data from the backend
+        const sentimentData = results.sentiment || {};
+        
+        // Only trigger fallback if sentiment data exists but sentimentStatements are missing
+        // This prevents premature fallback when entire analysis hasn't completed
+        if (sentimentData.positive || sentimentData.neutral || sentimentData.negative) {
+          console.log("Using sentiment data directly from backend without fallback", sentimentData);
+          
+          // Use sentiment data directly as statements if available
+          results.sentimentStatements = {
+            positive: Array.isArray(sentimentData.positive) ? sentimentData.positive : [],
+            neutral: Array.isArray(sentimentData.neutral) ? sentimentData.neutral : [],
+            negative: Array.isArray(sentimentData.negative) ? sentimentData.negative : []
+          };
+        } else if (results.themes && results.themes.length > 0 && results.patterns && results.patterns.length > 0) {
+          // Only trigger the keyword fallback if we have complete analysis results but missing sentiment statements
+          console.warn("Complete analysis but missing sentiment statements - implementing keyword fallback");
         
         // Initialize empty statements structure
         results.sentimentStatements = {
@@ -261,136 +278,67 @@ class ApiClient {
           negative: []
         };
         
-        // NEW: Check if results contains raw data with interview responses
+          // Check if results contains raw data with interview responses
         if (results.data && Array.isArray(results.data)) {
           console.log("Extracting sentiment statements from raw interview data");
           
-          // Process each interview response
+            // Process each interview response using more sophisticated rules
           results.data.forEach((item: any) => {
             const response = item.answer || item.response || item.text || '';
-            if (!response || typeof response !== 'string' || !response.trim()) {
+              if (!response || typeof response !== 'string' || !response.trim() || response.length < 20) {
               return;
             }
             
-            // Simple sentiment analysis based on keywords
-            const posWords = ['good', 'great', 'excellent', 'love', 'like', 'best', 'enjoy', 'helpful', 'easy', 'intuitive'];
-            const negWords = ['bad', 'poor', 'terrible', 'hate', 'dislike', 'worst', 'difficult', 'confusing', 'slow', 'frustrating'];
-            
-            const lowercaseResponse = response.toLowerCase();
-            
-            // Check if response contains positive keywords
-            if (posWords.some(word => lowercaseResponse.includes(word))) {
-              results.sentimentStatements.positive.push(response.trim());
-            } 
-            // Check if response contains negative keywords
-            else if (negWords.some(word => lowercaseResponse.includes(word))) {
-              results.sentimentStatements.negative.push(response.trim());
-            }
-            // Otherwise, treat as neutral
-            else {
-              results.sentimentStatements.neutral.push(response.trim());
-            }
-          });
-          
-          console.log("Extracted statements from raw data:", {
-            positive: results.sentimentStatements.positive.length,
-            neutral: results.sentimentStatements.neutral.length,
-            negative: results.sentimentStatements.negative.length
-          });
-        }
-        
-        // Method 1: Check if statements might be in a nested 'sentiment' object
-        if ((results.sentimentStatements.positive.length === 0 &&
-             results.sentimentStatements.neutral.length === 0 && 
-             results.sentimentStatements.negative.length === 0) && 
-            results.sentiment && typeof results.sentiment === 'object' && !Array.isArray(results.sentiment)) {
-          // Check for statements in sentiment.supporting_statements
-          const sentimentObj = results.sentiment as any;
-          if (sentimentObj.supporting_statements) {
-            console.log("Found supporting_statements in sentiment object");
-            results.sentimentStatements.positive = sentimentObj.supporting_statements.positive || [];
-            results.sentimentStatements.neutral = sentimentObj.supporting_statements.neutral || [];
-            results.sentimentStatements.negative = sentimentObj.supporting_statements.negative || [];
-          } 
-          // Check for direct positive/negative arrays
-          else if (sentimentObj.positive || sentimentObj.negative) {
-            console.log("Found positive/negative arrays in sentiment object");
-            results.sentimentStatements.positive = sentimentObj.positive || [];
-            results.sentimentStatements.negative = sentimentObj.negative || [];
-            // Create neutral from any neutral fields
-            results.sentimentStatements.neutral = sentimentObj.neutral || [];
-          }
-        }
-        
-        // Method 2: If we still don't have statements, extract them from the sentiment array items
-        if ((!results.sentimentStatements.positive.length &&
-             !results.sentimentStatements.negative.length && 
-             !results.sentimentStatements.neutral.length) && 
-            Array.isArray(results.sentiment)) {
-          
-          console.log("Extracting sentiment statements from sentiment array items");
-          
-          // Group all sentiment items by their score into positive, neutral, and negative
-          results.sentiment.forEach((item: any) => {
-            // Skip items without answers
-            if (!item.answer || typeof item.answer !== 'string' || !item.answer.trim()) {
+              // Skip metadata and headers
+              if (response.includes("Transcript") || 
+                  response.includes("Interview") && (response.includes("Date") || response.includes("Time")) ||
+                  /^\d{2,4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,4}/.test(response) || // Date patterns
+                  /^\d{1,2}:\d{2}/.test(response)) { // Time patterns
               return;
             }
             
-            // Categorize by score - ensure it's a number
-            const score = typeof item.score === 'number' ? item.score : 0;
-            if (score >= 0.2) {
-              results.sentimentStatements.positive.push(item.answer.trim());
-            } else if (score <= -0.2) {
-              results.sentimentStatements.negative.push(item.answer.trim());
+              // Better sentiment analysis with context awareness
+              const lowercaseResponse = response.toLowerCase();
+              
+              // More comprehensive keyword lists
+              const posWords = ['good', 'great', 'excellent', 'love', 'like', 'best', 'enjoy', 'helpful', 'easy', 'intuitive', 
+                               'impressive', 'satisfied', 'convenient', 'efficient', 'effective', 'simple', 'clear'];
+              const negWords = ['bad', 'poor', 'terrible', 'hate', 'dislike', 'worst', 'difficult', 'confusing', 'slow', 
+                               'frustrating', 'complicated', 'annoying', 'disappointing', 'inconsistent', 'useless', 'broken'];
+              
+              // Look for sentiment keywords in context
+              const hasPositive = posWords.some(word => lowercaseResponse.includes(word));
+              const hasNegative = negWords.some(word => lowercaseResponse.includes(word));
+              
+              // More nuanced classification
+              if (hasPositive && !hasNegative) {
+                results.sentimentStatements.positive.push(response);
+              } else if (hasNegative && !hasPositive) {
+                results.sentimentStatements.negative.push(response);
+              } else if (hasPositive && hasNegative) {
+                // Look at surrounding context to determine whether positive or negative dominates
+                // For mixed sentiment, classify based on which appears later or is more emphasized
+                const lastPosIndex = Math.max(...posWords.map(word => lowercaseResponse.lastIndexOf(word)).filter(i => i >= 0));
+                const lastNegIndex = Math.max(...negWords.map(word => lowercaseResponse.lastIndexOf(word)).filter(i => i >= 0));
+                
+                if (lastPosIndex > lastNegIndex) {
+                  results.sentimentStatements.positive.push(response);
+                } else {
+                  results.sentimentStatements.negative.push(response);
+                }
             } else {
-              results.sentimentStatements.neutral.push(item.answer.trim());
-            }
-          });
-          
-          console.log("Extracted sentiment statements:", {
-            positive: results.sentimentStatements.positive.length,
-            neutral: results.sentimentStatements.neutral.length,
-            negative: results.sentimentStatements.negative.length
-          });
-        }
-        
-        // Method 3: Look for sentiment details in a nested structure
-        if ((!results.sentimentStatements.positive.length &&
-             !results.sentimentStatements.negative.length && 
-             !results.sentimentStatements.neutral.length) && 
-            results.sentiment_details && 
-            Array.isArray(results.sentiment_details)) {
-          
-          console.log("Extracting sentiment statements from sentiment_details");
-          
-          results.sentiment_details.forEach((detail: any) => {
-            if (!detail || !detail.evidence || typeof detail.evidence !== 'string') {
-              return;
-            }
-            
-            // Categorize by score
-            const score = typeof detail.score === 'number' ? detail.score : 0;
-            if (score >= 0.2) {
-              results.sentimentStatements.positive.push(detail.evidence.trim());
-            } else if (score <= -0.2) {
-              results.sentimentStatements.negative.push(detail.evidence.trim());
-            } else {
-              results.sentimentStatements.neutral.push(detail.evidence.trim());
+                // If no strong sentiment, classify as neutral
+                results.sentimentStatements.neutral.push(response);
             }
           });
         }
-        
-        // If we still don't have any statements, add placeholders
-        if (!results.sentimentStatements.positive.length &&
-            !results.sentimentStatements.negative.length && 
-            !results.sentimentStatements.neutral.length) {
-          console.warn("Failed to extract any sentiment statements, using placeholders");
-          // Use placeholders that match the format used in the processFreeTextToSentimentStatements function
+        } else {
+          // If analysis is incomplete, initialize empty structure but don't run fallback
+          console.warn("Analysis incomplete - initializing empty sentiment statements without fallback");
           results.sentimentStatements = {
-            positive: ["No positive statements found in the provided text."],
-            neutral: ["No neutral statements found in the provided text."],
-            negative: ["No negative statements found in the provided text."]
+            positive: [],
+            neutral: [],
+            negative: []
           };
         }
       }

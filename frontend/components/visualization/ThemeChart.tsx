@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export interface ThemeChartProps {
   themes: Theme[];
@@ -50,7 +51,7 @@ const SENTIMENT_COLORS = {
 export function ThemeChart({ themes }: ThemeChartProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
-  const [viewMode, setViewMode] = useState<'sentiment' | 'frequency'>('sentiment');
+  const [viewMode, setViewMode] = useState<'sentiment' | 'frequency' | 'list'>('sentiment');
 
   // Filter themes based on search term
   const filteredThemes = themes.filter(theme => 
@@ -68,6 +69,14 @@ export function ThemeChart({ themes }: ThemeChartProps) {
   // Sort themes by frequency for frequency view
   const sortedByFrequency = [...filteredThemes].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
   const topThemes = sortedByFrequency.slice(0, 10); // Top 10 themes
+
+  // Get sentiment label
+  const getSentimentLabel = (sentiment: number | undefined) => {
+    if (typeof sentiment !== 'number') return 'Neutral';
+    if (sentiment >= 0.1) return 'Positive';
+    if (sentiment <= -0.1) return 'Negative';
+    return 'Neutral';
+  };
 
   // Theme card component
   const ThemeCard = ({ theme }: { theme: Theme }) => (
@@ -122,11 +131,17 @@ export function ThemeChart({ themes }: ThemeChartProps) {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full"
           />
+          {searchTerm && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Showing {filteredThemes.length} of {themes.length} themes
+            </p>
+          )}
         </div>
-        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'sentiment' | 'frequency')}>
+        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'sentiment' | 'frequency' | 'list')}>
           <TabsList>
             <TabsTrigger value="sentiment">By Sentiment</TabsTrigger>
             <TabsTrigger value="frequency">By Frequency</TabsTrigger>
+            <TabsTrigger value="list">List View</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -214,6 +229,88 @@ export function ThemeChart({ themes }: ThemeChartProps) {
         </Card>
       )}
 
+      {/* List View (similar to PatternList) */}
+      {viewMode === 'list' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Identified Themes</CardTitle>
+            <CardDescription>
+              {sortedByFrequency.length} theme{sortedByFrequency.length !== 1 ? 's' : ''} found in the analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sortedByFrequency.length > 0 ? (
+              <Accordion type="multiple" className="w-full">
+                {sortedByFrequency.map((theme) => (
+                  <AccordionItem key={theme.id} value={`theme-${theme.id}`}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center justify-between w-full pr-4">
+                        <span className="font-medium text-left">{theme.name}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={`${(theme.sentiment || 0) > 0.1 
+                              ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' 
+                              : (theme.sentiment || 0) < -0.1 
+                                ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                                : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}
+                >
+                  {getSentimentLabel(theme.sentiment)}
+                          </Badge>
+                          <Badge variant="outline">
+                            {Math.round((theme.frequency || 0) * 100)}%
+                          </Badge>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 pt-2">
+                        {theme.keywords && theme.keywords.length > 0 && (
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium">Keywords:</h4>
+                            <div className="flex flex-wrap gap-1">
+                              {theme.keywords.map((keyword, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {keyword}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {(theme.statements && theme.statements.length > 0) || (theme.examples && theme.examples.length > 0) ? (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium">Supporting Statements:</h4>
+                            <ScrollArea className="h-40 rounded-md border p-4">
+                              <ul className="space-y-2 text-sm">
+                                {theme.statements && theme.statements.map((statement, i) => (
+                                  <li key={i} className="bg-muted p-2 rounded-md">
+                                    <p className="italic">"{statement}"</p>
+                                  </li>
+                                ))}
+                                {!theme.statements && theme.examples && theme.examples.map((example, i) => (
+                                  <li key={i} className="bg-muted p-2 rounded-md">
+                                    <p className="italic">"{example}"</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </ScrollArea>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No supporting statements available.</p>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No themes found</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Theme Details Modal */}
       {selectedTheme && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedTheme(null)}>
@@ -253,31 +350,41 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                           {keyword}
                         </Badge>
                       ))}
-                    </div>
+              </div>
                   </div>
                 )}
                 
-                {selectedTheme.statements && selectedTheme.statements.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Supporting Statements</h4>
-                    <ScrollArea className="h-60 rounded-md border p-4">
-                      <ul className="space-y-3">
-                        {selectedTheme.statements.map((statement, i) => (
-                          <li key={i} className="pb-2 border-b last:border-0">
-                            <p className="italic">"{statement}"</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </ScrollArea>
-                  </div>
-                )}
-                
-                <div className="flex justify-end mt-4">
-                  <Button onClick={() => setSelectedTheme(null)}>Close</Button>
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Supporting Statements</h4>
+                  {selectedTheme.statements && selectedTheme.statements.length > 0 ? (
+                    <ul className="space-y-2">
+                      {selectedTheme.statements.map((statement, i) => (
+                        <li key={i} className="text-sm bg-muted p-2 rounded-md">
+                          <p className="italic">"{statement}"</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : selectedTheme.examples && selectedTheme.examples.length > 0 ? (
+                    <ul className="space-y-2">
+                      {selectedTheme.examples.map((example, i) => (
+                        <li key={i} className="text-sm bg-muted p-2 rounded-md">
+                          <p className="italic">"{example}"</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No supporting statements available. This may be due to limited evidence in the interview data.</p>
+                  )}
                 </div>
+                
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" onClick={() => setSelectedTheme(null)}>
+                    Close
+                  </Button>
+              </div>
               </CardContent>
             </Card>
-          </div>
+            </div>
         </div>
       )}
     </div>
