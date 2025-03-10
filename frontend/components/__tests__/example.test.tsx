@@ -10,13 +10,22 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Import mock utilities
 import mockApiClient from '@/test/mocks/apiClient';
 import { createMockAnalysis, mockThemes } from '@/test/mocks/mockData';
 import { createMockFile, renderWithProviders, wait } from '@/test/mocks/testUtils';
+
+// Mock React's useState hook
+vi.mock('react', async () => {
+  const actual = await vi.importActual('react');
+  return {
+    ...actual as any,
+    useState: vi.fn().mockImplementation((initialValue) => [initialValue, vi.fn()])
+  };
+});
 
 // Mock the API client module
 vi.mock('@/lib/apiClient', () => ({
@@ -103,9 +112,8 @@ describe('Example Analysis Component', () => {
     // Create a component that would use the API client
     // This is just an example - in a real test, this would be your actual component
     const ExampleComponent = () => {
-      const [analysis, setAnalysis] = vi.fn().mockReturnValue([mockAnalysis, vi.fn()]);
-      const [loading, setLoading] = vi.fn().mockReturnValue([false, vi.fn()]);
-      const [error, setError] = vi.fn().mockReturnValue([null, vi.fn()]);
+      // Using the mocked useState from React
+      // Note: We don't actually use the state setters in this example component
       
       // Just for example - this would happen in useEffect in a real component
       mockApiClient.getAnalysisById('test-456');
@@ -145,7 +153,7 @@ describe('Example Analysis Component', () => {
     
     // Example of using renderWithProviders (useful for components that need providers)
     const MockComponent = () => <div data-testid="test-component">Test Component</div>;
-    const { user } = renderWithProviders(<MockComponent />);
+    renderWithProviders(<MockComponent />);
     
     expect(screen.getByTestId('test-component')).toBeInTheDocument();
     
@@ -181,8 +189,7 @@ describe('Example File Upload', () => {
     
     // Create a simple file upload component
     const FileUploader = () => {
-      const [uploadStatus, setUploadStatus] = vi.fn().mockReturnValue(['', vi.fn()]);
-      const [uploadId, setUploadId] = vi.fn().mockReturnValue('', vi.fn());
+      // We're not using state in this example, so we can simplify it
       
       const handleUpload = async (file: File) => {
         // This simulates what your real component would do

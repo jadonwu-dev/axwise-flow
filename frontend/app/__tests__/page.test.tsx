@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, vi, beforeEach } from 'vitest';
+import { render } from '@testing-library/react';
 import HomePage from '../page';
 
 // Mock the components used in HomePage

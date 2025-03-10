@@ -12,7 +12,7 @@ vi.mock('@/lib/apiClient', () => ({
 }));
 
 vi.mock('@/components/FileUpload', () => ({
-  FileUpload: ({ onUploadComplete }: { onUploadComplete: any }) => (
+  FileUpload: () => (
     <div data-testid="file-upload">File Upload Component</div>
   )
 }));
