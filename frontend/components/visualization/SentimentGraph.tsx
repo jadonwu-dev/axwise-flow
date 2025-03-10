@@ -34,6 +34,8 @@ interface SentimentGraphProps {
   className?: string;
   /** Whether to show statements (default: true) */
   showStatements?: boolean;
+  /** Alternative prop name for data to match VisualizationTabs component */
+  sentimentData?: SentimentOverview;
 }
 
 /**
@@ -66,10 +68,14 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   showLegend = true,
   showStatements = true,
   className,
+  sentimentData,
 }) => {
+  // Use sentimentData prop if provided, otherwise fall back to data prop
+  const actualData = sentimentData || data;
+  
   // Validate and normalize sentiment data
-  const sentimentData = useMemo(() => {
-    console.log('Received sentiment data:', data);
+  const sentimentValues = useMemo(() => {
+    console.log('Received sentiment data:', actualData);
     console.log('Supporting statements:', supportingStatements);
 
     // Check if we have supporting statements to calculate more accurate percentages
@@ -100,32 +106,32 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
     }
 
     // Check if data is undefined or has invalid values
-    if (!data || 
-        typeof data.positive !== 'number' || 
-        typeof data.neutral !== 'number' || 
-        typeof data.negative !== 'number') {
+    if (!actualData || 
+        typeof actualData.positive !== 'number' || 
+        typeof actualData.neutral !== 'number' || 
+        typeof actualData.negative !== 'number') {
       console.warn('Invalid sentiment data, using defaults:', DEFAULT_SENTIMENT);
       return DEFAULT_SENTIMENT;
     }
 
     // Normalize values to ensure they sum to 1
-    const total = data.positive + data.neutral + data.negative;
+    const total = actualData.positive + actualData.neutral + actualData.negative;
     if (total === 0) {
       console.warn('All sentiment values are 0, using defaults');
       return DEFAULT_SENTIMENT;
     }
 
     if (Math.abs(total - 1) > 0.01) { // Allow for small floating-point differences
-      console.warn('Sentiment values do not sum to 1, normalizing:', { total, data });
+      console.warn('Sentiment values do not sum to 1, normalizing:', { total, data: actualData });
       return {
-        positive: data.positive / total,
-        neutral: data.neutral / total,
-        negative: data.negative / total,
+        positive: actualData.positive / total,
+        neutral: actualData.neutral / total,
+        negative: actualData.negative / total,
       };
     }
 
-    return data;
-  }, [data, supportingStatements]);
+    return actualData;
+  }, [actualData, supportingStatements]);
 
   // Process detailed sentiment data for trends
   const detailedStats = useMemo(() => {
@@ -146,9 +152,9 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   }, [detailedData]);
   
   // Calculate percentages for display
-  const positivePercent = Math.round(sentimentData.positive * 100);
-  const neutralPercent = Math.round(sentimentData.neutral * 100);
-  const negativePercent = Math.round(sentimentData.negative * 100);
+  const positivePercent = Math.round(sentimentValues.positive * 100);
+  const neutralPercent = Math.round(sentimentValues.neutral * 100);
+  const negativePercent = Math.round(sentimentValues.negative * 100);
 
   // Transform data for the pie chart
   const pieData = useMemo(() => [

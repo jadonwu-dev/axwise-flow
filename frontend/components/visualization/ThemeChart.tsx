@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import type {
   BarChart as BarChartType,
   CartesianGrid as CartesianGridType,
@@ -30,13 +30,15 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
-interface ThemeChartProps {
-  data: Theme[];
-  height?: number;
-  showLegend?: boolean;
-  className?: string;
-  onThemeClick?: (theme: Theme) => void;
+export interface ThemeChartProps {
+  themes: Theme[];
 }
 
 const SENTIMENT_COLORS = {
@@ -45,236 +47,241 @@ const SENTIMENT_COLORS = {
   negative: '#ef4444', // red-500
 };
 
-export const ThemeChart: React.FC<ThemeChartProps> = ({
-  data,
-  height = 400,
-  showLegend = true,
-  className,
-  onThemeClick,
-}) => {
-  const [expandedThemes, setExpandedThemes] = useState<Record<string, boolean>>({});
-  
-  const chartData = useMemo(() => {
-    const sortedData = [...data].sort((a, b) => {
-      const freqA = a.frequency || 0;
-      const freqB = b.frequency || 0;
-      return freqB - freqA;
-    });
-    
-    return sortedData.map((theme) => ({
-      name: theme.name,
-      shortName: theme.name.length > 20 ? `${theme.name.slice(0, 20)}...` : theme.name,
-      frequency: Math.min(100, Math.round(((theme.frequency || 0) * 100))),
-      sentiment: theme.sentiment || 0,
-      keywords: theme.keywords,
-      originalData: theme,
-    }));
-  }, [data]);
+export function ThemeChart({ themes }: ThemeChartProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [viewMode, setViewMode] = useState<'sentiment' | 'frequency'>('sentiment');
 
-  const legendItems = useMemo(() => {
-    return [
-      { value: 'Positive Sentiment', color: SENTIMENT_COLORS.positive, type: 'circle' as const },
-      { value: 'Neutral Sentiment', color: SENTIMENT_COLORS.neutral, type: 'circle' as const },
-      { value: 'Negative Sentiment', color: SENTIMENT_COLORS.negative, type: 'circle' as const },
-    ];
-  }, []);
-
-  const customTooltip = useMemo(
-    () =>
-      createCustomTooltip({
-        formatter: (value, name) => {
-          if (name === 'frequency') {
-            return `${value}%`;
-          }
-          if (name === 'sentiment') {
-            return value.toFixed(1);
-          }
-          return value;
-        },
-        labelFormatter: (label) => <span className="font-medium">{label}</span>,
-      }),
-    []
+  // Filter themes based on search term
+  const filteredThemes = themes.filter(theme => 
+    theme.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (theme.keywords && theme.keywords.some(keyword => 
+      keyword.toLowerCase().includes(searchTerm.toLowerCase())
+    ))
   );
 
-  const toggleExpanded = (themeId: number) => {
-    setExpandedThemes(prev => ({
-      ...prev,
-      [themeId]: !prev[themeId]
-    }));
-  };
+  // Group themes by sentiment
+  const positiveThemes = filteredThemes.filter(theme => (theme.sentiment || 0) > 0.1);
+  const neutralThemes = filteredThemes.filter(theme => (theme.sentiment || 0) >= -0.1 && (theme.sentiment || 0) <= 0.1);
+  const negativeThemes = filteredThemes.filter(theme => (theme.sentiment || 0) < -0.1);
 
-  const handleBarClick = (data: any) => {
-    if (onThemeClick && data.originalData) {
-      onThemeClick(data.originalData);
-    }
-  };
+  // Sort themes by frequency for frequency view
+  const sortedByFrequency = [...filteredThemes].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
+  const topThemes = sortedByFrequency.slice(0, 10); // Top 10 themes
 
-  const getBarColor = (sentiment: number) => {
-    if (sentiment >= 0.2) return SENTIMENT_COLORS.positive;
-    if (sentiment <= -0.2) return SENTIMENT_COLORS.negative;
-    return SENTIMENT_COLORS.neutral;
-  };
-
-  const getSentimentLabel = (sentiment: number | undefined) => {
-    if (typeof sentiment !== 'number') return 'Neutral';
-    if (sentiment >= 0.2) return 'Positive';
-    if (sentiment <= -0.2) return 'Negative';
-    return 'Neutral';
-  };
-
-  const renderSupportingStatements = (theme: Theme) => {
-    const isExpanded = expandedThemes[theme.id] || false;
-    const statements = theme.statements || theme.examples || [];
-    const statementLabel = theme.statements ? 'Supporting Statements' : 'Examples';
-    
-    if (statements.length === 0) {
-      return null;
-    }
-    
-    return (
-      <div className="mt-2">
-        <button
-          type="button"
-          className="text-xs text-primary flex items-center"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleExpanded(theme.id);
-          }}
+  // Theme card component
+  const ThemeCard = ({ theme }: { theme: Theme }) => (
+    <li key={theme.id} className="border-b pb-3 last:border-0">
+      <div className="flex justify-between items-start">
+        <h4 className="font-medium">{theme.name}</h4>
+        <Badge 
+          variant="outline" 
+          className={`${(theme.sentiment || 0) > 0.1 
+            ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' 
+            : (theme.sentiment || 0) < -0.1 
+              ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+              : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}
         >
-          {isExpanded ? 'Hide' : 'Show'} {statementLabel}
-          <svg
-            className={`ml-1 w-4 h-4 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        
-        {isExpanded && (
-          <ul className="text-xs list-disc list-inside mt-2 text-muted-foreground space-y-1">
-            {statements.map((statement, i) => (
-              <li key={i} className="pl-2">{statement}</li>
-            ))}
-          </ul>
-        )}
+          {Math.round((theme.frequency || 0) * 100)}%
+        </Badge>
       </div>
-    );
-  };
-
-  if (chartData.length === 0) {
-    return (
-      <div className={`flex items-center justify-center h-${height} ${className || ''}`}>
-        <p className="text-muted-foreground">No theme data available</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${className || ''} space-y-6`}>
-      <ResponsiveContainer height={height}>
-        <BarChart
-          data={chartData}
-          margin={{ top: 20, right: 30, left: 40, bottom: 150 }}
-          barSize={20}
-        >
-          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-          <XAxis
-            dataKey="shortName"
-            angle={-45}
-            textAnchor="end"
-            height={100}
-            interval={0}
-            tick={{ 
-              fontSize: 11,
-              fill: '#666',
-              dy: 10,
-            }}
-          />
-          <YAxis
-            label={{ 
-              value: 'Frequency (%)', 
-              angle: -90, 
-              position: 'insideLeft', 
-              style: { textAnchor: 'middle' } 
-            }}
-            tick={{ fontSize: 11 }}
-          />
-          <Tooltip content={customTooltip} />
-          <ReferenceLine y={0} stroke="#666" />
-          <Bar
-            dataKey="frequency"
-            name="Frequency"
-            onClick={handleBarClick}
-          >
-            {chartData.map((entry, index) => (
-              <Cell 
-                key={`cell-${index}`} 
-                fill={getBarColor(entry.sentiment)}
-                opacity={entry.originalData.id === chartData[index]?.originalData.id ? 1 : 0.7}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-
-      <div className="mt-6 space-y-4">
-        <h3 className="text-lg font-semibold">Theme Details</h3>
-        <div className="space-y-4">
-          {data.map((theme) => (
-            <div 
-              key={theme.id} 
-              className="p-4 border border-border rounded-md"
-              style={{ 
-                borderLeftWidth: '4px',
-                borderLeftColor: getBarColor(theme.sentiment || 0)
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold">{theme.name}</h4>
-                <span 
-                  className="px-2 py-1 text-xs rounded-full"
-                  style={{ 
-                    backgroundColor: `${getBarColor(theme.sentiment || 0)}20`,
-                    color: getBarColor(theme.sentiment || 0)
-                  }}
-                >
-                  {getSentimentLabel(theme.sentiment)}
-                </span>
-              </div>
-              <div className="mt-2">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <span>Frequency:</span>
-                  <div className="ml-2 w-32 h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full rounded-full" 
-                      style={{ 
-                        width: `${Math.round((theme.frequency || 0) * 100)}%`,
-                        backgroundColor: getBarColor(theme.sentiment || 0)
-                      }}
-                    />
-                  </div>
-                  <span className="ml-2">{Math.round((theme.frequency || 0) * 100)}%</span>
-                </div>
-              </div>
-              {renderSupportingStatements(theme)}
-            </div>
+      {theme.keywords && theme.keywords.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {theme.keywords.map((keyword, i) => (
+            <Badge key={i} variant="secondary" className="text-xs">
+              {keyword}
+            </Badge>
           ))}
         </div>
+      )}
+      {theme.statements && theme.statements.length > 0 && (
+        <div className="mt-2 text-sm text-muted-foreground">
+          <p className="italic">"{theme.statements[0]}"</p>
+        </div>
+      )}
+      <div className="mt-2">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-xs p-0 h-auto"
+          onClick={() => setSelectedTheme(theme)}
+        >
+          View Details
+        </Button>
+      </div>
+    </li>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="w-full sm:w-64">
+          <Input
+            placeholder="Search themes or keywords..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'sentiment' | 'frequency')}>
+          <TabsList>
+            <TabsTrigger value="sentiment">By Sentiment</TabsTrigger>
+            <TabsTrigger value="frequency">By Frequency</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      {showLegend && (
-        <ChartLegend
-          items={legendItems}
-          position="bottom"
-          align="center"
-          layout="horizontal"
-        />
+      {/* View by Sentiment */}
+      {viewMode === 'sentiment' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Positive Themes */}
+          <Card>
+            <CardHeader className="bg-green-50 dark:bg-green-900/20">
+              <CardTitle className="text-green-700 dark:text-green-300">Positive Themes</CardTitle>
+              <CardDescription>Themes with positive sentiment</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {positiveThemes.length > 0 ? (
+                <ul className="space-y-4">
+                  {positiveThemes.map((theme) => (
+                    <ThemeCard key={theme.id} theme={theme} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No positive themes found</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Neutral Themes */}
+          <Card>
+            <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
+              <CardTitle className="text-blue-700 dark:text-blue-300">Neutral Themes</CardTitle>
+              <CardDescription>Themes with neutral sentiment</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {neutralThemes.length > 0 ? (
+                <ul className="space-y-4">
+                  {neutralThemes.map((theme) => (
+                    <ThemeCard key={theme.id} theme={theme} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No neutral themes found</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Negative Themes */}
+          <Card>
+            <CardHeader className="bg-red-50 dark:bg-red-900/20">
+              <CardTitle className="text-red-700 dark:text-red-300">Negative Themes</CardTitle>
+              <CardDescription>Themes with negative sentiment</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {negativeThemes.length > 0 ? (
+                <ul className="space-y-4">
+                  {negativeThemes.map((theme) => (
+                    <ThemeCard key={theme.id} theme={theme} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No negative themes found</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* View by Frequency */}
+      {viewMode === 'frequency' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Themes by Frequency</CardTitle>
+            <CardDescription>Most frequently mentioned themes in the interview</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topThemes.length > 0 ? (
+              <ul className="space-y-4">
+                {topThemes.map((theme) => (
+                  <ThemeCard key={theme.id} theme={theme} />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No themes found</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Theme Details Modal */}
+      {selectedTheme && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedTheme(null)}>
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <Card>
+              <CardHeader>
+                <CardTitle>{selectedTheme.name}</CardTitle>
+                <CardDescription>Theme details and supporting evidence</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Badge 
+                    variant="outline" 
+                    className={`${(selectedTheme.sentiment || 0) > 0.1 
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' 
+                      : (selectedTheme.sentiment || 0) < -0.1 
+                        ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                        : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}
+                  >
+                    {(selectedTheme.sentiment || 0) > 0.1 
+                      ? 'Positive' 
+                      : (selectedTheme.sentiment || 0) < -0.1 
+                        ? 'Negative' 
+                        : 'Neutral'}
+                  </Badge>
+                  <Badge variant="outline">
+                    Frequency: {Math.round((selectedTheme.frequency || 0) * 100)}%
+                  </Badge>
+                </div>
+                
+                {selectedTheme.keywords && selectedTheme.keywords.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Keywords</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedTheme.keywords.map((keyword, i) => (
+                        <Badge key={i} variant="secondary">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {selectedTheme.statements && selectedTheme.statements.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Supporting Statements</h4>
+                    <ScrollArea className="h-60 rounded-md border p-4">
+                      <ul className="space-y-3">
+                        {selectedTheme.statements.map((statement, i) => (
+                          <li key={i} className="pb-2 border-b last:border-0">
+                            <p className="italic">"{statement}"</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+                )}
+                
+                <div className="flex justify-end mt-4">
+                  <Button onClick={() => setSelectedTheme(null)}>Close</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );
-};
+}
 
 export default ThemeChart;

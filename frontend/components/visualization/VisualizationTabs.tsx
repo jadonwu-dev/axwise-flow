@@ -122,9 +122,9 @@ export default function VisualizationTabs({ analysisId }: VisualizationTabsProps
           <TabsContent value="sentiment" className="mt-6">
             {analysis.sentiment.length > 0 ? (
               <SentimentGraph 
-                sentimentData={analysis.sentiment}
-                sentimentOverview={analysis.sentimentOverview} 
-                sentimentStatements={analysis.sentimentStatements}
+                data={analysis.sentimentOverview}
+                detailedData={analysis.sentiment}
+                supportingStatements={analysis.sentimentStatements}
               />
             ) : (
               <div className="text-center py-8 text-muted-foreground">

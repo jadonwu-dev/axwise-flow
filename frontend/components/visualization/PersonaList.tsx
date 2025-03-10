@@ -41,17 +41,21 @@ export type Persona = {
 };
 
 type PersonaListProps = {
-  data: Persona[];
+  data?: Persona[];
   className?: string;
+  personas?: Persona[];
 };
 
-export function PersonaList({ data = [], className }: PersonaListProps) {
+export function PersonaList({ data = [], className, personas }: PersonaListProps) {
+  // Use personas prop if provided, otherwise fall back to data prop
+  const personaData = personas || data;
+  
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(
-    data.length > 0 ? data[0] : null
+    personaData.length > 0 ? personaData[0] : null
   );
 
   // If no data, show empty state
-  if (data.length === 0) {
+  if (personaData.length === 0) {
     return (
       <Card className={cn("w-full", className)}>
         <CardHeader>
@@ -86,7 +90,7 @@ export function PersonaList({ data = [], className }: PersonaListProps) {
       <CardHeader>
         <CardTitle>Personas</CardTitle>
         <CardDescription>
-          {data.length} persona{data.length !== 1 ? 's' : ''} generated from analysis
+          {personaData.length} persona{personaData.length !== 1 ? 's' : ''} generated from analysis
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -96,7 +100,7 @@ export function PersonaList({ data = [], className }: PersonaListProps) {
             <h3 className="text-sm font-medium mb-2">Personas</h3>
             <ScrollArea className="h-[400px]">
               <div className="space-y-2">
-                {data.map((persona, index) => (
+                {personaData.map((persona, index) => (
                   <Button
                     key={index}
                     variant={selectedPersona?.name === persona.name ? "secondary" : "ghost"}

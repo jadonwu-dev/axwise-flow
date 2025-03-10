@@ -16,9 +16,15 @@ import {
   Treemap,
   ResponsiveContainer
 } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
-interface PatternListProps {
-  data: Pattern[];
+export interface PatternListProps {
+  patterns: Pattern[];
   showEvidence?: boolean;
   className?: string;
   onPatternClick?: (pattern: Pattern) => void;
@@ -30,19 +36,38 @@ const SENTIMENT_COLORS = {
   negative: '#ef4444', // red-500
 };
 
-export const PatternList: React.FC<PatternListProps> = ({
-  data,
-  showEvidence = true,
-  className,
-  onPatternClick,
-}) => {
+export function PatternList({ patterns, showEvidence = true, className, onPatternClick }: PatternListProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'all' | 'grouped'>('all');
   const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [displayMode, setDisplayMode] = useState<'treemap' | 'bar'>('treemap');
 
+  // Filter patterns based on search term
+  const filteredPatterns = patterns.filter(pattern => 
+    pattern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (pattern.description && pattern.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Sort patterns by frequency
+  const sortedPatterns = [...filteredPatterns].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
+
+  // Group patterns by category (if available)
+  const groupedPatterns = sortedPatterns.reduce((groups, pattern) => {
+    const category = pattern.category || 'Uncategorized';
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category].push(pattern);
+    return groups;
+  }, {} as Record<string, Pattern[]>);
+
+  // Get all categories
+  const categories = Object.keys(groupedPatterns).sort();
+
   // Process the data to handle missing fields
   const processedData = useMemo(() => {
-    return data.map((pattern, index) => ({
+    return patterns.map((pattern, index) => ({
       ...pattern,
       id: pattern.id || index,
       name: pattern.name || `Pattern ${index + 1}`,
@@ -53,7 +78,7 @@ export const PatternList: React.FC<PatternListProps> = ({
       evidence: pattern.evidence || pattern.examples || [],
       examples: pattern.examples || pattern.evidence || []
     }));
-  }, [data]);
+  }, [patterns]);
 
   const { chartData, treemapData } = useMemo(() => {
     const grouped: Record<string, Pattern[]> = {};
@@ -118,10 +143,11 @@ export const PatternList: React.FC<PatternListProps> = ({
     return 'Neutral';
   };
 
-  const handleItemClick = (data: any) => {
-    if (data && data.originalData && onPatternClick) {
-      setSelectedPattern(data.originalData);
-      onPatternClick(data.originalData);
+  const handlePatternClick = (pattern: Pattern) => {
+    if (onPatternClick) {
+      onPatternClick(pattern);
+    } else {
+      setSelectedPattern(pattern === selectedPattern ? null : pattern);
     }
   };
 
@@ -153,117 +179,130 @@ export const PatternList: React.FC<PatternListProps> = ({
     { value: 'Negative Pattern', color: SENTIMENT_COLORS.negative, type: 'circle' as const },
   ];
 
-  // Render function for treemap items
-  const renderTreemapContent = (props: any) => {
-    const { depth, x, y, width, height, index, name, sentiment } = props;
-    const color = getBarColor(sentiment);
-    
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          style={{
-            fill: color,
-            stroke: '#fff',
-            strokeWidth: 2,
-            fillOpacity: depth === 1 ? (activeIndex === index ? 0.8 : 0.6) : 0,
-          }}
-          onMouseEnter={() => setActiveIndex(index)}
-          onMouseLeave={() => setActiveIndex(null)}
-          onClick={() => handleItemClick(props)}
-          cursor="pointer"
-        />
-        {width > 50 && height > 25 ? (
-          <text
-            x={x + width / 2}
-            y={y + height / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="#fff"
-            fontSize={width > 100 ? 14 : 10}
-            fontWeight="500"
-          >
-            {name}
-          </text>
-        ) : null}
-      </g>
-    );
-  };
-
-  // Check if we have valid data to display
-  if (!data || data.length === 0) {
-    return (
-      <div className={`w-full ${className} p-4 border border-gray-200 rounded-md`}>
-        <p className="text-gray-500 text-center">No patterns found in the analysis.</p>
-      </div>
-    );
-  }
-
   return (
     <div className={`w-full ${className}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">Patterns</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setDisplayMode('treemap')}
-            className={`px-3 py-1 text-sm rounded ${
-              displayMode === 'treemap' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Treemap
-          </button>
-          <button
-            onClick={() => setDisplayMode('bar')}
-            className={`px-3 py-1 text-sm rounded ${
-              displayMode === 'bar' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Bar Chart
-          </button>
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="w-full sm:w-64">
+          <Input
+            placeholder="Search patterns..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
         </div>
+        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'all' | 'grouped')}>
+          <TabsList>
+            <TabsTrigger value="all">All Patterns</TabsTrigger>
+            <TabsTrigger value="grouped">Grouped</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      {displayMode === 'treemap' ? (
-        <div style={{ width: '100%', height: 400 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treemapData}
-              dataKey="size"
-              aspectRatio={4/3}
-              stroke="#fff"
-              fill="#8884d8"
-              content={renderTreemapContent as any}
-              isAnimationActive={true}
-            />
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div style={{ width: '100%', height: 400 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <ReferenceLine y={0} stroke="#000" />
-              <Bar dataKey="frequency" name="Frequency" onClick={handleItemClick}>
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getBarColor(entry.sentiment || 0)} />
+      {/* All Patterns View */}
+      {viewMode === 'all' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Identified Patterns</CardTitle>
+            <CardDescription>
+              {sortedPatterns.length} pattern{sortedPatterns.length !== 1 ? 's' : ''} found in the analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sortedPatterns.length > 0 ? (
+              <Accordion type="multiple" className="w-full">
+                {sortedPatterns.map((pattern) => (
+                  <AccordionItem key={pattern.id} value={`pattern-${pattern.id}`}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center justify-between w-full pr-4">
+                        <span className="font-medium text-left">{pattern.name}</span>
+                        <Badge variant="outline" className="ml-2">
+                          {Math.round((pattern.frequency || 0) * 100)}%
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 pt-2">
+                        {pattern.description && (
+                          <p className="text-sm text-muted-foreground">{pattern.description}</p>
+                        )}
+                        
+                        {pattern.examples && pattern.examples.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium">Examples:</h4>
+                            <ScrollArea className="h-40 rounded-md border p-4">
+                              <ul className="space-y-2 text-sm">
+                                {pattern.examples.map((example, i) => (
+                                  <li key={i} className="bg-muted p-2 rounded-md">
+                                    <p className="italic">"{example}"</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </Accordion>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No patterns identified</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Grouped Patterns View */}
+      {viewMode === 'grouped' && (
+        <div className="space-y-6">
+          {categories.map((category) => (
+            <Card key={category}>
+              <CardHeader>
+                <CardTitle>{category}</CardTitle>
+                <CardDescription>
+                  {groupedPatterns[category].length} pattern{groupedPatterns[category].length !== 1 ? 's' : ''}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="multiple" className="w-full">
+                  {groupedPatterns[category].map((pattern) => (
+                    <AccordionItem key={pattern.id} value={`pattern-${pattern.id}`}>
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <span className="font-medium text-left">{pattern.name}</span>
+                          <Badge variant="outline" className="ml-2">
+                            {Math.round((pattern.frequency || 0) * 100)}%
+                          </Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3 pt-2">
+                          {pattern.description && (
+                            <p className="text-sm text-muted-foreground">{pattern.description}</p>
+                          )}
+                          
+                          {pattern.examples && pattern.examples.length > 0 && (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Examples:</h4>
+                              <ScrollArea className="h-40 rounded-md border p-4">
+                                <ul className="space-y-2 text-sm">
+                                  {pattern.examples.map((example, i) => (
+                                    <li key={i} className="bg-muted p-2 rounded-md">
+                                      <p className="italic">"{example}"</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </ScrollArea>
+                            </div>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -293,6 +332,6 @@ export const PatternList: React.FC<PatternListProps> = ({
       )}
     </div>
   );
-};
+}
 
 export default PatternList;
