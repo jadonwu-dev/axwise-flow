@@ -1,17 +1,12 @@
 'use client';
 
-// Note on type handling:
-// This component handles multiple visualization types ('themes', 'patterns', 'sentiment', 'personas')
-// We use explicit type guards with separate if statements rather than ternary operators
-// to avoid TypeScript "no overlap" errors when comparing string literal types.
-
 import React, { useMemo } from 'react';
 import { Theme, Pattern, SentimentData, SentimentStatements, Persona } from '@/types/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ThemeChart } from './ThemeChart';
-import { PatternList } from './PatternList';
-import { PersonaList } from './PersonaList';
+import PatternList from './PatternList';
+import PersonaList from './PersonaList';
 
 interface UnifiedVisualizationProps {
   type: 'themes' | 'patterns' | 'sentiment' | 'personas';
@@ -43,6 +38,33 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     };
   }, [sentimentData]);
 
+  // Function to scroll to a pattern by ID
+  const scrollToPattern = (patternId: string) => {
+    // Wait for a short time to ensure everything is rendered
+    setTimeout(() => {
+      const element = document.getElementById(patternId);
+      if (element) {
+        // Calculate position accounting for any headers
+        const offset = 100;
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - offset;
+        
+        // Scroll to the element
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+        
+        // Add highlight effect
+        element.style.transition = 'background-color 0.5s ease';
+        element.style.backgroundColor = 'rgba(251, 191, 36, 0.2)';
+        setTimeout(() => {
+          element.style.backgroundColor = '';
+        }, 2000);
+      }
+    }, 50);
+  };
+
   // Generate key insights based on visualization type
   const getKeyInsights = () => {
     const insights = [];
@@ -72,7 +94,7 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     
     if (type === 'patterns' && patternsData.length > 0) {
       // Prepare pattern insights
-      const sortedPatterns = [...patternsData].sort((a, b) => b.frequency - a.frequency);
+      const sortedPatterns = [...patternsData].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
       const topPatterns = sortedPatterns.slice(0, 3);
       
       insights.push(`Top patterns: ${topPatterns.map(p => p.description).join(', ')}`);
@@ -157,67 +179,40 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
             <h3 className="text-sm font-medium mb-2">Top Patterns</h3>
             <div className="space-y-3">
               {topPatterns.map((pattern, idx) => (
-                <div key={idx} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
+                <div key={idx} className="flex gap-3 relative">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium absolute left-0 top-1/2 -translate-y-1/2">
                     {idx + 1}
                   </div>
-                  <div className="flex-1">
-                    <a 
-                      href={`#pattern-${pattern.id || idx}`}
-                      className="block hover:no-underline"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const targetId = `pattern-${pattern.id || idx}`;
-                        const targetElement = document.getElementById(targetId);
-                        
-                        if (targetElement) {
-                          // Scroll to element with smooth behavior
-                          targetElement.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                          });
-                          
-                          // Add highlight effect
-                          targetElement.classList.add('bg-amber-50');
-                          setTimeout(() => {
-                            targetElement.classList.remove('bg-amber-50');
-                          }, 2000);
-                        }
+                  <div className="flex-1 pl-9">
+                    <div 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        const patternId = `pattern-${pattern.id || idx}`;
+                        scrollToPattern(patternId);
                       }}
                     >
-                      <div className={`p-2 rounded-md ${
-                        (pattern.sentiment !== undefined && pattern.sentiment >= 0.2) ? 'bg-green-50 border border-green-100 hover:bg-green-100 hover:shadow-sm' : 
-                        (pattern.sentiment !== undefined && pattern.sentiment <= -0.2) ? 'bg-red-50 border border-red-100 hover:bg-red-100 hover:shadow-sm' :
-                        'bg-slate-50 border border-slate-100 hover:bg-slate-100 hover:shadow-sm'
-                      } transition-all duration-150`}>
-                        <div className="text-sm font-medium flex items-center">
+                      <div 
+                        id={`pattern-${pattern.id || idx}`}
+                        className={`border rounded-lg p-4 relative ${
+                          (pattern.sentiment !== undefined && pattern.sentiment >= 0.2) ? 'border-green-300 bg-green-50 hover:bg-green-100' : 
+                          (pattern.sentiment !== undefined && pattern.sentiment <= -0.2) ? 'border-red-300 bg-red-50 hover:bg-red-100' :
+                          'border-slate-300 bg-slate-50 hover:bg-slate-100'
+                        } transition-all duration-150`}>
+                        <Badge className="absolute top-1/2 right-3 -translate-y-1/2">
+                          {Math.round((pattern.frequency || 0) * 100)}%
+                        </Badge>
+                        <div className="absolute -left-1 -top-1 text-4xl text-primary/20 font-serif">"</div>
+                        <div className="absolute -right-1 -bottom-1 text-4xl text-primary/20 font-serif rotate-180">"</div>
+                        <p className="text-sm leading-relaxed pr-16 font-medium">
                           {pattern.name}
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="16" 
-                            height="16" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            className="ml-1 h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                          </svg>
-                        </div>
+                        </p>
                         {pattern.description && (
-                          <p className="text-xs text-muted-foreground mt-1">{pattern.description}</p>
+                          <p className="text-xs text-muted-foreground mt-1 pr-16">
+                            {pattern.description}
+                          </p>
                         )}
                       </div>
-                    </a>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <Badge variant="outline" className="text-xs">
-                      {Math.round((pattern.frequency || 0) * 100)}%
-                    </Badge>
+                    </div>
                   </div>
                 </div>
               ))}
