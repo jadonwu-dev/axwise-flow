@@ -4,11 +4,11 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { Tooltip } from 'react-tooltip';
 
 // Define types for Persona data structure
 type PersonaTrait = {
@@ -53,6 +53,17 @@ export function PersonaList({ data = [], className, personas }: PersonaListProps
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(
     personaData.length > 0 ? personaData[0] : null
   );
+  
+  // State for managing evidence visibility
+  const [evidenceVisibility, setEvidenceVisibility] = useState<Record<string, boolean>>({});
+
+  // Toggle evidence visibility for a specific trait
+  const toggleEvidence = (trait: string) => {
+    setEvidenceVisibility(prev => ({
+      ...prev,
+      [trait]: !prev[trait]
+    }));
+  };
 
   // If no data, show empty state
   if (personaData.length === 0) {
@@ -85,6 +96,13 @@ export function PersonaList({ data = [], className, personas }: PersonaListProps
     return 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100';
   };
 
+  const getConfidenceTooltip = (confidence: number) => {
+    if (confidence >= 0.9) return 'High confidence: Based on direct statements from the interview';
+    if (confidence >= 0.7) return 'Good confidence: Based on strong evidence across multiple mentions';
+    if (confidence >= 0.5) return 'Moderate confidence: Based on contextual clues';
+    return 'Limited confidence: Based on inferences with minimal evidence';
+  };
+
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader>
@@ -104,16 +122,18 @@ export function PersonaList({ data = [], className, personas }: PersonaListProps
                   <Button
                     key={index}
                     variant={selectedPersona?.name === persona.name ? "secondary" : "ghost"}
-                    className="w-full justify-start"
+                    className="w-full justify-start text-left h-auto py-2"
                     onClick={() => setSelectedPersona(persona)}
                   >
-                    <Avatar className="h-6 w-6 mr-2">
+                    <Avatar className="h-6 w-6 mr-2 flex-shrink-0">
                       <AvatarFallback className="text-xs">
                         {getInitials(persona.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="truncate text-left">
-                      {persona.name}
+                    <div className="overflow-hidden">
+                      <div className="w-full break-words">
+                        {persona.name}
+                      </div>
                     </div>
                   </Button>
                 ))}
@@ -131,187 +151,315 @@ export function PersonaList({ data = [], className, personas }: PersonaListProps
                 </div>
                 <Badge className={getConfidenceColor(selectedPersona.confidence)}>
                   {Math.round(selectedPersona.confidence * 100)}% Confidence
+                  <Tooltip>{getConfidenceTooltip(selectedPersona.confidence)}</Tooltip>
                 </Badge>
               </div>
               
               <Tabs defaultValue="overview">
                 <TabsList className="mb-4">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="attributes">Attributes</TabsTrigger>
                   <TabsTrigger value="evidence">Evidence</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview" className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Confidence Guide Panel */}
+                    <Card className="col-span-1 md:col-span-2 bg-blue-50 dark:bg-blue-900/20">
+                      <CardHeader className="p-4">
+                        <CardTitle className="text-base">Confidence Score Guide</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="text-sm">
+                          <p className="mb-2">Our confidence scores reflect the strength of evidence:</p>
+                          <ul className="space-y-1 list-disc list-inside">
+                            <li><strong>90-100%:</strong> Direct statements from interview</li>
+                            <li><strong>70-80%:</strong> Strong evidence across multiple mentions</li>
+                            <li><strong>50-60%:</strong> Contextual clues and moderate evidence</li>
+                            <li><strong>&lt;50%:</strong> Limited evidence based on inferences</li>
+                          </ul>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
                     <Card>
-                      <CardHeader className="py-3">
-                        <CardTitle className="text-base">Role Context</CardTitle>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Role Context</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.role_context.confidence)} id="role-context-badge">
+                            {Math.round(selectedPersona.role_context.confidence * 100)}%
+                            <Tooltip anchorId="role-context-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.role_context.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <p>{selectedPersona.role_context.value}</p>
+                        
+                        {selectedPersona.role_context.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('role_context')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['role_context'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['role_context'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.role_context.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                     
                     <Card>
-                      <CardHeader className="py-3">
-                        <CardTitle className="text-base">Key Responsibilities</CardTitle>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Key Responsibilities</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.key_responsibilities.confidence)} id="key-responsibilities-badge">
+                            {Math.round(selectedPersona.key_responsibilities.confidence * 100)}%
+                            <Tooltip anchorId="key-responsibilities-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.key_responsibilities.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
                       </CardHeader>
                       <CardContent>
-                        <p>{selectedPersona.key_responsibilities.value}</p>
+                        <ul className="list-disc pl-5">
+                          {selectedPersona.key_responsibilities.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
+                            <li key={i}>{item.trim()}</li>
+                          ))}
+                        </ul>
+                        
+                        {selectedPersona.key_responsibilities.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('key_responsibilities')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['key_responsibilities'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['key_responsibilities'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.key_responsibilities.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                     
                     <Card>
-                      <CardHeader className="py-3">
-                        <CardTitle className="text-base">Tools Used</CardTitle>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Tools Used</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.tools_used.confidence)} id="tools-used-badge">
+                            {Math.round(selectedPersona.tools_used.confidence * 100)}%
+                            <Tooltip anchorId="tools-used-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.tools_used.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
                       </CardHeader>
                       <CardContent>
-                        <p>{selectedPersona.tools_used.value}</p>
+                        <ul className="list-disc pl-5">
+                          {selectedPersona.tools_used.value.split(', ').filter(item => item.trim().length > 0).map((item, i) => (
+                            <li key={i}>{item.trim()}</li>
+                          ))}
+                        </ul>
+                        
+                        {selectedPersona.tools_used.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('tools_used')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['tools_used'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['tools_used'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.tools_used.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                     
                     <Card>
-                      <CardHeader className="py-3">
-                        <CardTitle className="text-base">Pain Points</CardTitle>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Pain Points</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.pain_points.confidence)} id="pain-points-badge">
+                            {Math.round(selectedPersona.pain_points.confidence * 100)}%
+                            <Tooltip anchorId="pain-points-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.pain_points.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
                       </CardHeader>
                       <CardContent>
-                        <p>{selectedPersona.pain_points.value}</p>
+                        <ul className="list-disc pl-5">
+                          {selectedPersona.pain_points.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
+                            <li key={i}>{item.trim()}</li>
+                          ))}
+                        </ul>
+                        
+                        {selectedPersona.pain_points.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('pain_points')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['pain_points'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['pain_points'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.pain_points.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Collaboration Style</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.collaboration_style.confidence)} id="collaboration-style-badge">
+                            {Math.round(selectedPersona.collaboration_style.confidence * 100)}%
+                            <Tooltip anchorId="collaboration-style-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.collaboration_style.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="list-disc pl-5">
+                          {selectedPersona.collaboration_style.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
+                            <li key={i}>{item.trim()}</li>
+                          ))}
+                        </ul>
+                        
+                        {selectedPersona.collaboration_style.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('collaboration_style')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['collaboration_style'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['collaboration_style'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.collaboration_style.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">Analysis Approach</CardTitle>
+                          <Badge variant="outline" className={getConfidenceColor(selectedPersona.analysis_approach.confidence)} id="analysis-approach-badge">
+                            {Math.round(selectedPersona.analysis_approach.confidence * 100)}%
+                            <Tooltip anchorId="analysis-approach-badge" place="top">
+                              {getConfidenceTooltip(selectedPersona.analysis_approach.confidence)}
+                            </Tooltip>
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="list-disc pl-5">
+                          {selectedPersona.analysis_approach.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
+                            <li key={i}>{item.trim()}</li>
+                          ))}
+                        </ul>
+                        
+                        {selectedPersona.analysis_approach.evidence.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Evidence:</h4>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => toggleEvidence('analysis_approach')}
+                                className="h-6 text-xs"
+                              >
+                                {evidenceVisibility['analysis_approach'] ? 'Hide evidence' : 'Show evidence'}
+                              </Button>
+                            </div>
+                            
+                            {evidenceVisibility['analysis_approach'] && (
+                              <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
+                                {selectedPersona.analysis_approach.evidence.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
                   
                   <div>
                     <h3 className="text-sm font-medium mb-2">Common Patterns</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedPersona.patterns.map((pattern, index) => (
-                        <Badge key={index} variant="outline">{pattern}</Badge>
-                      ))}
-                    </div>
+                    {selectedPersona.patterns && selectedPersona.patterns.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPersona.patterns.map((pattern, index) => (
+                          <Badge key={index} variant="outline">{pattern}</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No common patterns identified for this persona.</p>
+                    )}
                   </div>
-                </TabsContent>
-                
-                <TabsContent value="attributes">
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="role">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Role Context</span>
-                          <Badge className={getConfidenceColor(selectedPersona.role_context.confidence)}>
-                            {Math.round(selectedPersona.role_context.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.role_context.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.role_context.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    
-                    <AccordionItem value="responsibilities">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Key Responsibilities</span>
-                          <Badge className={getConfidenceColor(selectedPersona.key_responsibilities.confidence)}>
-                            {Math.round(selectedPersona.key_responsibilities.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.key_responsibilities.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.key_responsibilities.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    
-                    <AccordionItem value="tools">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Tools Used</span>
-                          <Badge className={getConfidenceColor(selectedPersona.tools_used.confidence)}>
-                            {Math.round(selectedPersona.tools_used.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.tools_used.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.tools_used.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    
-                    <AccordionItem value="collaboration">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Collaboration Style</span>
-                          <Badge className={getConfidenceColor(selectedPersona.collaboration_style.confidence)}>
-                            {Math.round(selectedPersona.collaboration_style.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.collaboration_style.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.collaboration_style.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    
-                    <AccordionItem value="analysis">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Analysis Approach</span>
-                          <Badge className={getConfidenceColor(selectedPersona.analysis_approach.confidence)}>
-                            {Math.round(selectedPersona.analysis_approach.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.analysis_approach.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.analysis_approach.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    
-                    <AccordionItem value="pain">
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span>Pain Points</span>
-                          <Badge className={getConfidenceColor(selectedPersona.pain_points.confidence)}>
-                            {Math.round(selectedPersona.pain_points.confidence * 100)}%
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-2">{selectedPersona.pain_points.value}</p>
-                        <h4 className="text-sm font-medium mb-1">Evidence:</h4>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {selectedPersona.pain_points.evidence.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
                 </TabsContent>
                 
                 <TabsContent value="evidence">

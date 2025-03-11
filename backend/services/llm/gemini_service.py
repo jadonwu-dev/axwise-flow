@@ -28,7 +28,7 @@ class GeminiService:
         """
         self.REDACTED_API_KEY = config.get("REDACTED_API_KEY")
         self.model = config.get("model", "gemini-2.0-flash")
-        self.temperature = config.get("temperature", 1.0)
+        self.temperature = config.get("temperature", 0.0)
         self.max_tokens = config.get("max_tokens", 8192)
         self.top_p = config.get("top_p", 0.95)
         self.top_k = config.get("top_k", 40)
@@ -461,7 +461,7 @@ class GeminiService:
             - The sentiment scores are between 0 and 1
             - The breakdown percentages sum to 1.0
             - Each statement category has at least 3-5 supporting statements
-            - Statements are EXACT QUOTES from the text - do not summarize or paraphrase
+            - Statements are EXACT QUOTES from the text - do not rewrite, summarize, or paraphrase anything.
             - Each statement is a complete sentence or paragraph from the original text
             
             IMPORTANT: Use EXACT quotes from the text. Do not rewrite, summarize, or paraphrase anything.

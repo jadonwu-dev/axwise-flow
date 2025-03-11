@@ -21,7 +21,7 @@ class OpenAIService:
         """Initialize the OpenAI service with configuration."""
         self.REDACTED_API_KEY = config.get("REDACTED_API_KEY")
         self.model = config.get("model", "gpt-4o-2024-08-06")
-        self.temperature = config.get("temperature", 0.3)
+        self.temperature = config.get("temperature", 0.0)
         self.max_tokens = config.get("max_tokens", 16384)
         
         # Initialize OpenAI client
