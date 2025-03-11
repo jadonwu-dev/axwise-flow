@@ -95,8 +95,13 @@ class NLPProcessor:
             'answer': text.strip()
         }]
 
-    async def process_interview_data(self, data: Dict[str, Any], llm_service) -> Dict[str, Any]:
+    async def process_interview_data(self, data: Dict[str, Any], llm_service, config=None) -> Dict[str, Any]:
         """Process interview data to extract insights"""
+        if config is None:
+            config = {}
+        
+        use_enhanced_theme_analysis = config.get('use_enhanced_theme_analysis', False)
+        
         try:
             # Extract text content
             texts = []
@@ -199,11 +204,18 @@ class NLPProcessor:
             
             # Run theme, pattern, and sentiment analysis in parallel
             # For theme analysis, use answer_only_text
-            themes_task = llm_service.analyze({
-                'task': 'theme_analysis',
-                'text': answer_only_text,  # Use answer-only text for themes
-                'use_answer_only': True  # Flag to indicate answer-only processing
-            })
+            if use_enhanced_theme_analysis:
+                themes_task = llm_service.analyze({
+                    'task': 'theme_analysis_enhanced',
+                    'text': answer_only_text,  # Use answer-only text for themes
+                    'use_answer_only': True  # Flag to indicate answer-only processing
+                })
+            else:
+                themes_task = llm_service.analyze({
+                    'task': 'theme_analysis',
+                    'text': answer_only_text,  # Use answer-only text for themes
+                    'use_answer_only': True  # Flag to indicate answer-only processing
+                })
             patterns_task = llm_service.analyze({
                 'task': 'pattern_recognition',
                 'text': combined_text

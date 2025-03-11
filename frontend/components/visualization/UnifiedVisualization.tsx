@@ -7,6 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { ThemeChart } from './ThemeChart';
 import PatternList from './PatternList';
 import PersonaList from './PersonaList';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 
 interface UnifiedVisualizationProps {
   type: 'themes' | 'patterns' | 'sentiment' | 'personas';
@@ -149,7 +155,7 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
       return (
         <div className="space-y-4">
           <div className="mb-2">
-            <h3 className="text-sm font-medium mb-2">Top Patterns</h3>
+            <h3 className="text-sm font-medium mb-2">Top Behavior Patterns</h3>
             <div className="space-y-3">
               {topPatterns.map((pattern, idx) => (
                 <div key={idx} className="flex gap-3 relative">
@@ -162,9 +168,23 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                       (pattern.sentiment !== undefined && pattern.sentiment <= -0.2) ? 'border-red-300 bg-red-50' :
                       'border-slate-300 bg-slate-50'
                     } transition-all duration-150`}>
-                      <Badge className="absolute top-1/2 right-3 -translate-y-1/2">
-                        {Math.round((pattern.frequency || 0) * 100)}%
-                      </Badge>
+                      {pattern.category && (
+                        <Badge variant="outline" className="mb-1">
+                          {pattern.category}
+                        </Badge>
+                      )}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge className="absolute top-3 right-3 cursor-help">
+                              {Math.round((pattern.frequency || 0) * 100)}%
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                            <p>Confidence score: How strongly this pattern is represented in the interview</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <p className="text-sm leading-relaxed pr-16 font-medium">
                         {pattern.name}
                       </p>

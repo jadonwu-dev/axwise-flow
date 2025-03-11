@@ -3,25 +3,18 @@
 import React, { useMemo, useState } from 'react';
 import { Pattern } from '@/types/api';
 import { ChartLegend } from './common';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Cell,
-  ReferenceLine,
-  Legend,
-  Treemap,
-  ResponsiveContainer
-} from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 
 export interface PatternListProps {
   patterns: Pattern[];
@@ -34,6 +27,16 @@ const SENTIMENT_COLORS = {
   positive: '#22c55e', // green-500
   neutral: '#64748b', // slate-500
   negative: '#ef4444', // red-500
+};
+
+// Pattern category descriptions
+const PATTERN_CATEGORIES = {
+  'Workflow': 'Sequences of actions users take to accomplish goals',
+  'Coping Strategy': 'Ways users overcome obstacles or limitations',
+  'Decision Process': 'How users make choices',
+  'Workaround': 'Alternative approaches when standard methods fail',
+  'Habit': 'Repeated behaviors users exhibit',
+  'Uncategorized': 'Other behavioral patterns'
 };
 
 export function PatternList({ patterns, showEvidence = true, className, onPatternClick }: PatternListProps) {
@@ -132,44 +135,63 @@ export function PatternList({ patterns, showEvidence = true, className, onPatter
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {sortedPatterns.length > 0 ? (
+          {categories.length > 0 ? (
             <div className="space-y-8">
-              {sortedPatterns.map((pattern) => (
-                <div key={pattern.id} id={`pattern-${pattern.id}`} className="border-b pb-6 last:border-0 last:pb-0">
-                  <div className="w-full mb-4">
-                    <h2 className="text-xl font-bold text-foreground">{pattern.name}</h2>
+              {categories.map((category) => (
+                <div key={category} className="mb-8 last:mb-0">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">{category}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {PATTERN_CATEGORIES[category as keyof typeof PATTERN_CATEGORIES] || 'Behavioral patterns'}
+                    </p>
                   </div>
-                  
-                  {pattern.description && (
-                    <div className="mb-5 p-1.5 relative">
-                      <div className={`border ${getPatternColors(pattern.sentiment).border} ${getPatternColors(pattern.sentiment).bg} rounded-lg p-4 relative`}>
-                        <Badge className="absolute top-1/2 right-3 -translate-y-1/2">
-                          {Math.round((pattern.frequency || 0) * 100)}%
-                        </Badge>
-                        <div className="absolute -left-1 -top-1 text-4xl text-primary/20 font-serif">"</div>
-                        <div className="absolute -right-1 -bottom-1 text-4xl text-primary/20 font-serif rotate-180">"</div>
-                        <p className="text-base leading-relaxed text-foreground pr-16">
-                          {pattern.description}
-                        </p>
+                  <div className="space-y-6">
+                    {groupedPatterns[category].map((pattern) => (
+                      <div key={pattern.id} id={`pattern-${pattern.id}`} className="border-b pb-6 last:border-0 last:pb-0">
+                        <div className="w-full mb-4">
+                          <h2 className="text-lg font-bold text-foreground">{pattern.name}</h2>
+                        </div>
+                        
+                        {pattern.description && (
+                          <div className="mb-5 p-1.5 relative">
+                            <div className={`border ${getPatternColors(pattern.sentiment).border} ${getPatternColors(pattern.sentiment).bg} rounded-lg p-4 relative`}>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className="absolute top-1/2 right-3 -translate-y-1/2 cursor-help">
+                                      {Math.round((pattern.frequency || 0) * 100)}%
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left">
+                                    <p>Confidence score: How strongly this pattern is represented in the interview</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <p className="text-base leading-relaxed text-foreground pr-16">
+                                {pattern.description}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {pattern.evidence && pattern.evidence.length > 0 && (
+                          <div className="mt-3">
+                            <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
+                            <div className="pl-3 border-l-2 border-primary/20">
+                              <ul className="space-y-3">
+                                {pattern.evidence.map((example, i) => (
+                                  <li key={i} className="relative bg-muted/30 p-3 rounded-md">
+                                    <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
+                                    <p className="text-muted-foreground text-sm">{example}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                  
-                  {pattern.examples && pattern.examples.length > 0 && (
-                    <div className="mt-3">
-                      <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
-                      <div className="pl-3 border-l-2 border-primary/20">
-                        <ul className="space-y-3">
-                          {pattern.examples.map((example, i) => (
-                            <li key={i} className="relative bg-muted/30 p-3 rounded-md">
-                              <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                              <p className="italic text-muted-foreground text-sm">"{example}"</p>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

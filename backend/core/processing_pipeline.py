@@ -8,7 +8,7 @@ from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
-async def process_data(nlp_processor, llm_service, data: Any) -> Dict[str, Any]:
+async def process_data(nlp_processor, llm_service, data: Any, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Process uploaded data through NLP pipeline.
     
@@ -16,17 +16,24 @@ async def process_data(nlp_processor, llm_service, data: Any) -> Dict[str, Any]:
         nlp_processor: NLP processor instance
         llm_service: LLM service instance
         data: Interview data to process (can be a list, dictionary, or string)
+        config: Analysis configuration options
         
     Returns:
         Dict[str, Any]: Analysis results
     """
     try:
+        # Initialize config if not provided
+        if config is None:
+            config = {}
+            
         # Log processing start
         logger.info(f"Starting data processing pipeline with data type: {type(data)}")
+        if config.get('use_enhanced_theme_analysis'):
+            logger.info("Using enhanced thematic analysis")
         
         # Process data through NLP pipeline
         # The NLP processor now handles different data formats internally
-        results = await nlp_processor.process_interview_data(data, llm_service)
+        results = await nlp_processor.process_interview_data(data, llm_service, config)
         
         # Validate results
         logger.info("Validating analysis results")

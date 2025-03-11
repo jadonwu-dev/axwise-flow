@@ -9,6 +9,8 @@ import os
 from typing import Dict, Any, List
 import openai
 from openai import AsyncOpenAI
+import re
+import time
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -248,35 +250,49 @@ class OpenAIService:
             
         elif task == 'pattern_recognition':
             return """
-            You are an expert interview analyst. Analyze the provided interview text and identify recurring patterns.
-            For each pattern you identify, provide:
-            1. A clear category (e.g., "Pain Point", "Feature Request", "Positive Feedback")
-            2. A concise description of the pattern
+            You are an expert behavioral analyst specializing in identifying ACTION PATTERNS in interview data. 
+            
+            IMPORTANT DISTINCTION:
+            - THEMES capture WHAT PEOPLE TALK ABOUT (topics, concepts, ideas)
+            - PATTERNS capture WHAT PEOPLE DO (behaviors, actions, workflows, strategies)
+            
+            Focus EXCLUSIVELY on identifying recurring BEHAVIORS and ACTION SEQUENCES mentioned by interviewees. 
+            Look for:
+            1. Workflows - Sequences of actions users take to accomplish goals
+            2. Coping strategies - Ways users overcome obstacles or limitations
+            3. Decision processes - How users make choices
+            4. Workarounds - Alternative approaches when standard methods fail
+            5. Habits - Repeated behaviors users exhibit
+            
+            For each behavioral pattern you identify, provide:
+            1. A behavior-oriented category (e.g., "Workflow", "Coping Strategy", "Decision Process", "Workaround", "Habit")
+            2. A description of the pattern that highlights the ACTIONS or BEHAVIORS
             3. A frequency score between 0 and 1 indicating how prevalent the pattern is
-            4. A sentiment score between 0 and 1 (0 being very negative, 0.5 being neutral, 1 being very positive)
-            5. A list of 2-3 supporting pieces of evidence from the text
+            4. A sentiment score between -1.0 and 1.0 
+            5. Supporting evidence that shows the SPECIFIC ACTIONS mentioned
             
             Return your analysis in the following JSON format:
             {
                 "patterns": [
                     {
-                        "category": "Pain Point",
-                        "description": "Description here",
+                        "category": "Workflow",
+                        "description": "Users repeatedly check multiple sources before making UX decisions",
                         "frequency": 0.65,
-                        "sentiment": 0.2,
+                        "sentiment": -0.3,
                         "evidence": [
-                            "Direct quote or paraphrase from text 1",
-                            "Direct quote or paraphrase from text 2"
+                            "I always check Nielsen's heuristics first, then validate with our own research, before presenting options",
+                            "We go through a three-step validation process: first check best practices, then look at competitors, then test with users"
                         ]
                     }
                 ]
             }
             
-            Ensure that:
-            - Categories are clear and consistent
-            - Descriptions are specific and actionable
-            - Sentiment scores reflect the emotional tone (0 negative, 0.5 neutral, 1 positive)
-            - Evidence directly supports the pattern identified
+            IMPORTANT:
+            - Emphasize VERBS and ACTION words in your pattern descriptions
+            - Each pattern should describe WHAT USERS DO, not just what they think or say
+            - Evidence should contain quotes showing the ACTIONS mentioned
+            - If you can't identify clear behavioral patterns, focus on the few you can confidently identify
+            - Ensure 100% of your response is in valid JSON format
             """
             
         elif task == 'sentiment_analysis':
@@ -399,3 +415,342 @@ class OpenAIService:
         
         else:
             return f"You are an expert analyst. Analyze the provided text for the task: {task}."
+    
+    def _get_prompt_template(self, task, use_answer_only=False):
+        """Get the prompt template for a specific task."""
+        
+        if task == 'text_cleaning':
+            return """
+            Clean and format the following interview transcript. Correct spelling/grammar errors and segment it into paragraphs or sentences for coding. Return the cleaned text with line numbers.
+            
+            FORMAT YOUR RESPONSE AS:
+            Line 1: [Cleaned text]
+            Line 2: [Cleaned text]
+            ...
+            
+            DO NOT include explanations, just the cleaned, numbered text.
+            """
+            
+        if task == 'text_familiarization':
+            return """
+            Read the cleaned transcript below and summarize the key topics, tone, and context. Highlight recurring ideas or phrases.
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            {
+              "summary": "Overall summary of the content",
+              "key_topics": ["topic1", "topic2", ...],
+              "tone": "Description of overall tone",
+              "recurring_ideas": ["idea1", "idea2", ...]
+            }
+            """
+            
+        if task == 'initial_coding':
+            return """
+            Analyze each numbered segment from the transcript. Assign a concise code (1-3 words) that captures the core idea. 
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            [
+              {
+                "line": 1,
+                "text": "Text from line 1",
+                "code": "Code for line 1"
+              },
+              ...
+            ]
+            """
+            
+        if task == 'code_consolidation':
+            return """
+            Review the codes below. Merge duplicates, resolve inconsistencies, and ensure codes align with their segments. 
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            [
+              {
+                "consolidated_code": "New code name",
+                "original_codes": ["Original code 1", "Original code 2", ...],
+                "line_references": [1, 5, 8, ...] // Line numbers where this code appears
+              },
+              ...
+            ]
+            """
+            
+        if task == 'theme_identification':
+            return """
+            Group the codes below into broader themes. Explain the rationale for each grouping. 
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            [
+              {
+                "theme_candidate": "Potential theme name",
+                "codes": ["Code 1", "Code 2", ...],
+                "rationale": "Explanation of why these codes form a theme"
+              },
+              ...
+            ]
+            """
+            
+        if task == 'theme_refinement':
+            return """
+            Refine the theme candidates below. Ensure each theme is distinct and comprehensive. Assign clear, descriptive names. 
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            [
+              {
+                "name": "Final theme name",
+                "definition": "One-sentence description of the theme",
+                "codes": ["Code 1", "Code 2", ...],
+                "frequency_estimate": 0.XX // Decimal between 0-1 representing prevalence
+              },
+              ...
+            ]
+            """
+            
+        if task == 'reliability_check':
+            return """
+            Act as three independent raters. Review the transcript and the proposed themes. For each rater, indicate agreement or disagreement with each theme.
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            {
+              "raters": [
+                {
+                  "rater_id": 1,
+                  "agreement": {
+                    "theme1_name": true, // true for agreement, false for disagreement
+                    "theme2_name": false,
+                    ...
+                  },
+                  "comments": "Optional comments from this rater"
+                },
+                // repeat for raters 2 and 3
+              ],
+              "agreement_statistics": {
+                "overall_agreement": 0.XX, // proportion of agreements across all themes and raters
+                "cohen_kappa": 0.XX // calculated cohen's kappa coefficient
+              }
+            }
+            """
+            
+        if task == 'theme_report':
+            return """
+            Based on the themes and inter-rater results, generate a comprehensive thematic analysis report.
+            
+            FORMAT YOUR RESPONSE AS JSON:
+            {
+              "key_themes": [
+                {
+                  "name": "Theme name",
+                  "definition": "Theme definition",
+                  "frequency": 0.XX,
+                  "example_quotes": ["Quote 1", "Quote 2"],
+                  "sentiment_estimate": X.XX // between -1 and 1
+                },
+                ...
+              ],
+              "frequency_analysis": {
+                "most_common_codes": ["Code 1", "Code 2", ...],
+                "least_common_codes": ["Code N", "Code M", ...]
+              },
+              "insights": {
+                "patterns": ["Pattern 1", "Pattern 2", ...],
+                "surprises": ["Surprising finding 1", ...],
+                "implications": ["Implication 1", ...]
+              }
+            }
+            """
+    
+    async def analyze_themes_enhanced(self, data):
+        """
+        Perform enhanced thematic analysis using the 8-step process
+        """
+        text = data.get('text', '')
+        use_reliability_check = data.get('use_reliability_check', True)
+        
+        try:
+            self.logger.info("Starting enhanced thematic analysis")
+            start_time = time.time()
+            
+            # Step 1: Data Preparation
+            self.logger.info("Step 1: Data Preparation")
+            cleaned_text_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('text_cleaning')}\n\nTRANSCRIPT:\n{text}"
+            })
+            
+            try:
+                cleaned_text = cleaned_text_data['content']
+            except (KeyError, TypeError):
+                cleaned_text = str(cleaned_text_data)
+                
+            # Step 2: Familiarization
+            self.logger.info("Step 2: Familiarization")
+            familiarization_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('text_familiarization')}\n\nCLEANED TRANSCRIPT:\n{cleaned_text}"
+            })
+            
+            try:
+                familiarization = self._parse_json_response(familiarization_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing familiarization data: {str(e)}")
+                familiarization = {"summary": "Error generating summary", "key_topics": []}
+            
+            # Step 3: Initial Coding
+            self.logger.info("Step 3: Initial Coding")
+            initial_coding_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('initial_coding')}\n\nCLEANED TRANSCRIPT:\n{cleaned_text}"
+            })
+            
+            try:
+                initial_codes = self._parse_json_response(initial_coding_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing initial coding data: {str(e)}")
+                initial_codes = []
+            
+            # Step 4: Code Review & Consolidation
+            self.logger.info("Step 4: Code Consolidation")
+            code_consolidation_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('code_consolidation')}\n\nINITIAL CODES:\n{json.dumps(initial_codes)}"
+            })
+            
+            try:
+                consolidated_codes = self._parse_json_response(code_consolidation_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing consolidated codes: {str(e)}")
+                consolidated_codes = []
+            
+            # Step 5: Theme Identification
+            self.logger.info("Step 5: Theme Identification")
+            theme_identification_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('theme_identification')}\n\nCONSOLIDATED CODES:\n{json.dumps(consolidated_codes)}"
+            })
+            
+            try:
+                theme_candidates = self._parse_json_response(theme_identification_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing theme candidates: {str(e)}")
+                theme_candidates = []
+            
+            # Step 6: Theme Refinement & Naming
+            self.logger.info("Step 6: Theme Refinement")
+            theme_refinement_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('theme_refinement')}\n\nTHEME CANDIDATES:\n{json.dumps(theme_candidates)}"
+            })
+            
+            try:
+                refined_themes = self._parse_json_response(theme_refinement_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing refined themes: {str(e)}")
+                refined_themes = []
+            
+            reliability_data = None
+            # Step 7: Inter-Rater Reliability (optional)
+            if use_reliability_check:
+                self.logger.info("Step 7: Reliability Check")
+                reliability_check_data = await self._call_llm({
+                    'role': 'user',
+                    'content': f"{self._get_prompt_template('reliability_check')}\n\nTRANSCRIPT:\n{cleaned_text}\n\nPROPOSED THEMES:\n{json.dumps(refined_themes)}"
+                })
+                
+                try:
+                    reliability_data = self._parse_json_response(reliability_check_data['content'])
+                except Exception as e:
+                    self.logger.error(f"Error parsing reliability data: {str(e)}")
+                    reliability_data = {"agreement_statistics": {"overall_agreement": 0.0, "cohen_kappa": 0.0}}
+            
+            # Step 8: Final Report
+            self.logger.info("Step 8: Theme Report")
+            theme_report_data = await self._call_llm({
+                'role': 'user',
+                'content': f"{self._get_prompt_template('theme_report')}\n\nTHEMES:\n{json.dumps(refined_themes)}\n\nRELIABILITY DATA:\n{json.dumps(reliability_data) if reliability_data else 'Not available'}"
+            })
+            
+            try:
+                theme_report = self._parse_json_response(theme_report_data['content'])
+            except Exception as e:
+                self.logger.error(f"Error parsing theme report: {str(e)}")
+                theme_report = {"key_themes": [], "insights": {"patterns": []}}
+            
+            # Format the final themes
+            final_themes = []
+            theme_id = 1
+            
+            for theme in theme_report.get('key_themes', []):
+                # Find the corresponding refined theme to get codes
+                matching_refined_theme = next(
+                    (rt for rt in refined_themes if rt.get('name') == theme.get('name')), 
+                    {}
+                )
+                
+                final_themes.append({
+                    'id': theme_id,
+                    'name': theme.get('name', f"Theme {theme_id}"),
+                    'definition': theme.get('definition', ''),
+                    'frequency': theme.get('frequency', 0.0),
+                    'statements': theme.get('example_quotes', []),
+                    'sentiment': theme.get('sentiment_estimate', 0.0),
+                    'codes': matching_refined_theme.get('codes', []),
+                    'keywords': self._extract_keywords_from_codes(matching_refined_theme.get('codes', [])),
+                    'reliability': reliability_data.get('agreement_statistics', {}).get('cohen_kappa', 0.0) if reliability_data else None,
+                    'process': 'enhanced'
+                })
+                theme_id += 1
+            
+            elapsed_time = time.time() - start_time
+            self.logger.info(f"Enhanced thematic analysis completed in {elapsed_time:.2f} seconds")
+            
+            return {
+                'themes': final_themes,
+                'metadata': {
+                    'process': 'enhanced_thematic_analysis',
+                    'reliability': reliability_data.get('agreement_statistics', {}) if reliability_data else None,
+                    'insights': theme_report.get('insights', {}),
+                    'elapsedTime': elapsed_time
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in enhanced thematic analysis: {str(e)}")
+            # Return minimal data in case of error
+            return {
+                'themes': [],
+                'metadata': {
+                    'process': 'enhanced_thematic_analysis',
+                    'error': str(e)
+                }
+            }
+            
+    def _extract_keywords_from_codes(self, codes):
+        """Extract keywords from codes for backward compatibility"""
+        keywords = []
+        for code in codes:
+            # Split the code by spaces and add each word as a keyword
+            words = code.split()
+            keywords.extend(words)
+        
+        # Remove duplicates and limit to 10 keywords
+        return list(set(keywords))[:10]
+        
+    def _parse_json_response(self, response_text):
+        """Parse JSON from the response text, handling various formats"""
+        try:
+            # Try to find JSON within the text (in case there's markdown or other text)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response_text)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Try to find JSON without the markdown markers
+                json_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', response_text)
+                if json_match:
+                    json_str = json_match.group(1)
+                else:
+                    json_str = response_text
+                    
+            return json.loads(json_str)
+        except Exception as e:
+            self.logger.error(f"Failed to parse JSON: {str(e)}")
+            self.logger.debug(f"Response text: {response_text}")
+            raise Exception(f"Failed to parse response as JSON: {str(e)}")

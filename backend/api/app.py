@@ -282,9 +282,13 @@ async def analyze_data(
             "gpt-4o-2024-08-06" if llm_provider == "openai" else "gemini-2.0-flash"
         )
         is_free_text = analysis_request.is_free_text
+        use_enhanced_theme_analysis = analysis_request.use_enhanced_theme_analysis
+        use_reliability_check = analysis_request.use_reliability_check
 
         logger.info(f"Analysis parameters - data_id: {data_id}, provider: {llm_provider}, model: {llm_model}, is_free_text: {is_free_text}")
-
+        if use_enhanced_theme_analysis:
+            logger.info(f"Using enhanced thematic analysis with reliability check: {use_reliability_check}")
+        
         # Initialize services
         try:
             llm_service = LLMServiceFactory.create(llm_provider, LLM_CONFIG[llm_provider])
@@ -390,7 +394,13 @@ async def analyze_data(
                 result = await process_data(
                     nlp_processor=nlp_processor,
                     llm_service=llm_service,
-                    data=data
+                    data=data,
+                    config={
+                        'use_enhanced_theme_analysis': use_enhanced_theme_analysis,
+                        'use_reliability_check': use_reliability_check,
+                        'llm_provider': llm_provider,
+                        'llm_model': llm_model
+                    }
                 )
                 
                 # Update database record with results

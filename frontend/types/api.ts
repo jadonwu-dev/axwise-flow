@@ -34,6 +34,10 @@ export interface Theme {
   statements?: string[];    // Supporting statements from the LLM
   examples?: string[];      // Legacy field for backward compatibility
   sentiment?: number;
+  definition?: string;      // One-sentence description of the theme
+  codes?: string[];         // Associated codes from the coding process
+  reliability?: number;     // Inter-rater reliability score (0-1)
+  process?: 'basic' | 'enhanced';  // Identifies which analysis process was used
 }
 
 /**
