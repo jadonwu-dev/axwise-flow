@@ -38,33 +38,6 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
     };
   }, [sentimentData]);
 
-  // Function to scroll to a pattern by ID
-  const scrollToPattern = (patternId: string) => {
-    // Wait for a short time to ensure everything is rendered
-    setTimeout(() => {
-      const element = document.getElementById(patternId);
-      if (element) {
-        // Calculate position accounting for any headers
-        const offset = 100;
-        const elementPosition = element.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - offset;
-        
-        // Scroll to the element
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: 'smooth'
-        });
-        
-        // Add highlight effect
-        element.style.transition = 'background-color 0.5s ease';
-        element.style.backgroundColor = 'rgba(251, 191, 36, 0.2)';
-        setTimeout(() => {
-          element.style.backgroundColor = '';
-        }, 2000);
-      }
-    }, 50);
-  };
-
   // Generate key insights based on visualization type
   const getKeyInsights = () => {
     const insights = [];
@@ -184,34 +157,22 @@ const UnifiedVisualization: React.FC<UnifiedVisualizationProps> = ({
                     {idx + 1}
                   </div>
                   <div className="flex-1 pl-9">
-                    <div 
-                      className="cursor-pointer"
-                      onClick={() => {
-                        const patternId = `pattern-${pattern.id || idx}`;
-                        scrollToPattern(patternId);
-                      }}
-                    >
-                      <div 
-                        id={`pattern-${pattern.id || idx}`}
-                        className={`border rounded-lg p-4 relative ${
-                          (pattern.sentiment !== undefined && pattern.sentiment >= 0.2) ? 'border-green-300 bg-green-50 hover:bg-green-100' : 
-                          (pattern.sentiment !== undefined && pattern.sentiment <= -0.2) ? 'border-red-300 bg-red-50 hover:bg-red-100' :
-                          'border-slate-300 bg-slate-50 hover:bg-slate-100'
-                        } transition-all duration-150`}>
-                        <Badge className="absolute top-1/2 right-3 -translate-y-1/2">
-                          {Math.round((pattern.frequency || 0) * 100)}%
-                        </Badge>
-                        <div className="absolute -left-1 -top-1 text-4xl text-primary/20 font-serif">"</div>
-                        <div className="absolute -right-1 -bottom-1 text-4xl text-primary/20 font-serif rotate-180">"</div>
-                        <p className="text-sm leading-relaxed pr-16 font-medium">
-                          {pattern.name}
+                    <div className={`border rounded-lg p-4 relative ${
+                      (pattern.sentiment !== undefined && pattern.sentiment >= 0.2) ? 'border-green-300 bg-green-50' : 
+                      (pattern.sentiment !== undefined && pattern.sentiment <= -0.2) ? 'border-red-300 bg-red-50' :
+                      'border-slate-300 bg-slate-50'
+                    } transition-all duration-150`}>
+                      <Badge className="absolute top-1/2 right-3 -translate-y-1/2">
+                        {Math.round((pattern.frequency || 0) * 100)}%
+                      </Badge>
+                      <p className="text-sm leading-relaxed pr-16 font-medium">
+                        {pattern.name}
+                      </p>
+                      {pattern.description && (
+                        <p className="text-xs text-muted-foreground mt-1 pr-16">
+                          {pattern.description}
                         </p>
-                        {pattern.description && (
-                          <p className="text-xs text-muted-foreground mt-1 pr-16">
-                            {pattern.description}
-                          </p>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
