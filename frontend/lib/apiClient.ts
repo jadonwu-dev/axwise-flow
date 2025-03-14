@@ -430,10 +430,40 @@ class ApiClient {
    */
   async listAnalyses(params?: unknown): Promise<DetailedAnalysisResult[]> {
     try {
-      const response = await this.client.get('/api/analyses', { params });
+      // Log the URL and parameters being used for debugging
+      const apiUrl = `${this.baseUrl}/api/analyses`;
+      console.log('Making API request to:', apiUrl, 'with params:', params);
+      console.log('Current headers:', this.client.defaults.headers);
+      
+      // Add explicit CORS headers for this specific request
+      const response = await this.client.get('/api/analyses', { 
+        params,
+        headers: {
+          'Accept': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      });
+      
       return response.data;
     } catch (error: any) {
+      // Enhanced error logging for debugging
       console.error('API error:', error);
+      
+      // Specific handling for CORS errors
+      if (error.message && error.message.includes('Network Error')) {
+        console.error('This appears to be a CORS or network error. Check if:');
+        console.error('1. The backend server is running');
+        console.error('2. CORS is properly configured on the backend');
+        console.error('3. There are no network connectivity issues');
+        
+        // Return an empty array instead of throwing an error
+        // This helps the UI show something instead of breaking
+        console.warn('Returning empty array instead of throwing error');
+        return [];
+      }
+      
       throw new Error(`Failed to fetch analyses: ${error.message}`);
     }
   }
