@@ -142,6 +142,32 @@ export interface DetailedAnalysisResult {
 }
 
 /**
+ * Unified data structure for dashboard visualization components
+ * This consolidated interface ensures consistent data structure across dashboard components
+ */
+export interface DashboardData {
+  // Metadata
+  analysisId: string;
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: string;
+  fileName: string;
+  fileSize?: number;
+  llmProvider?: string;
+  llmModel?: string;
+  
+  // Analysis Data
+  themes: Theme[];
+  patterns: Pattern[];
+  sentiment: SentimentData[];
+  sentimentOverview: SentimentOverview;
+  sentimentStatements?: SentimentStatements;
+  personas?: Persona[];
+  
+  // Error Information
+  error?: string;
+}
+
+/**
  * Parameters for listing analyses
  */
 export interface ListAnalysesParams {

@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileText } from 'lucide-react';
-import { DetailedAnalysisResult } from '@/types/api';
+import { DashboardData } from '@/types/api';
 import { ThemeChart } from '@/components/visualization/ThemeChart';
 import { PatternList } from '@/components/visualization/PatternList';
 import { SentimentGraph } from '@/components/visualization/SentimentGraph';
@@ -13,13 +13,13 @@ import { PersonaList } from '@/components/visualization/PersonaList';
 import NoResultsView from './NoResultsView';
 
 interface VisualizationTabProps {
-  results?: DetailedAnalysisResult | null;
+  dashboardData?: DashboardData | null;
 }
 
 /**
  * Tab for visualizing analysis results with multiple visualization options
  */
-const VisualizationTab = ({ results }: VisualizationTabProps) => {
+const VisualizationTab = ({ dashboardData }: VisualizationTabProps) => {
   // Visualization sub-tab state
   const [activeTab, setActiveTab] = useState<'themes' | 'patterns' | 'sentiment' | 'personas'>('themes');
   
@@ -70,22 +70,22 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
     let isMounted = true;
     let logTimer: NodeJS.Timeout;
 
-    if (results && activeTab === 'sentiment' && isMounted) {
+    if (dashboardData && activeTab === 'sentiment' && isMounted) {
       // Defer logging to avoid blocking tab switching
       logTimer = setTimeout(() => {
         try {
-          console.log('Results object for sentiment visualization:', 
-            typeof results === 'object' ? 'Object' : typeof results);
+          console.log('DashboardData object for sentiment visualization:', 
+            typeof dashboardData === 'object' ? 'Object' : typeof dashboardData);
           
           // Only log if the properties exist
-          if (results.sentimentStatements) {
-            console.log('SentimentStatements in results:', 
-              typeof results.sentimentStatements === 'object' ? 'Object' : typeof results.sentimentStatements);
+          if (dashboardData.sentimentStatements) {
+            console.log('SentimentStatements in dashboardData:', 
+              typeof dashboardData.sentimentStatements === 'object' ? 'Object' : typeof dashboardData.sentimentStatements);
           }
           
-          if (results.sentimentOverview) {
+          if (dashboardData.sentimentOverview) {
             console.log('Sentiment overview:', 
-              typeof results.sentimentOverview === 'object' ? 'Object' : typeof results.sentimentOverview);
+              typeof dashboardData.sentimentOverview === 'object' ? 'Object' : typeof dashboardData.sentimentOverview);
           }
         } catch (error) {
           // Suppress errors in logging
@@ -98,10 +98,10 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
       isMounted = false;
       if (logTimer) clearTimeout(logTimer);
     };
-  }, [results, activeTab]);
+  }, [dashboardData, activeTab]);
   
   // If no results available, show placeholder
-  if (!results) {
+  if (!dashboardData) {
     return <NoResultsView />;
   }
   
@@ -123,8 +123,8 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
           </TabsList>
           
           <TabsContent value="themes">
-            {results.themes && results.themes.length > 0 ? (
-              <ThemeChart themes={results.themes} />
+            {dashboardData.themes && dashboardData.themes.length > 0 ? (
+              <ThemeChart themes={dashboardData.themes} />
             ) : (
               <Alert>
                 <FileText className="h-4 w-4" />
@@ -136,8 +136,8 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
           </TabsContent>
           
           <TabsContent value="patterns">
-            {results.patterns && results.patterns.length > 0 ? (
-              <PatternList patterns={results.patterns} />
+            {dashboardData.patterns && dashboardData.patterns.length > 0 ? (
+              <PatternList patterns={dashboardData.patterns} />
             ) : (
               <Alert>
                 <FileText className="h-4 w-4" />
@@ -149,14 +149,14 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
           </TabsContent>
           
           <TabsContent value="sentiment">
-            {results.sentimentStatements && 
-             (Object.keys(results.sentimentStatements).length > 0 || 
-              (results.sentimentStatements.positive && results.sentimentStatements.positive.length > 0) ||
-              (results.sentimentStatements.negative && results.sentimentStatements.negative.length > 0) ||
-              (results.sentimentStatements.neutral && results.sentimentStatements.neutral.length > 0)) ? (
+            {dashboardData.sentimentStatements && 
+             (Object.keys(dashboardData.sentimentStatements).length > 0 || 
+              (dashboardData.sentimentStatements.positive && dashboardData.sentimentStatements.positive.length > 0) ||
+              (dashboardData.sentimentStatements.negative && dashboardData.sentimentStatements.negative.length > 0) ||
+              (dashboardData.sentimentStatements.neutral && dashboardData.sentimentStatements.neutral.length > 0)) ? (
               <SentimentGraph 
-                data={results.sentimentOverview}
-                supportingStatements={results.sentimentStatements}
+                data={dashboardData.sentimentOverview}
+                supportingStatements={dashboardData.sentimentStatements}
               />
             ) : (
               <Alert>
@@ -169,8 +169,8 @@ const VisualizationTab = ({ results }: VisualizationTabProps) => {
           </TabsContent>
           
           <TabsContent value="personas">
-            {results.personas && results.personas.length > 0 ? (
-              <PersonaList personas={results.personas} />
+            {dashboardData.personas && dashboardData.personas.length > 0 ? (
+              <PersonaList personas={dashboardData.personas} />
             ) : (
               <Alert>
                 <FileText className="h-4 w-4" />

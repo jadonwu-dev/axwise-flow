@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/lib/apiClient';
-import type { DetailedAnalysisResult, AnalysisResponse, ListAnalysesParams } from '@/types/api';
+import type { DetailedAnalysisResult, AnalysisResponse, ListAnalysesParams, DashboardData } from '@/types/api';
 import { useToast } from '@/components/providers/toast-provider';
 
 /**
@@ -37,6 +37,9 @@ interface AnalysisState {
   setVisualizationTab: (tab: 'themes' | 'patterns' | 'sentiment' | 'personas') => void;
   setHistoryFilters: (filters: Partial<AnalysisState['historyFilters']>) => void;
   clearErrors: () => void;
+  
+  // New function to convert to dashboard data format
+  getDashboardData: (analysisResult: DetailedAnalysisResult | null) => DashboardData | null;
 }
 
 /**
@@ -196,7 +199,32 @@ export const useAnalysisStore = create<AnalysisState>()(
        */
       clearErrors: () => {
         set({ analysisError: null, historyError: null });
-      }
+      },
+      
+      /**
+       * Convert DetailedAnalysisResult to DashboardData format
+       * This provides a consistent data structure for dashboard components
+       */
+      getDashboardData: (analysisResult: DetailedAnalysisResult | null): DashboardData | null => {
+        if (!analysisResult) return null;
+        
+        return {
+          analysisId: analysisResult.id,
+          status: analysisResult.status,
+          createdAt: analysisResult.createdAt,
+          fileName: analysisResult.fileName,
+          fileSize: analysisResult.fileSize,
+          llmProvider: analysisResult.llmProvider,
+          llmModel: analysisResult.llmModel,
+          themes: analysisResult.themes || [],
+          patterns: analysisResult.patterns || [],
+          sentiment: analysisResult.sentiment || [],
+          sentimentOverview: analysisResult.sentimentOverview || { positive: 0, neutral: 0, negative: 0 },
+          sentimentStatements: analysisResult.sentimentStatements || { positive: [], neutral: [], negative: [] },
+          personas: analysisResult.personas || [],
+          error: analysisResult.error
+        };
+      },
     }),
     {
       name: 'interview-analysis-store',
@@ -237,3 +265,12 @@ export const useVisualizationTab = () => {
   const setTab = useAnalysisStore(state => state.setVisualizationTab);
   return { tab, setTab };
 };
+
+/**
+ * Selector to get the current analysis as DashboardData
+ */
+export const useCurrentDashboardData = () => useAnalysisStore(state => ({
+  dashboardData: state.currentAnalysis ? state.getDashboardData(state.currentAnalysis) : null,
+  isLoading: state.isLoadingAnalysis,
+  error: state.analysisError
+}));

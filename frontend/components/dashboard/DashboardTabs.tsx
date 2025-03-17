@@ -6,17 +6,17 @@ import UploadTab from './UploadTab';
 import VisualizationTab from './VisualizationTab';
 import HistoryTab from './HistoryTab';
 import DocumentationTab from './DocumentationTab';
-import { DetailedAnalysisResult } from '@/types/api';
+import { DashboardData } from '@/types/api';
 
 interface DashboardTabsProps {
-  currentAnalysis: DetailedAnalysisResult | null;
+  dashboardData: DashboardData | null;
 }
 
 /**
  * Main navigation tabs for the dashboard
  * Handles tab switching and URL state synchronization
  */
-const DashboardTabs = ({ currentAnalysis }: DashboardTabsProps) => {
+const DashboardTabs = ({ dashboardData }: DashboardTabsProps) => {
   // State for active tab will be moved to a Zustand store in future improvement
   const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
   
@@ -74,7 +74,7 @@ const DashboardTabs = ({ currentAnalysis }: DashboardTabsProps) => {
       </TabsContent>
       
       <TabsContent value="visualize">
-        <VisualizationTab results={currentAnalysis} />
+        <VisualizationTab dashboardData={dashboardData} />
       </TabsContent>
       
       <TabsContent value="history">

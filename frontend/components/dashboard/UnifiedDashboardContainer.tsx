@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import DashboardTabs from './DashboardTabs';
-import { DetailedAnalysisResult } from '@/types/api';
+import { DashboardData } from '@/types/api';
 import { apiClient } from '@/lib/apiClient';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAnalysisStore, useCurrentDashboardData } from '@/store/useAnalysisStore';
 
 /**
  * Main container component for the unified dashboard
@@ -20,10 +21,8 @@ const UnifiedDashboardContainer = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  
-  // State for analysis data
-  const [currentAnalysis, setCurrentAnalysis] = useState<DetailedAnalysisResult | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const { fetchAnalysisById, setCurrentAnalysis } = useAnalysisStore();
+  const { dashboardData, isLoading, error: dashboardError } = useCurrentDashboardData();
   const [error, setError] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string>('testuser123'); // To be replaced with real auth
   
@@ -43,27 +42,33 @@ const UnifiedDashboardContainer = () => {
     if (analysisId && tab === 'visualize') {
       const fetchAnalysis = async () => {
         try {
-          setIsLoading(true);
           setError(null);
           
           // Set auth token
           apiClient.setAuthToken(authToken);
           
-          // Fetch analysis details
-          const result = await apiClient.getAnalysisById(analysisId);
-          setCurrentAnalysis(result);
+          // Fetch analysis using the store
+          const result = await fetchAnalysisById(analysisId, true);
+          if (!result) {
+            throw new Error('Failed to fetch analysis');
+          }
         } catch (err) {
           console.error('Error fetching analysis:', err);
           setError(`Failed to load analysis: ${err instanceof Error ? err.message : String(err)}`);
           showToast(`Failed to load analysis: ${err instanceof Error ? err.message : String(err)}`, { variant: 'error' });
-        } finally {
-          setIsLoading(false);
         }
       };
       
       fetchAnalysis();
     }
-  }, [searchParams, showToast, authToken]);
+  }, [searchParams, showToast, authToken, fetchAnalysisById]);
+  
+  // Set error from dashboard if available
+  useEffect(() => {
+    if (dashboardError) {
+      setError(dashboardError.message);
+    }
+  }, [dashboardError]);
   
   // If still loading auth, show minimal loading UI
   if (!isLoaded) {
@@ -92,7 +97,7 @@ const UnifiedDashboardContainer = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Interview Analysis Dashboard</h1>
       
-      <DashboardTabs currentAnalysis={currentAnalysis} />
+      <DashboardTabs dashboardData={dashboardData} />
       
       {isLoading && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
