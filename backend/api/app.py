@@ -341,7 +341,7 @@ async def analyze_data(
         logger.info(f"Analysis parameters - data_id: {data_id}, provider: {llm_provider}, model: {llm_model}, is_free_text: {is_free_text}")
         if use_enhanced_theme_analysis:
             logger.info(f"Using enhanced thematic analysis with reliability check: {use_reliability_check}")
-        
+
         # Initialize services
         try:
             llm_service = LLMServiceFactory.create(llm_provider, LLM_CONFIG[llm_provider])
@@ -385,7 +385,7 @@ async def analyze_data(
                         data = data[0]['content']
                     elif 'free_text' in data[0]:
                         data = data[0]['free_text']
-                
+                    
                 # Ensure data is a string for free text processing
                 if not isinstance(data, str):
                     try:
@@ -442,7 +442,7 @@ async def analyze_data(
                     "progress": 5
                 })
                 async_db.commit()
-                
+
                 # Process data
                 result = await process_data(
                     nlp_processor=nlp_processor,
@@ -462,7 +462,7 @@ async def analyze_data(
                 task_result.completed_at = datetime.utcnow()
                 async_db.commit()
                 logger.info(f"Analysis completed for result_id: {task_result.result_id}")
-                
+
             except Exception as e:
                 logger.error(f"Error during analysis: {str(e)}")
                 try:
