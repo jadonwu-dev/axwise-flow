@@ -25,6 +25,7 @@ import json
 import asyncio
 from sqlalchemy.orm import Session
 from datetime import datetime
+from sqlalchemy.sql import text
 
 from backend.schemas import (
     AnalysisRequest, UploadResponse, AnalysisResponse,
@@ -582,6 +583,38 @@ async def list_analyses(
     Retrieves a list of analyses performed by the user.
     """
     try:
+        # Add very detailed debug logging
+        logger.info(f"list_analyses called - user_id: {current_user.user_id}")
+        logger.info(f"Request parameters - sortBy: {sortBy}, sortDirection: {sortDirection}, status: {status}")
+        logger.info(f"Current request headers: {dict(request.headers)}")
+        
+        # Test database connection with detailed error handling
+        try:
+            db.execute(text("SELECT 1")).fetchone()
+            logger.info("Database connection test successful")
+            
+            # Log database type
+            import inspect
+            db_info = inspect.getmodule(db.bind.__class__).__name__
+            logger.info(f"Using database type: {db_info}")
+        except Exception as db_error:
+            logger.error(f"Database connection error: {str(db_error)}", exc_info=True)
+            # Return a detailed JSONResponse with CORS headers
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                content={
+                    "error": f"Database connection failed: {str(db_error)}",
+                    "type": "database_error"
+                },
+                status_code=500,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Allow-Methods": "GET, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+                }
+            )
+        
         # Build the query with user authorization check
         query = db.query(AnalysisResult).join(
             InterviewData
@@ -659,15 +692,59 @@ async def list_analyses(
                 
             formatted_results.append(formatted_result)
             
-        logger.info(f"Retrieved {len(formatted_results)} analyses for user {current_user.user_id}")
-        return formatted_results
+        logger.info(f"Returning {len(formatted_results)} analyses for user {current_user.user_id}")
+        
+        # Log detailed format of first result for debugging (if available)
+        if formatted_results and len(formatted_results) > 0:
+            logger.info(f"First result sample keys: {list(formatted_results[0].keys())}")
+            logger.info(f"First result ID: {formatted_results[0].get('id')}")
+            logger.info(f"First result contains themes: {len(formatted_results[0].get('themes', []))}")
+        else:
+            logger.warning(f"No analyses found for user {current_user.user_id}")
+        
+        # Ensure CORS headers and consistent format
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content=formatted_results,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
+            }
+        )
             
     except Exception as e:
         logger.error(f"Error retrieving analyses: {str(e)}")
-        raise HTTPException(
+        # Return a detailed JSONResponse with CORS headers
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content={
+                "error": f"Internal server error: {str(e)}",
+                "type": "server_error"
+            },
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
         )
+
+# Add explicit OPTIONS handler for CORS preflight requests
+@app.options("/api/analyses")
+async def options_analyses():
+    """Handle OPTIONS preflight request for analyses endpoint"""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={"status": "ok"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-Client-Origin, X-API-Version"
+        }
+    )
 
 # Add the new endpoint for direct text-to-persona generation
 @app.post(
@@ -757,3 +834,68 @@ async def generate_persona_from_text(
             status_code=500,
             detail=f"Server error: {str(e)}"
         )
+
+@app.get(
+    "/api/health",
+    tags=["System"],
+    summary="Detailed health check",
+    description="Detailed health check endpoint that returns information about the server, database connection, and user count."
+)
+async def detailed_health_check(db: Session = Depends(get_db)):
+    """
+    Detailed health check endpoint that reports on server and database status.
+    """
+    try:
+        # Test database connection
+        db_status = "connected"
+        db_error = None
+        db_info = None
+        user_count = 0
+        analysis_count = 0
+        
+        try:
+            result = db.execute(text("SELECT 1")).fetchone()
+            
+            # Get database type and version
+            if str(db.bind.url).startswith('sqlite'):
+                db_info = db.execute(text("SELECT sqlite_version()")).fetchone()[0]
+            else:
+                db_info = db.execute(text("SELECT version()")).fetchone()[0]
+                
+            # Count users and analyses
+            from backend.models import User, AnalysisResult
+            user_count = db.query(User).count()
+            analysis_count = db.query(AnalysisResult).count()
+            
+        except Exception as e:
+            db_status = "error"
+            db_error = str(e)
+        
+        # Get environment info
+        env_info = {
+            "ENABLE_CLERK_VALIDATION": os.getenv("ENABLE_CLERK_VALIDATION", "false"),
+            "REDACTED_DATABASE_URL_TYPE": str(db.bind.url).split("://")[0] if db_status == "connected" else "unknown"
+        }
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "database": {
+                "status": db_status,
+                "error": db_error,
+                "info": db_info,
+                "counts": {
+                    "users": user_count,
+                    "analyses": analysis_count
+                }
+            },
+            "environment": env_info,
+            "server_id": "DesignAId-API-v2"
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }

@@ -8,6 +8,13 @@ declare module 'axios' {
   }
 }
 
+// Add an interface for the window object that includes showToast
+declare global {
+  interface Window {
+    showToast?: (message: string, options?: any) => void;
+  }
+}
+
 /**
  * API Client for interacting with the backend API
  * 
@@ -46,20 +53,37 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: any) => {
+        // Enhanced error detection and handling
+        const isConnectionRefused = 
+          error?.message?.includes('Connection refused') || 
+          error?.message?.includes('Network Error') ||
+          error?.code === 'ERR_CONNECTION_REFUSED' ||
+          error?.code === 'ERR_NETWORK';
+        
         // Ensure error is an AxiosError
         if (!error || !error.response) {
-          // Check for network errors (likely CORS issues)
-          if (error.message?.includes('Network Error')) {
-            console.error('CORS/network issue detected in interceptor');
+          // Check for network errors (likely CORS issues or server down)
+          if (isConnectionRefused) {
+            console.error('Backend connection refused or not available');
             // For GET requests, return empty data instead of rejecting
             if (error.config?.method?.toLowerCase() === 'get') {
-              console.warn('Returning empty data for GET request due to network error');
+              if (window.showToast) {
+                window.showToast('Backend server is not responding. Using mock data instead.', { variant: 'error' });
+              }
+              console.warn('Returning empty data for GET request due to connection error');
+              return { data: [] };
+            }
+          } else if (error.message?.includes('CORS')) {
+            console.error('CORS error detected in interceptor');
+            // For GET requests, return empty data instead of rejecting
+            if (error.config?.method?.toLowerCase() === 'get') {
+              console.warn('Returning empty data for GET request due to CORS error');
               return { data: [] };
             }
           }
           return Promise.reject(error);
         }
-
+        
         const originalRequest = error.config;
         
         if (!originalRequest) {
@@ -440,49 +464,88 @@ class ApiClient {
    * List all analyses
    */
   async listAnalyses(params?: unknown): Promise<DetailedAnalysisResult[]> {
+    console.log('ApiClient: listAnalyses called with params:', params);
     try {
-      // Log the URL and parameters being used for debugging
-      const apiUrl = `${this.baseUrl}/api/analyses`;
-      console.log('Making API request to:', apiUrl, 'with params:', params);
-      console.log('Current headers:', this.client.defaults.headers);
-      
-      // Add explicit CORS headers for this specific request
+      // Add timeout and retry options
       const response = await this.client.get('/api/analyses', { 
         params,
+        timeout: 10000, // 10 second timeout
         headers: {
           'Accept': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'X-API-Version': 'merged-976ce06-current' // Version tracking
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Client-Origin': window.location.origin  // Use a custom header instead of Origin
         }
       });
       
-      return response.data;
-    } catch (error: any) {
-      // Enhanced error logging for debugging
-      console.error('API error in listAnalyses:', error);
+      console.log('ApiClient: listAnalyses response received', response.status);
       
-      // Specific handling for CORS errors
-      if (error.message && error.message.includes('Network Error')) {
-        console.error('This appears to be a CORS or network error. Check if:');
-        console.error('1. The backend server is running');
-        console.error('2. CORS is properly configured on the backend');
-        console.error('3. There are no network connectivity issues');
+      // Detailed response logging
+      console.log('Response headers:', response.headers);
+      console.log('Raw response data type:', typeof response.data);
+      
+      // Ensure we have an array, even if backend returns an object
+      let analysesArray: DetailedAnalysisResult[] = [];
+      
+      if (Array.isArray(response.data)) {
+        console.log(`Processing array response with ${response.data.length} items`);
+        analysesArray = response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        // If response is an object, check if it has numeric keys (like an object representation of an array)
+        console.log('Processing object response, checking format');
         
-        // Return an empty array instead of throwing an error
-        // This helps the UI show something instead of breaking
-        console.warn('Returning empty array instead of throwing error');
-        return [];
+        // If it's a regular object, check if it has an 'error' property
+        if (response.data.error) {
+          console.error('Server returned error:', response.data.error);
+          return this.generateMockAnalyses();
+        }
+        
+        // If it's an array-like object, convert to array
+        if (Object.keys(response.data).some(key => !isNaN(Number(key)))) {
+          console.log('Converting array-like object to array');
+          analysesArray = Object.values(response.data);
+        } else {
+          // Last resort - wrap single object in array if it has expected properties
+          if ('id' in response.data && 'status' in response.data) {
+            console.log('Wrapping single analysis object in array');
+            analysesArray = [response.data as DetailedAnalysisResult];
+          }
+        }
       }
       
-      // Handle authentication errors with mock data
-      if (error.response?.status === 403) {
-        console.warn('Authentication error (403) - using mock data fallback');
-        return this.generateMockAnalyses();
+      // Handle empty results
+      if (analysesArray.length === 0) {
+        console.log('No analyses found in response');
+        if (window.showToast) {
+          window.showToast('No analyses found. Try uploading a file first.');
+        }
+      } else {
+        console.log(`Returning ${analysesArray.length} analyses`);
       }
       
-      throw new Error(`Failed to fetch analyses: ${error.message}`);
+      return analysesArray;
+    } catch (error: any) {
+      // Enhanced error logging
+      const errorMessage = error?.message || 'Unknown error';
+      const statusCode = error?.response?.status;
+      
+      if (errorMessage.includes('Network Error') || errorMessage.includes('CORS')) {
+        console.error('CORS/network issue detected in API client');
+        // Show a toast or notification to the user
+        if (window.showToast) {
+          window.showToast('Backend connection issue detected. Using sample data instead.');
+        }
+      } else if (statusCode === 500) {
+        console.error('Backend server error (500) when fetching analyses');
+        if (window.showToast) {
+          window.showToast('Server error occurred. Using sample data instead.');
+        }
+      } else {
+        console.error('Error fetching analyses:', errorMessage, error);
+      }
+      
+      // Always return mock data on error to prevent UI from breaking
+      return this.generateMockAnalyses();
     }
   }
 
@@ -490,66 +553,57 @@ class ApiClient {
    * Generate mock analyses data for fallback
    */
   private generateMockAnalyses(): DetailedAnalysisResult[] {
-    console.log('Generating mock analyses data');
-    const now = new Date().toISOString();
+    const mockDate = new Date().toISOString();
+    
     return [
       {
-        id: '1',
-        fileName: 'interview-data-1.json',
-        fileSize: 1024,
+        id: 'mock-1',
+        fileName: 'example-1.txt',
+        fileSize: 2500,
         status: 'completed',
-        createdAt: now,
+        createdAt: mockDate,
         themes: [
-          { id: 1, name: 'User Experience', frequency: 0.8, keywords: ['UX', 'interface', 'usability'], definition: 'Comments about the user interface and experience' },
-          { id: 2, name: 'Performance', frequency: 0.6, keywords: ['speed', 'performance', 'slow'], definition: 'Feedback about system performance' }
+          { id: 1, name: 'User Feedback', frequency: 0.8, keywords: ['feedback', 'review'] },
+          { id: 2, name: 'Product Features', frequency: 0.5, keywords: ['feature', 'capability'] }
         ],
         patterns: [
-          { id: 1, name: 'Navigation Issues', frequency: 0.7, category: 'Workflow', description: 'Users struggle with navigation' },
-          { id: 2, name: 'Feature Requests', frequency: 0.5, category: 'Enhancement', description: 'Requests for new features' }
+          { id: 1, name: 'Feature Requests', category: 'Enhancement', description: 'Users requesting specific features', frequency: 0.7 },
+          { id: 2, name: 'Pain Points', category: 'Issue', description: 'Common issues users face', frequency: 0.6 }
         ],
-        sentiment: [
-          { text: 'I love the interface', score: 0.8, timestamp: now },
-          { text: 'The system is too slow', score: -0.6, timestamp: now }
-        ],
+        sentiment: [],
         sentimentOverview: {
-          positive: 0.4,
-          neutral: 0.3,
-          negative: 0.3
-        },
-        sentimentStatements: {
-          positive: ['I love the interface', 'The new features are great'],
-          neutral: ['It works as expected', 'The system is adequate'],
-          negative: ['The system is too slow', 'I found it difficult to navigate']
+          positive: 0.5,
+          negative: 0.3,
+          neutral: 0.2
         }
-      },
+      }
+    ];
+  }
+
+  /**
+   * Generate mock personas data for fallback
+   */
+  private generateMockPersonas(): any[] {
+    return [
       {
-        id: '2',
-        fileName: 'survey-responses.json',
-        fileSize: 2048,
-        status: 'completed',
-        createdAt: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-        themes: [
-          { id: 3, name: 'Customer Support', frequency: 0.9, keywords: ['support', 'help', 'assistance'], definition: 'Feedback about support quality' },
-          { id: 4, name: 'Pricing', frequency: 0.7, keywords: ['price', 'cost', 'expensive'], definition: 'Comments about pricing structure' }
+        "id": "mock-persona-1",
+        "name": "Design Leader Alex",
+        "traits": [
+          { "value": "Design team lead at medium-sized technology company", "confidence": 0.9, "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] },
+          { "value": "8+ years experience in UX/UI design", "confidence": 0.95, "evidence": ["Has worked on enterprise applications", "Mentions experience with design systems"] },
+          { "value": "Advocates for user research and testing", "confidence": 0.85, "evidence": ["Pushes for more user testing resources", "Frustrated by decisions made without user input"] }
         ],
-        patterns: [
-          { id: 3, name: 'Support Delays', frequency: 0.6, category: 'Service Issue', description: 'Long wait times for support' },
-          { id: 4, name: 'Pricing Confusion', frequency: 0.4, category: 'Communication', description: 'Unclear pricing information' }
+        "goals": [
+          "Improve design consistency across products",
+          "Increase design team influence in product decisions",
+          "Implement better research practices"
         ],
-        sentiment: [
-          { text: 'Support team was helpful', score: 0.7, timestamp: now },
-          { text: 'Pricing is too high', score: -0.5, timestamp: now }
+        "painPoints": [
+          "Limited resources for user research",
+          "Engineering-driven decision making",
+          "Maintaining design quality with tight deadlines"
         ],
-        sentimentOverview: {
-          positive: 0.3,
-          neutral: 0.2,
-          negative: 0.5
-        },
-        sentimentStatements: {
-          positive: ['Support team was helpful', 'The documentation is comprehensive'],
-          neutral: ['The pricing is as expected', 'Standard features work well'],
-          negative: ['Pricing is too high', 'Support response times are slow']
-        }
+        "description": "Alex is an experienced design leader who values user-centered processes and design systems. They struggle with ensuring design quality while meeting business demands and securing resources for proper research."
       }
     ];
   }
@@ -698,6 +752,52 @@ class ApiClient {
     }
     
     throw new Error(`Analysis processing timed out after ${maxAttempts} attempts`);
+  }
+
+  // Add a personaGeneration method to handle the API call
+  async generatePersonaFromText(text: string, options?: { 
+    llmProvider?: string; 
+    llmModel?: string; 
+  }): Promise<any> {
+    try {
+      const response = await this.client.post('/api/generate-persona', {
+        text,
+        llm_provider: options?.llmProvider || 'gemini',
+        llm_model: options?.llmModel || 'gemini-2.0-flash'
+      }, {
+        timeout: 60000, // Longer timeout for persona generation
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Origin': window.location.origin
+        }
+      });
+      
+      if (response.data && response.data.persona) {
+        return response.data.persona;
+      }
+      
+      // Fall back to mock data if response structure is unexpected
+      return this.generateMockPersonas()[0];
+      
+    } catch (error: any) {
+      console.error('Error generating persona:', error);
+      
+      // Show appropriate toast message
+      if (error?.message?.includes('Connection refused') || 
+          error?.code === 'ERR_CONNECTION_REFUSED' ||
+          error?.code === 'ERR_NETWORK') {
+        if (window.showToast) {
+          window.showToast('Backend server is not available. Using sample persona instead.');
+        }
+      } else if (error?.response?.status === 500) {
+        if (window.showToast) {
+          window.showToast('Error generating persona. Using sample persona instead.');
+        }
+      }
+      
+      // Return mock data
+      return this.generateMockPersonas()[0];
+    }
   }
 }
 

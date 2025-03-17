@@ -172,7 +172,9 @@ if (!window.consolePatchApplied) {
     
     // Check for common patterns in React key warnings
     const firstArg = String(args[0] || '');
-    const message = args.join(' ');
+    
+    // Make sure args is an array before calling join
+    const message = Array.isArray(args) ? args.join(' ') : String(args);
     
     return (
       // React key warnings
@@ -206,11 +208,42 @@ if (!window.consolePatchApplied) {
     return message.substring(0, 50);
   }
   
-  /**
-   * Monitor React component lifecycle through console logging behavior
-   * This helps us detect when components are being unmounted
-   */
+  // Track React component lifecycle through console logging behavior
   function patchConsole() {
+    // Keep track of recent errors to prevent cascading error messages
+    const recentErrors = new Set();
+    const MAX_RECENT_ERRORS = 50;
+    
+    // Helper to check if this is a message channel error
+    function isMessageChannelError(err) {
+      return (
+        err && 
+        typeof err.message === 'string' && 
+        err.message.includes('message channel closed')
+      );
+    }
+    
+    // Helper to prevent repetitive errors in short timeframes
+    function shouldSuppressError(errorKey) {
+      if (recentErrors.has(errorKey)) {
+        return true;
+      }
+      
+      recentErrors.add(errorKey);
+      if (recentErrors.size > MAX_RECENT_ERRORS) {
+        // Remove oldest error
+        const firstKey = recentErrors.values().next().value;
+        recentErrors.delete(firstKey);
+      }
+      
+      // Auto-clear this error key after 1 second
+      setTimeout(() => {
+        recentErrors.delete(errorKey);
+      }, 1000);
+      
+      return false;
+    }
+    
     // Replace console.log with our safe version
     console.log = function() {
       if (window.isUnmounting) {
@@ -237,7 +270,7 @@ if (!window.consolePatchApplied) {
       }
     };
     
-    // Also patch console.warn and console.error with the same approach
+    // Also patch console.warn with the same approach
     console.warn = function() {
       if (window.isUnmounting) {
         const simpleArgs = Array.from(arguments).map(arg => {
@@ -273,7 +306,9 @@ if (!window.consolePatchApplied) {
       }
     };
     
+    // Update console.error with additional safeguards
     console.error = function() {
+      // During unmounting, only log string messages
       if (window.isUnmounting) {
         const simpleArgs = Array.from(arguments).map(arg => {
           if (typeof arg === 'string') return arg;
@@ -283,19 +318,32 @@ if (!window.consolePatchApplied) {
       }
       
       try {
-        // Check if this is a React warning we should deduplicate
+        // Check for message channel closed errors specifically
+        const errorString = Array.from(arguments).map(a => String(a)).join(' ');
+        if (errorString.includes('message channel closed')) {
+          // Generate an error fingerprint to prevent duplicates
+          const errorKey = 'channel-closed-' + Date.now().toString().substr(-5);
+          if (shouldSuppressError(errorKey)) {
+            return; // Skip repeating this error
+          }
+          // Log simplified message for troubleshooting
+          return originalConsoleError.call(console, '[DevTools Error] Message channel closed - error suppressed');
+        }
+      
+        // Handle React key warnings
         if (isReactKeyWarning(arguments)) {
           const warningSignature = getWarningSignature(arguments);
           
-          // If we've already shown this warning, skip it
+          // Skip if already shown
           if (window.reactWarningsShown.has(warningSignature)) {
             return;
           }
           
-          // Otherwise, remember we've shown it
+          // Remember we've shown it
           window.reactWarningsShown.add(warningSignature);
         }
         
+        // Rest of the existing error handling logic
         const safeArgs = Array.from(arguments).map(arg => {
           if (typeof arg === 'string') return arg;
           if (typeof arg === 'number') return arg;
@@ -304,6 +352,11 @@ if (!window.consolePatchApplied) {
         });
         return originalConsoleError.apply(console, safeArgs);
       } catch (err) {
+        // Special handling for errors during error handling (meta-errors)
+        if (isMessageChannelError(err)) {
+          // For message channel errors, show a simplified error to avoid recursion
+          return originalConsoleError.call(console, '[Console patch] Message channel error suppressed');
+        }
         return originalConsoleError.call(console, '[Error in console.error]', err.message);
       }
     };

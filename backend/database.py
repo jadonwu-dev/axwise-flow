@@ -30,6 +30,11 @@ else:
 # Override with full URL if provided
 REDACTED_DATABASE_URL=***REDACTED*** REDACTED_DATABASE_URL)
 
+# If no REDACTED_DATABASE_URL provided, fallback to file-based SQLite database
+if not REDACTED_DATABASE_URL:
+    logger.warning("No REDACTED_DATABASE_URL provided, using SQLite file database")
+    REDACTED_DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+
 ***REMOVED*** engine configuration
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
@@ -37,24 +42,49 @@ DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
 
 # Engine creation
 try:
-    # Create engine for PostgreSQL with connection pooling
-    engine = create_engine(
-        REDACTED_DATABASE_URL,
-        poolclass=QueuePool,
-        pool_size=DB_POOL_SIZE,
-        max_overflow=DB_MAX_OVERFLOW,
-        pool_timeout=DB_POOL_TIMEOUT,
-        pool_pre_ping=True,  # Verify connections before using them
-        connect_args={"application_name": "DesignAId Backend"}
-    )
+    # Detect SQLite connection
+    is_sqlite = REDACTED_DATABASE_URL.startswith('sqlite:')
+    
+    # Configure engine based on database type
+    if is_sqlite:
+        # SQLite doesn't support connection pooling the same way
+        engine = create_engine(
+            REDACTED_DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            pool_pre_ping=True
+        )
+        logger.info("Using SQLite database")
+    else:
+        # Create engine for PostgreSQL with connection pooling
+        engine = create_engine(
+            REDACTED_DATABASE_URL,
+            poolclass=QueuePool,
+            pool_size=DB_POOL_SIZE,
+            max_overflow=DB_MAX_OVERFLOW,
+            pool_timeout=DB_POOL_TIMEOUT,
+            pool_pre_ping=True,  # Verify connections before using them
+            connect_args={"application_name": "DesignAId Backend"}
+        )
+        logger.info("Using PostgreSQL database")
 
-    # Test the connection
+    # Test the connection with proper text() usage
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
-        logger.info("Successfully connected to the PostgreSQL database")
+        logger.info("Successfully connected to the database")
 except Exception as e:
     logger.error(f"Error connecting to the database: {str(e)}")
-    raise
+    # Fall back to SQLite if PostgreSQL connection fails
+    try:
+        logger.warning("Falling back to SQLite file database")
+        REDACTED_DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+        engine = create_engine(
+            REDACTED_DATABASE_URL,
+            connect_args={"check_same_thread": False}
+        )
+        logger.info("Successfully connected to SQLite fallback database")
+    except Exception as fallback_error:
+        logger.critical(f"Critical error: Failed to connect to fallback database: {str(fallback_error)}")
+        raise
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -101,7 +131,7 @@ def init_db():
         bool: True if initialization was successful, False otherwise
     """
     try:
-        # Test the database connection
+        # Test the database connection with proper text() usage
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         

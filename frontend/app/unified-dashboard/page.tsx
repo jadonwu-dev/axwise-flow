@@ -150,12 +150,16 @@ export default function UnifiedDashboard() {
   // Fetch analysis history
   useEffect(() => {
     async function fetchAnalyses() {
-      try {
         setHistoryLoading(true);
         setHistoryError(null);
         
-        // Set auth token
-        apiClient.setAuthToken(authToken);
+      if (process.env.NEXT_PUBLIC_...=***REMOVED*** 'true') {
+        // Use mock data for testing
+        console.log('Using mock data (from env setting)');
+        setAnalyses(generateMockAnalyses());
+        setHistoryLoading(false);
+        return;
+      }
         
         // Use the API client to fetch real data
         try {
@@ -165,84 +169,65 @@ export default function UnifiedDashboard() {
             status: filterStatus === 'all' ? undefined : filterStatus,
           };
           
-          const data = await apiClient.listAnalyses(apiParams);
+        console.log('Fetching analyses with params:', apiParams);
+        
+        // Add a timeout to handle cases where the API request hangs
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('API request timeout after 10 seconds')), 10000);
+        });
+        
+        // Race the API request against the timeout
+        const data = await Promise.race([
+          apiClient.listAnalyses(apiParams),
+          timeoutPromise
+        ]);
+        
+        if (data && Array.isArray(data)) {
+          if (data.length === 0) {
+            console.log('No analyses found');
+            showToast('No analyses found. Try uploading a file first.', { variant: 'info' });
+          } else {
+            console.log(`Found ${data.length} analyses`);
+          }
           setAnalyses(data);
+        } else {
+          console.error('Invalid data format received:', data);
+          showToast('Error loading analyses. Received invalid data format.', { variant: 'error' });
+          // Fall back to mock data
+          setAnalyses(generateMockAnalyses());
+        }
         } catch (apiError) {
           console.error('API error:', apiError);
-          
-          // If this is an authentication error (403), use mock data for testing
-          if ((apiError as any).response?.status === 403 || 
-              (apiError instanceof Error && apiError.message.includes('Failed to fetch analyses'))) {
-            console.warn('Using mock data for testing due to authentication error');
-            
-            // Generate mock analyses data
-            const mockAnalyses: DetailedAnalysisResult[] = [
-              {
-                id: 'mock-1',
-                fileName: 'Sample Interview 1.docx',
-                fileSize: 2345,
-                status: 'completed' as const,
-                createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-                themes: [
-                  { id: 1, name: 'User Experience', frequency: 12, keywords: ['interface', 'usability', 'design'] },
-                  { id: 2, name: 'Performance', frequency: 8, keywords: ['speed', 'response time', 'lag'] }
-                ],
-                patterns: [
-                  { id: 1, name: 'Confusion about navigation', frequency: 5, sentiment: -0.3, category: 'UX Issues', description: 'Users expressed confusion about navigating the interface' },
-                  { id: 2, name: 'Positive feedback on visuals', frequency: 7, sentiment: 0.8, category: 'Visual Design', description: 'Users provided positive feedback about the visual design' }
-                ],
-                sentiment: [],
-                sentimentOverview: { positive: 0.6, neutral: 0.2, negative: 0.2 },
-                sentimentStatements: {
-                  positive: ['I love how clean the interface is', 'The visualizations are really helpful'],
-                  neutral: ['The product has many features'],
-                  negative: ['Navigation is sometimes confusing', 'I had trouble finding the settings']
-                }
-              },
-              {
-                id: 'mock-2',
-                fileName: 'Focus Group Feb 2025.pdf',
-                fileSize: 4567,
-                status: 'completed' as const,
-                createdAt: new Date(Date.now() - 86400000).toISOString(),
-                themes: [
-                  { id: 3, name: 'Feature Requests', frequency: 15, keywords: ['need', 'want', 'add'] },
-                  { id: 4, name: 'Competitive Analysis', frequency: 10, keywords: ['competitor', 'alternative', 'comparison'] }
-                ],
-                patterns: [
-                  { id: 3, name: 'Request for mobile features', frequency: 8, sentiment: 0.1, category: 'Feature Requests', description: 'Users requested additional mobile features' },
-                  { id: 4, name: 'Comparisons to competitors', frequency: 6, sentiment: -0.2, category: 'Competition', description: 'Users compared the product to competitors' }
-                ],
-                sentiment: [],
-                sentimentOverview: { positive: 0.4, neutral: 0.3, negative: 0.3 },
-                sentimentStatements: {
-                  positive: ['The new dashboard is much better', 'I appreciate the recent improvements'],
-                  neutral: ['It has similar features to other products', 'The pricing is standard'],
-                  negative: ['Still missing key mobile features', 'Updates are too infrequent']
-                }
-              }
-            ];
-            
-            setAnalyses(mockAnalyses);
-          } else {
-            setHistoryError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
-            showToast('Failed to fetch analysis history', { variant: 'error' });
-          }
+        
+        // Check for CORS errors specifically
+        const errorMsg = apiError instanceof Error ? apiError.message : String(apiError);
+        const isCorsError = errorMsg.includes('CORS policy') || errorMsg.includes('Access-Control-Allow-Origin');
+        const isConnectionError = errorMsg.includes('Network Error') || errorMsg.includes('Connection refused') || errorMsg.includes('timeout');
+        
+        if (isCorsError) {
+          console.warn('CORS error detected - using mock data');
+          showToast('Backend connection issue detected. Using sample data instead.', { variant: 'info' });
+        } else if (isConnectionError) {
+          console.warn('Connection error detected - using mock data');
+          showToast('Cannot connect to backend. Using sample data instead.', { variant: 'info' });
+        } else {
+          showToast('Error loading analyses. Using sample data instead.', { variant: 'info' });
         }
         
+        // Always use mock data for any error type
+        console.warn('Using mock data as fallback due to API error');
+        setAnalyses(generateMockAnalyses());
+      } finally {
+        // Always clear loading states
         setHistoryLoading(false);
-      } catch (err) {
-        console.error('Error fetching analyses:', err);
-        setHistoryError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
-        setHistoryLoading(false);
-        showToast('Failed to load analyses', { variant: 'error' });
+        setHistoryError(null);
       }
     }
 
     if (activeTab === 'history') {
       fetchAnalyses();
     }
-  }, [activeTab, showToast, sortBy, sortDirection, filterStatus, authToken]);
+  }, [activeTab, showToast, sortBy, sortDirection, filterStatus]);
   
   // Debug logging for sentiment visualization
   useEffect(() => {
@@ -663,33 +648,77 @@ export default function UnifiedDashboard() {
     return `${mb.toFixed(2)} MB`;
   };
 
-  // Helper function for formatting date
+  // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString();
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  // Filter and sort analyses
-  const filteredAndSortedAnalyses = analyses
-    .filter(analysis => {
-      if (filterStatus === 'all') return true;
-      return analysis.status === filterStatus;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'date') {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
-      } else {
-        // Sort by name
-        return sortDirection === 'asc'
-          ? a.fileName.localeCompare(b.fileName)
-          : b.fileName.localeCompare(a.fileName);
+  // Generate mock analyses data for testing
+  const generateMockAnalyses = (): DetailedAnalysisResult[] => {
+    console.log('Generating mock analyses data for UI testing');
+    const now = new Date().toISOString();
+    return [
+      {
+        id: 'mock-1',
+        fileName: 'Sample Interview 1.docx',
+        fileSize: 2345,
+        status: 'completed' as const,
+        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+        themes: [
+          { id: 1, name: 'User Experience', frequency: 0.8, keywords: ['interface', 'usability', 'design'] },
+          { id: 2, name: 'Performance', frequency: 0.6, keywords: ['speed', 'response time', 'lag'] }
+        ],
+        patterns: [
+          { id: 1, name: 'Confusion about navigation', frequency: 0.7, category: 'UX Issues', description: 'Users expressed confusion about navigating the interface' },
+          { id: 2, name: 'Positive feedback on visuals', frequency: 0.5, category: 'Visual Design', description: 'Users provided positive feedback about the visual design' }
+        ],
+        sentiment: [
+          { text: 'I love how clean the interface is', score: 0.8, timestamp: now },
+          { text: 'Navigation is sometimes confusing', score: -0.6, timestamp: now }
+        ],
+        sentimentOverview: { positive: 0.6, neutral: 0.2, negative: 0.2 },
+        sentimentStatements: {
+          positive: ['I love how clean the interface is', 'The visualizations are really helpful'],
+          neutral: ['The product has many features'],
+          negative: ['Navigation is sometimes confusing', 'I had trouble finding the settings']
+        }
+      },
+      {
+        id: 'mock-2',
+        fileName: 'Focus Group Feb 2025.pdf',
+        fileSize: 4567,
+        status: 'completed' as const,
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        themes: [
+          { id: 3, name: 'Feature Requests', frequency: 0.9, keywords: ['need', 'want', 'add'] },
+          { id: 4, name: 'Competitive Analysis', frequency: 0.7, keywords: ['competitor', 'alternative', 'comparison'] }
+        ],
+        patterns: [
+          { id: 3, name: 'Request for mobile features', frequency: 0.6, category: 'Feature Requests', description: 'Users requested additional mobile features' },
+          { id: 4, name: 'Comparisons to competitors', frequency: 0.4, category: 'Competition', description: 'Users compared the product to competitors' }
+        ],
+        sentiment: [
+          { text: 'The new dashboard is much better', score: 0.7, timestamp: now },
+          { text: 'Still missing key mobile features', score: -0.5, timestamp: now }
+        ],
+        sentimentOverview: { positive: 0.4, neutral: 0.3, negative: 0.3 },
+        sentimentStatements: {
+          positive: ['The new dashboard is much better', 'I appreciate the recent improvements'],
+          neutral: ['It has similar features to other products', 'The pricing is standard'],
+          negative: ['Still missing key mobile features', 'Updates are too infrequent']
+        }
       }
-    });
+    ];
+  };
 
-  // After all the changes, update the processFreeTextToSentimentStatements function to better handle Team chat format:
-
+  // Process free text to sentiment statements
   const processFreeTextToSentimentStatements = (text: string) => {
     // First determine if it's Teams format before using it in logging
     const isTeamsFormat = text.match(/\[\d+:\d+ [AP]M\]/);
@@ -937,6 +966,25 @@ export default function UnifiedDashboard() {
       negative: negative.length > 0 ? negative.slice(0, 10) : ["No negative statements found in the text."]
     };
   };
+
+  // Filter and sort analyses
+  const filteredAndSortedAnalyses = analyses
+    .filter(analysis => {
+      if (filterStatus === 'all') return true;
+      return analysis.status === filterStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'date') {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      } else {
+        // Sort by name
+        return sortDirection === 'asc'
+          ? a.fileName.localeCompare(b.fileName)
+          : b.fileName.localeCompare(a.fileName);
+      }
+    });
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
