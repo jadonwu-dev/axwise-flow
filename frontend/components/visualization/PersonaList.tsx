@@ -9,10 +9,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Tooltip } from 'react-tooltip';
+import { 
+  TooltipTrigger, 
+  TooltipContent, 
+  TooltipProvider 
+} from '@/components/ui/tooltip';
 
 // Define types for Persona data structure
 type PersonaTrait = {
-  value: string;
+  value: string | string[] | number | boolean | null;
   confidence: number;
   evidence: string[];
 };
@@ -234,9 +239,17 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {activePersona.key_responsibilities.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
-                              <li key={i}>{item.trim()}</li>
-                            ))}
+                            {typeof activePersona.key_responsibilities.value === 'string' 
+                              ? activePersona.key_responsibilities.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
+                                  <li key={i}>{item.trim()}</li>
+                                ))
+                              : (Array.isArray(activePersona.key_responsibilities.value) 
+                                  ? (activePersona.key_responsibilities.value as string[]).map((item: string, i: number) => (
+                                      <li key={i}>{item}</li>
+                                    ))
+                                  : <li>{String(activePersona.key_responsibilities.value ?? '')}</li>
+                                )
+                            }
                           </ul>
                           
                           {activePersona.key_responsibilities.evidence.length > 0 && (
@@ -279,9 +292,17 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {activePersona.tools_used.value.split(', ').filter(item => item.trim().length > 0).map((item, i) => (
-                              <li key={i}>{item.trim()}</li>
-                            ))}
+                            {typeof activePersona.tools_used.value === 'string' 
+                              ? activePersona.tools_used.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
+                                  <li key={i}>{item.trim()}</li>
+                                ))
+                              : (Array.isArray(activePersona.tools_used.value) 
+                                  ? (activePersona.tools_used.value as string[]).map((item: string, i: number) => (
+                                      <li key={i}>{item}</li>
+                                    ))
+                                  : <li>{String(activePersona.tools_used.value ?? '')}</li>
+                                )
+                            }
                           </ul>
                           
                           {activePersona.tools_used.evidence.length > 0 && (
@@ -324,9 +345,17 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {activePersona.pain_points.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
-                              <li key={i}>{item.trim()}</li>
-                            ))}
+                            {typeof activePersona.pain_points.value === 'string' 
+                              ? activePersona.pain_points.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
+                                  <li key={i}>{item.trim()}</li>
+                                ))
+                              : (Array.isArray(activePersona.pain_points.value) 
+                                  ? (activePersona.pain_points.value as string[]).map((item: string, i: number) => (
+                                      <li key={i}>{item}</li>
+                                    ))
+                                  : <li>{String(activePersona.pain_points.value ?? '')}</li>
+                                )
+                            }
                           </ul>
                           
                           {activePersona.pain_points.evidence.length > 0 && (
@@ -369,9 +398,17 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {activePersona.collaboration_style.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
-                              <li key={i}>{item.trim()}</li>
-                            ))}
+                            {typeof activePersona.collaboration_style.value === 'string' 
+                              ? activePersona.collaboration_style.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
+                                  <li key={i}>{item.trim()}</li>
+                                ))
+                              : (Array.isArray(activePersona.collaboration_style.value) 
+                                  ? (activePersona.collaboration_style.value as string[]).map((item: string, i: number) => (
+                                      <li key={i}>{item}</li>
+                                    ))
+                                  : <li>{String(activePersona.collaboration_style.value ?? '')}</li>
+                                )
+                            }
                           </ul>
                           
                           {activePersona.collaboration_style.evidence.length > 0 && (
@@ -414,9 +451,17 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {activePersona.analysis_approach.value.split('. ').filter(item => item.trim().length > 0).map((item, i) => (
-                              <li key={i}>{item.trim()}</li>
-                            ))}
+                            {typeof activePersona.analysis_approach.value === 'string' 
+                              ? activePersona.analysis_approach.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
+                                  <li key={i}>{item.trim()}</li>
+                                ))
+                              : (Array.isArray(activePersona.analysis_approach.value) 
+                                  ? (activePersona.analysis_approach.value as string[]).map((item: string, i: number) => (
+                                      <li key={i}>{item}</li>
+                                    ))
+                                  : <li>{String(activePersona.analysis_approach.value ?? '')}</li>
+                                )
+                            }
                           </ul>
                           
                           {activePersona.analysis_approach.evidence.length > 0 && (
@@ -516,31 +561,66 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Key Responsibilities</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.key_responsibilities.value}</td>
+                      <td key={index} className="p-2">
+                        {typeof persona.key_responsibilities.value === 'string' 
+                          ? persona.key_responsibilities.value 
+                          : Array.isArray(persona.key_responsibilities.value)
+                            ? persona.key_responsibilities.value.join(', ')
+                            : String(persona.key_responsibilities.value ?? '')
+                        }
+                      </td>
                     ))}
                   </tr>
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Tools Used</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.tools_used.value}</td>
+                      <td key={index} className="p-2">
+                        {typeof persona.tools_used.value === 'string' 
+                          ? persona.tools_used.value 
+                          : Array.isArray(persona.tools_used.value)
+                            ? persona.tools_used.value.join(', ')
+                            : String(persona.tools_used.value ?? '')
+                        }
+                      </td>
                     ))}
                   </tr>
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Pain Points</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.pain_points.value}</td>
+                      <td key={index} className="p-2">
+                        {typeof persona.pain_points.value === 'string' 
+                          ? persona.pain_points.value 
+                          : Array.isArray(persona.pain_points.value)
+                            ? persona.pain_points.value.join(', ')
+                            : String(persona.pain_points.value)
+                        }
+                      </td>
                     ))}
                   </tr>
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Collaboration Style</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.collaboration_style.value}</td>
+                      <td key={index} className="p-2">
+                        {typeof persona.collaboration_style.value === 'string' 
+                          ? persona.collaboration_style.value 
+                          : Array.isArray(persona.collaboration_style.value)
+                            ? persona.collaboration_style.value.join(', ')
+                            : String(persona.collaboration_style.value ?? '')
+                        }
+                      </td>
                     ))}
                   </tr>
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Analysis Approach</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.analysis_approach.value}</td>
+                      <td key={index} className="p-2">
+                        {typeof persona.analysis_approach.value === 'string' 
+                          ? persona.analysis_approach.value 
+                          : Array.isArray(persona.analysis_approach.value)
+                            ? persona.analysis_approach.value.join(', ')
+                            : String(persona.analysis_approach.value ?? '')
+                        }
+                      </td>
                     ))}
                   </tr>
                 </tbody>
