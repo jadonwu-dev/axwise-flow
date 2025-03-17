@@ -2,14 +2,13 @@
 
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Loader2, Upload } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { apiClient } from '@/lib/apiClient';
 import AnalysisProgress from '@/components/AnalysisProgress';
 import AnalysisOptions from './AnalysisOptions';
-import FileUploadForm from './FileUploadForm';
+import { FileUpload } from '@/components/FileUpload';
 import { UploadResponse, AnalysisResponse } from '@/types/api';
 
 /**
@@ -28,7 +27,7 @@ const UploadTab = () => {
   const [authToken] = useState<string>('testuser123');
   const [llmProvider, setLlmProvider] = useState<'openai' | 'gemini'>('gemini');
   
-  // Handle file selection from the FileUploadForm component
+  // Handle file selection from the FileUpload component
   const handleFileChange = (selectedFile: File, isText: boolean) => {
     setFile(selectedFile);
     setIsTextFile(isText);
@@ -100,9 +99,14 @@ const UploadTab = () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <FileUploadForm 
+          <FileUpload 
             onFileChange={handleFileChange} 
             file={file}
+            showCard={false}
+            title="Interview Data File"
+            description="Select a JSON file with interview data or a text file with interview transcripts"
+            showFileDetails={true}
+            autoUpload={false}
           />
           
           <AnalysisOptions 

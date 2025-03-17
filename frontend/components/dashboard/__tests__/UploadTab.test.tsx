@@ -1,7 +1,7 @@
 'use client';
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { UploadTab } from '../UploadTab';
+import UploadTab from '../UploadTab';
 import { apiClient } from '@/lib/apiClient';
 import { vi } from 'vitest';
 
@@ -21,13 +21,12 @@ vi.mock('@/lib/apiClient', () => ({
   }
 }));
 
-// Mock FileUploadForm and AnalysisOptions components
-vi.mock('../FileUploadForm', () => ({
-  __esModule: true,
-  default: ({ onFileSelect }: { onFileSelect: (file: File, isText: boolean) => void }) => (
-    <div data-testid="file-upload-form">
+// Mock the FileUpload component
+vi.mock('@/components/FileUpload', () => ({
+  FileUpload: ({ onFileChange }: { onFileChange: (file: File, isText: boolean) => void }) => (
+    <div data-testid="file-upload">
       <button 
-        onClick={() => onFileSelect(new File(['test'], 'test.txt', { type: 'text/plain' }), true)}
+        onClick={() => onFileChange(new File(['test'], 'test.txt', { type: 'text/plain' }), true)}
         data-testid="select-file-btn"
       >
         Select File
@@ -36,12 +35,13 @@ vi.mock('../FileUploadForm', () => ({
   )
 }));
 
+// Mock AnalysisOptions component
 vi.mock('../AnalysisOptions', () => ({
   __esModule: true,
-  default: ({ onLlmProviderChange }: { onLlmProviderChange: (provider: 'openai' | 'gemini') => void }) => (
+  default: ({ onProviderChange }: { onProviderChange: (provider: 'openai' | 'gemini') => void }) => (
     <div data-testid="analysis-options">
       <button 
-        onClick={() => onLlmProviderChange('openai')}
+        onClick={() => onProviderChange('openai')}
         data-testid="select-openai-btn"
       >
         Select OpenAI
@@ -67,7 +67,7 @@ describe('UploadTab', () => {
     render(<UploadTab />);
     
     expect(screen.getByText(/upload interview data/i)).toBeInTheDocument();
-    expect(screen.getByTestId('file-upload-form')).toBeInTheDocument();
+    expect(screen.getByTestId('file-upload')).toBeInTheDocument();
     expect(screen.getByTestId('analysis-options')).toBeInTheDocument();
   });
   

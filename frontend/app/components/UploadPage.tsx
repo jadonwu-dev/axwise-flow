@@ -1,13 +1,22 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { FileUpload } from '@/components/FileUpload'
+import { useRouter } from 'next/navigation'
 
 export default function UploadPage() {
+  const router = useRouter();
+  const [uploadCompleted, setUploadCompleted] = useState(false);
+
   const handleUploadComplete = (dataId: number) => {
-    // Handle successful upload (e.g., navigate to analysis page)
+    setUploadCompleted(true);
     console.log(`Upload completed. Data ID: ${dataId}`);
+    
+    // After successful upload, redirect to analysis page
+    setTimeout(() => {
+      router.push(`/unified-dashboard?analysisId=${dataId}&tab=visualize`);
+    }, 1500); // Small delay to show success message
   };
 
   return (
@@ -16,11 +25,15 @@ export default function UploadPage() {
         <CardHeader>
           <CardTitle>Upload Interview Data</CardTitle>
           <CardDescription>
-            Upload your interview data in JSON format to begin analysis.
+            Upload your interview data in JSON or text format to begin analysis.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <FileUpload onUploadComplete={handleUploadComplete} />
+          <FileUpload 
+            onUploadComplete={handleUploadComplete} 
+            autoUpload={true}
+            showCard={false}
+          />
         </CardContent>
       </Card>
     </div>

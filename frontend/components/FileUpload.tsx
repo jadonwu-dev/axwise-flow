@@ -1,6 +1,6 @@
 /**
  * Consolidated FileUpload component
- * Combines features from both implementations with enhanced functionality
+ * Combines features from all implementations with enhanced functionality
  */
 'use client'
 
@@ -11,13 +11,22 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button' 
 import { useCallback, useState, useEffect } from 'react'
 import { apiClient } from '@/lib/apiClient'
-import { AlertCircle, CheckCircle2, UploadCloud } from 'lucide-react'
+import { AlertCircle, CheckCircle2, UploadCloud, FileUp } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Label } from '@/components/ui/label'
 import type { UploadResponse } from '@/types/api'
 
 interface FileUploadProps {
-  onUploadComplete: (dataId: number) => void
-  className?: string
+  onUploadComplete?: (dataId: number) => void;
+  onFileChange?: (file: File, isTextFile: boolean) => void;
+  className?: string;
+  file?: File | null;
+  showFileDetails?: boolean;
+  autoUpload?: boolean;
+  showCard?: boolean;
+  title?: string;
+  description?: string;
+  maxSizeMB?: number;
 }
 
 /**
@@ -28,15 +37,36 @@ interface FileUploadProps {
  * - Progress tracking
  * - File validation (JSON and TXT)
  * - Error and success states
+ * - File details display
+ * - Configurable UI and behavior
  */
-export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps): JSX.Element {
+export function FileUpload({ 
+  onUploadComplete, 
+  onFileChange,
+  file: externalFile,
+  className = '', 
+  showFileDetails = true,
+  autoUpload = false,
+  showCard = true,
+  title,
+  description,
+  maxSizeMB = 10
+}: FileUploadProps): JSX.Element {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<Error | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [isDraggingLocal, setIsDraggingLocal] = useState(false)
+  const [internalFile, setInternalFile] = useState<File | null>(null)
+
+  // Use external file if provided, otherwise use internal state
+  const file = externalFile !== undefined ? externalFile : internalFile;
+  
+  // Maximum file size in bytes
+  const maxFileSize = maxSizeMB * 1024 * 1024;
 
   const uploadFile = useCallback(async (file: File) => {
+    // Validate file type
     if (
       file.type !== 'application/json' && 
       file.type !== 'text/plain' && 
@@ -46,8 +76,28 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
       setUploadError(new Error('Please upload a JSON or TXT file'))
       return
     }
+    
+    // Validate file size
+    if (file.size > maxFileSize) {
+      setUploadError(new Error(`File size exceeds ${maxSizeMB}MB limit`))
+      return
+    }
 
     const isTextFile = file.type === 'text/plain' || file.name.endsWith('.txt')
+
+    // If we're just reporting the file change without uploading
+    if (onFileChange) {
+      onFileChange(file, isTextFile)
+      // If not auto-uploading, return early
+      if (!autoUpload || !onUploadComplete) {
+        return
+      }
+    }
+    
+    // Only proceed with upload if onUploadComplete is provided
+    if (!onUploadComplete) {
+      return
+    }
 
     setIsUploading(true)
     setUploadProgress(0)
@@ -71,12 +121,13 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
       setUploadError(error instanceof Error ? error : new Error('Failed to upload file'))
       setIsUploading(false)
     }
-  }, [onUploadComplete])
+  }, [onUploadComplete, onFileChange, autoUpload, maxFileSize, maxSizeMB])
 
   // Handle file drop
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
     if (file) {
+      setInternalFile(file)
       await uploadFile(file)
     }
   }, [uploadFile])
@@ -112,7 +163,7 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
     await uploadFile(file)
   }, [uploadFile])
 
-  // Expose these methods for testing
+  // Expose methods for testing
   React.useImperativeHandle(
     React.createRef(),
     () => ({
@@ -122,9 +173,18 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
     }),
     [handleTestUpload]
   )
-
-  return (
-    <Card className={`p-6 ${className}`}>
+  
+  // Build the content for the component
+  const renderContent = () => (
+    <>
+      {/* Optional title and description */}
+      {(title || description) && (
+        <div className="flex flex-col space-y-2 mb-4">
+          {title && <Label htmlFor="file-upload">{title}</Label>}
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </div>
+      )}
+        
       <div
         {...getRootProps()}
         className={`
@@ -137,9 +197,9 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
       >
-        <input {...getInputProps()} disabled={isUploading} data-testid="file-input" />
+        <input {...getInputProps()} disabled={isUploading} data-testid="file-input" id="file-upload" />
 
-        <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
+        <FileUp className="mx-auto h-12 w-12 text-muted-foreground" />
 
         <div className="mt-4">
           {isDraggingLocal || isDragActive ? (
@@ -159,6 +219,16 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
           Select File
         </Button>
       </div>
+
+      {/* File details when a file is selected */}
+      {file && showFileDetails && (
+        <div className="text-sm flex items-center justify-between mt-4">
+          <span>Selected file: <strong>{file.name}</strong></span>
+          <span className="text-muted-foreground">
+            {(file.size / 1024).toFixed(1)} KB
+          </span>
+        </div>
+      )}
 
       {/* Upload Progress */}
       {isUploading && (
@@ -191,6 +261,17 @@ export function FileUpload({ onUploadComplete, className = '' }: FileUploadProps
           </AlertDescription>
         </Alert>
       )}
+    </>
+  )
+  
+  // If showCard is true, wrap content in a Card, otherwise return content directly
+  return showCard ? (
+    <Card className={`p-6 ${className}`}>
+      {renderContent()}
     </Card>
+  ) : (
+    <div className={className}>
+      {renderContent()}
+    </div>
   )
 }
