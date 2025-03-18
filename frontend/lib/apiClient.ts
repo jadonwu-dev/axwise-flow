@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import type { UploadResponse, DetailedAnalysisResult, AnalysisResponse, SentimentOverview } from '@/types/api';
+import type { UploadResponse, DetailedAnalysisResult, AnalysisResponse, SentimentOverview, PriorityInsightsResponse } from '@/types/api';
 
 // Add a custom property to the AxiosRequestConfig type to fix the _retry issue
 declare module 'axios' {
@@ -880,6 +880,39 @@ class ApiClient {
       
       // Return mock data
       return this.generateMockPersonas()[0];
+    }
+  }
+
+  /**
+   * Get prioritized insights for a specific analysis
+   * This generates actionable insights with priority scores based on sentiment analysis
+   * 
+   * @param analysisId The ID of the analysis to get prioritized insights for
+   * @returns A promise that resolves to the prioritized insights
+   */
+  async getPriorityInsights(analysisId: string): Promise<PriorityInsightsResponse> {
+    try {
+      const token = await this.getAuthToken();
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token || ''}`
+      };
+      
+      const response = await fetch(`${this.baseUrl}/api/analysis/priority?result_id=${analysisId}`, {
+        method: 'GET',
+        headers
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Error fetching priority insights: ${errorData.detail || response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching priority insights:', error);
+      throw error;
     }
   }
 }

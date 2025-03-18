@@ -13,7 +13,7 @@
  * the older approach of using UnifiedVisualization for all visualization types.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   useAnalysisStore, 
   useCurrentAnalysis, 
@@ -23,14 +23,19 @@ import { ThemeChart } from '@/components/visualization/ThemeChart';
 import { PatternList } from '@/components/visualization/PatternList';
 import { SentimentGraph } from '@/components/visualization/SentimentGraph';
 import { PersonaList } from '@/components/visualization/PersonaList';
+import { PriorityInsights } from '@/components/visualization/PriorityInsights';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface VisualizationTabsProps {
   analysisId?: string;
 }
+
+// Define a type for the tab values
+type TabValue = 'themes' | 'patterns' | 'sentiment' | 'personas' | 'priority';
 
 /**
  * VisualizationTabs Component
@@ -44,17 +49,33 @@ export default function VisualizationTabs({ analysisId }: VisualizationTabsProps
   // Get fetch action from store
   const fetchAnalysisById = useAnalysisStore(state => state.fetchAnalysisById);
   
+  // Get the URL query parameters to support specific tab navigation
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const defaultTab = searchParams.get('tab') as TabValue | null;
+  
+  // Initialize active tab state with default from URL or 'themes'
+  const [activeTabState, setActiveTabState] = useState<TabValue>(defaultTab || 'themes');
+  
+  // Handle tab change
+  const handleTabChange = (newTab: string) => {
+    setActiveTabState(newTab as TabValue);
+    
+    // Update the URL to reflect the current tab for sharing/bookmarking
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', newTab);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    
+    // Update global state for other components to reference
+    setActiveTab(newTab as TabValue);
+  };
+  
   // If an analysisId is provided, fetch the analysis when the component mounts
   useEffect(() => {
     if (analysisId && (!analysis || analysis.id !== analysisId)) {
       fetchAnalysisById(analysisId, true); // Fetch with polling
     }
   }, [analysisId, analysis, fetchAnalysisById]);
-  
-  // Handle tab change
-  const handleTabChange = (newTab: string) => {
-    setActiveTab(newTab as 'themes' | 'patterns' | 'sentiment' | 'personas');
-  };
   
   // If still loading, show spinner
   if (isLoading) {
@@ -106,12 +127,13 @@ export default function VisualizationTabs({ analysisId }: VisualizationTabsProps
       </CardHeader>
       
       <CardContent>
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full grid grid-cols-4">
+        <Tabs value={activeTabState} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="w-full grid grid-cols-5">
             <TabsTrigger value="themes">Themes</TabsTrigger>
             <TabsTrigger value="patterns">Patterns</TabsTrigger>
             <TabsTrigger value="sentiment">Sentiment</TabsTrigger>
             <TabsTrigger value="personas">Personas</TabsTrigger>
+            <TabsTrigger value="priority">Priority</TabsTrigger>
           </TabsList>
           
           <TabsContent value="themes" className="mt-6">
@@ -156,6 +178,10 @@ export default function VisualizationTabs({ analysisId }: VisualizationTabsProps
                 No personas detected in this interview.
               </div>
             )}
+          </TabsContent>
+          
+          <TabsContent value="priority" className="mt-6">
+            <PriorityInsights analysisId={analysisId || ''} />
           </TabsContent>
         </Tabs>
       </CardContent>

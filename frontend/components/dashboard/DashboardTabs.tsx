@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import UploadTab from './UploadTab';
-import VisualizationTab from './VisualizationTab';
+import VisualizationTabs from '@/components/visualization/VisualizationTabs';
 import HistoryTab from './HistoryTab';
 import DocumentationTab from './DocumentationTab';
 import { DashboardData } from '@/types/api';
@@ -74,7 +74,13 @@ const DashboardTabs = ({ dashboardData }: DashboardTabsProps) => {
       </TabsContent>
       
       <TabsContent value="visualize">
-        <VisualizationTab dashboardData={dashboardData} />
+        {dashboardData?.analysisId ? (
+          <VisualizationTabs analysisId={dashboardData.analysisId} />
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            No analysis selected. Please upload a file or select an analysis from history.
+          </div>
+        )}
       </TabsContent>
       
       <TabsContent value="history">

@@ -177,3 +177,30 @@ export interface ListAnalysesParams {
   limit?: number;
   offset?: number;
 }
+
+/**
+ * Prioritized Insight structure for prioritized insights endpoint
+ */
+export interface PrioritizedInsight {
+  type: 'theme' | 'pattern';
+  name: string;
+  description: string;
+  priority_score: number;
+  urgency: 'high' | 'medium' | 'low';
+  sentiment: number;
+  frequency: number;
+  category?: string;  // Only for patterns
+  original: Theme | Pattern;
+}
+
+/**
+ * Response from the priority insights endpoint
+ */
+export interface PriorityInsightsResponse {
+  insights: PrioritizedInsight[];
+  metrics: {
+    high_urgency_count: number;
+    medium_urgency_count: number;
+    low_urgency_count: number;
+  };
+}
