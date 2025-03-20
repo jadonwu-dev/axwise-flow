@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { useAnalysisStore, useAnalysisHistory } from '@/store/useAnalysisStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Loader2, ChevronDown, Search, ArrowUpDown, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronDown, ArrowUpDown, ChevronRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { DetailedAnalysisResult } from '@/types/api';
@@ -26,50 +26,52 @@ export default function HistoryPanel() {
     fetchHistory 
   } = useAnalysisHistory();
   
-  // Get methods to set current analysis
-  const setCurrentAnalysis = useAnalysisStore(state => state.setCurrentAnalysis);
+  // Get methods to set current analysis - memoize the setter to prevent re-renders
+  const setCurrentAnalysis = useMemo(() => {
+    return useAnalysisStore.getState().setCurrentAnalysis;
+  }, []);
   
-  // Fetch history on mount
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory, filters]);
+  // Memoize the filter change callbacks to prevent re-renders
+  const toggleSortDirection = useCallback(() => {
+    setFilters({ 
+      sortDirection: filters.sortDirection === 'asc' ? 'desc' : 'asc' 
+    });
+  }, [filters.sortDirection, setFilters]);
   
-  // Handle selecting an analysis
-  const handleSelectAnalysis = (analysis: DetailedAnalysisResult) => {
+  const changeSortBy = useCallback((field: 'createdAt' | 'fileName') => {
+    setFilters({ sortBy: field });
+  }, [setFilters]);
+  
+  const changeStatusFilter = useCallback((status: 'all' | 'completed' | 'pending' | 'failed') => {
+    setFilters({ status });
+  }, [setFilters]);
+  
+  // Memoize the handleSelectAnalysis function
+  const handleSelectAnalysis = useCallback((analysis: DetailedAnalysisResult) => {
     setCurrentAnalysis(analysis);
     
     // Navigate programmatically to visualize tab if needed
     // You could use router.push or a similar method here
-  };
+  }, [setCurrentAnalysis]);
   
-  // Toggle sort direction
-  const toggleSortDirection = () => {
-    setFilters({ 
-      sortDirection: filters.sortDirection === 'asc' ? 'desc' : 'asc' 
-    });
-  };
+  // Fetch history only when filters change or on mount
+  useEffect(() => {
+    // Use a stable reference to the fetchHistory function
+    const fetchHistoryFn = fetchHistory;
+    fetchHistoryFn();
+  }, [filters]); // Remove fetchHistory from dependencies to prevent re-renders
   
-  // Change sort field
-  const changeSortBy = (field: 'createdAt' | 'fileName') => {
-    setFilters({ sortBy: field });
-  };
-  
-  // Change status filter
-  const changeStatusFilter = (status: 'all' | 'completed' | 'pending' | 'failed') => {
-    setFilters({ status });
-  };
-  
-  // Format file size for display
-  const formatFileSize = (bytes: number | undefined) => {
+  // Format file size for display - memoize as it's a pure function
+  const formatFileSize = useCallback((bytes: number | undefined) => {
     if (!bytes) return 'Unknown';
     const kb = bytes / 1024;
     if (kb < 1024) return `${kb.toFixed(2)} KB`;
     const mb = kb / 1024;
     return `${mb.toFixed(2)} MB`;
-  };
+  }, []);
   
   // Get status badge with valid variants
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case 'completed':
         return <Badge variant="secondary">Completed</Badge>;
@@ -80,7 +82,7 @@ export default function HistoryPanel() {
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
-  };
+  }, []);
   
   // Loading state
   if (isLoading && history.length === 0) {

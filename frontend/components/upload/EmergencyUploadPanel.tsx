@@ -1,14 +1,5 @@
-import React, { useRef, useCallback, useMemo } from 'react';
-import { 
-  useUploadStore, 
-  useUploadStatus, 
-  useAnalysisStatus,
-  useLlmProvider,
-  useFileStatus,
-  useFileProgress,
-  useFileId,
-  useFileMetadata
-} from '@/store/useUploadStore';
+import React, { useRef, useState, useCallback } from 'react';
+import { useUploadStore } from '@/store/useUploadStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -19,40 +10,58 @@ import { useToast } from '@/components/providers/toast-provider';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 /**
- * UploadPanel Component
- * Handles file selection, upload, and analysis initiation
+ * Emergency UploadPanel Component (Loop-Free Version)
+ * 
+ * This component completely bypasses Zustand subscription mechanisms
+ * that were causing infinite loops and instead uses React's useState
+ * for local state management with manual synchronization to the store.
  */
-export default function UploadPanel() {
+export default function EmergencyUploadPanel() {
+  // React local state instead of Zustand subscriptions
+  const [file, setLocalFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string>('');
+  const [fileSize, setFileSize] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadComplete, setUploadComplete] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [uploadError, setUploadError] = useState<Error | null>(null);
+  const [analysisError, setAnalysisError] = useState<Error | null>(null);
+  const [resultId, setResultId] = useState<string | null>(null);
+  const [llmProvider, setLocalLlmProvider] = useState<'openai' | 'gemini'>('openai');
+  
+  // Direct store access (no subscriptions)
+  const store = useUploadStore.getState();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
-  
-  // Get access to the upload store actions
-  const setFile = useUploadStore((state) => state.setFile);
-  const clearFile = useUploadStore((state) => state.clearFile);
-  const uploadFile = useUploadStore((state) => state.uploadFile);
-  const startAnalysis = useUploadStore((state) => state.startAnalysis);
-  const clearErrors = useUploadStore((state) => state.clearErrors);
-  const retryUpload = useUploadStore((state) => state.retryUpload);
-  
-  // Use individual state selectors to prevent unnecessary re-renders
-  const file = useUploadStore((state) => state.file);
-  const status = useFileStatus();
-  const progress = useFileProgress() ?? 0;
-  const fileId = useFileId();
-  const { isTextFile, filePreview } = useFileMetadata();
-  const { isUploading, uploadResponse, uploadError } = useUploadStatus();
-  const { isAnalyzing, analysisResponse, analysisError } = useAnalysisStatus();
-  const { provider: llmProvider, setProvider: setLlmProvider } = useLlmProvider();
-  
-  // Memoize derived values to prevent recalculation
-  const progressPercentage = useMemo(() => Math.round(progress * 100), [progress]);
   
   // Handle file selection
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setLocalFile(selectedFile);
+      setFileName(selectedFile.name);
+      setFileSize(selectedFile.size);
+      setUploadComplete(false);
+      setAnalysisComplete(false);
+      setResultId(null);
+      
+      // Manual store update without subscription
+      useUploadStore.setState(state => ({
+        ...state,
+        file: {
+          ...selectedFile,
+          id: crypto.randomUUID(),
+          status: 'uploading',
+          progress: 0
+        },
+        uploadResponse: null,
+        analysisResponse: null,
+        uploadError: null,
+        analysisError: null
+      }));
     }
-  }, [setFile]);
+  }, []);
   
   // Handle file upload
   const handleUpload = useCallback(async () => {
@@ -61,22 +70,50 @@ export default function UploadPanel() {
       return;
     }
     
-    clearErrors();
-    await uploadFile();
-  }, [file, showToast, clearErrors, uploadFile]);
+    setIsUploading(true);
+    setUploadError(null);
+    
+    try {
+      // Call the store method directly without subscription
+      const response = await store.uploadFile();
+      setUploadComplete(true);
+      if (response) {
+        showToast('File uploaded successfully', { variant: 'success' });
+      }
+    } catch (error) {
+      setUploadError(error instanceof Error ? error : new Error('Unknown upload error'));
+      showToast('Upload failed', { variant: 'error' });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [file, showToast, store]);
   
   // Handle analysis start
   const handleStartAnalysis = useCallback(async () => {
-    if (!uploadResponse) {
+    if (!uploadComplete) {
       showToast('Please upload a file first', { variant: 'error' });
       return;
     }
     
-    const response = await startAnalysis();
-    if (response) {
-      showToast('Analysis started successfully', { variant: 'success' });
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    
+    try {
+      // Call the store method directly without subscription
+      const response = await store.startAnalysis();
+      if (response) {
+        setAnalysisComplete(true);
+        // Fix: Convert number to string to match state type
+        setResultId(response.result_id.toString());
+        showToast('Analysis started successfully', { variant: 'success' });
+      }
+    } catch (error) {
+      setAnalysisError(error instanceof Error ? error : new Error('Unknown analysis error'));
+      showToast('Analysis failed', { variant: 'error' });
+    } finally {
+      setIsAnalyzing(false);
     }
-  }, [uploadResponse, startAnalysis, showToast]);
+  }, [uploadComplete, showToast, store]);
   
   // Trigger file input click
   const handleSelectFileClick = useCallback(() => {
@@ -85,19 +122,48 @@ export default function UploadPanel() {
   
   // Handle clear file
   const handleClearFile = useCallback(() => {
-    clearFile();
+    setLocalFile(null);
+    setFileName('');
+    setFileSize(0);
+    setUploadComplete(false);
+    setAnalysisComplete(false);
+    setResultId(null);
+    setUploadError(null);
+    setAnalysisError(null);
+    
     // Also clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [clearFile]);
+    
+    // Manual store update without subscription
+    useUploadStore.setState(state => ({
+      ...state,
+      file: undefined,
+      uploadResponse: null,
+      analysisResponse: null,
+      uploadError: null,
+      analysisError: null
+    }));
+  }, []);
   
-  // Handle retry upload
-  const handleRetry = useCallback(() => {
-    if (fileId) {
-      retryUpload(fileId);
-    }
-  }, [fileId, retryUpload]);
+  // Handle LLM provider change
+  const handleLlmProviderChange = useCallback((value: string) => {
+    const provider = value as 'openai' | 'gemini';
+    setLocalLlmProvider(provider);
+    
+    // Manual store update without subscription
+    useUploadStore.setState(state => ({
+      ...state,
+      llmProvider: provider
+    }));
+  }, []);
+  
+  // Calculate file size in KB
+  const fileSizeKB = fileSize > 0 ? (fileSize / 1024).toFixed(2) : '0';
+  
+  // Format file type (simple check)
+  const isTextFile = file?.type?.includes('text') || fileName.endsWith('.txt') || fileName.endsWith('.text');
   
   return (
     <Card className="w-full max-w-3xl mx-auto">
@@ -149,20 +215,10 @@ export default function UploadPanel() {
           {/* File Details */}
           {file && (
             <div className="bg-muted p-3 rounded-md">
-              <p className="font-medium">{file.name}</p>
+              <p className="font-medium">{fileName}</p>
               <p className="text-sm text-muted-foreground">
-                {isTextFile ? 'Text file' : 'JSON file'} - {(file.size / 1024).toFixed(2)} KB
+                {isTextFile ? 'Text file' : 'JSON file'} - {fileSizeKB} KB
               </p>
-              
-              {/* Text Preview for text files */}
-              {isTextFile && filePreview && (
-                <div className="mt-2">
-                  <Label className="text-xs">Preview:</Label>
-                  <div className="bg-background p-2 rounded text-xs mt-1 max-h-20 overflow-y-auto">
-                    {filePreview}
-                  </div>
-                </div>
-              )}
             </div>
           )}
           
@@ -181,7 +237,7 @@ export default function UploadPanel() {
           <RadioGroup 
             id="llm-provider" 
             value={llmProvider} 
-            onValueChange={(value) => setLlmProvider(value as 'openai' | 'gemini')}
+            onValueChange={handleLlmProviderChange}
             className="flex space-x-4"
           >
             <div className="flex items-center space-x-2">
@@ -200,7 +256,7 @@ export default function UploadPanel() {
         {/* Upload Button */}
         <Button 
           onClick={handleUpload} 
-          disabled={!file || isUploading || !!uploadResponse}
+          disabled={!file || isUploading || uploadComplete}
           className="w-full"
         >
           {isUploading ? (
@@ -217,7 +273,7 @@ export default function UploadPanel() {
         </Button>
         
         {/* Analysis Button - Only show when upload is complete */}
-        {uploadResponse && !analysisResponse && (
+        {uploadComplete && !analysisComplete && (
           <Button 
             onClick={handleStartAnalysis} 
             disabled={isAnalyzing}
@@ -243,16 +299,6 @@ export default function UploadPanel() {
           <Alert variant="destructive">
             <AlertTitle>Analysis Error</AlertTitle>
             <AlertDescription>{analysisError.message}</AlertDescription>
-          </Alert>
-        )}
-        
-        {/* Success State */}
-        {analysisResponse && (
-          <Alert>
-            <AlertTitle>Analysis Started</AlertTitle>
-            <AlertDescription>
-              Your analysis has been started. Analysis ID: {analysisResponse.result_id}
-            </AlertDescription>
           </Alert>
         )}
       </CardFooter>

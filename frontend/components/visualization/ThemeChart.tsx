@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Theme } from '@/types/api';
+import { AnalyzedTheme } from '@/types/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,18 @@ import { Input } from '@/components/ui/input';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export interface ThemeChartProps {
-  themes: Theme[];
-  showKeyInsights?: boolean;
+interface ThemeChartProps {
+  themes: AnalyzedTheme[];
 }
 
-export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) {
+export function ThemeChart({ themes }: ThemeChartProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<AnalyzedTheme | null>(null);
 
   // Filter themes based on search term
   const filteredThemes = themes.filter(theme => 
     theme.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (theme.keywords && theme.keywords.some(keyword => 
+    (theme.keywords && theme.keywords.some((keyword: string) => 
       keyword.toLowerCase().includes(searchTerm.toLowerCase())
     ))
   );
@@ -56,22 +55,23 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
       return ['No themes available for analysis'];
     }
 
-    const insights = [];
+    const insights: string[] = [];
     
     // Prepare theme insights with more depth and context
-    const sortedTopThemes = [...themes].sort((a, b) => b.frequency - a.frequency);
+    const sortedTopThemes = [...themes].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
     const topThemes = sortedTopThemes.slice(0, 3);
     
     // Add more descriptive top themes insight with percentages
-    insights.push(`Top themes: ${topThemes.map(t => 
-      `${t.name} (${Math.round(t.frequency * 100)}%)`).join(', ')}`);
+    insights.push(`Top ${topThemes.length} themes identified: ${topThemes.map(t => 
+      `${t.name} (${Math.round((t.frequency || 0) * 100)}%)`
+    ).join(', ')}.`);
     
-    // Add theme clustering insight if applicable
-    if (topThemes.length >= 2) {
-      const topKeywords = topThemes.flatMap(t => t.keywords || []).slice(0, 5);
-      if (topKeywords.length > 0) {
-        insights.push(`Key topics discussed: ${topKeywords.join(', ')}`);
-      }
+    // Add thematic coverage insight
+    insights.push(`Total of ${themes.length} themes identified in the interviews.`);
+    
+    // Add density of themes insight if there are many themes
+    if (themes.length >= 10) {
+      insights.push(`High thematic density detected with ${themes.length} themes identified, suggesting complex or diverse responses.`);
     }
     
     // Add sentiment distribution of themes with percentages
@@ -85,40 +85,27 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
       const neuPercent = Math.round((neuThemes / totalThemes) * 100);
       const negPercent = Math.round((negThemes / totalThemes) * 100);
       
-      // Add sentiment overview with a more insightful message
-      if (posThemes > negThemes && posThemes > neuThemes) {
-        insights.push(`Overall positive theme sentiment (${posPercent}% of themes)`);
-      } else if (negThemes > posThemes && negThemes > neuThemes) {
-        insights.push(`Overall negative theme sentiment (${negPercent}% of themes)`);
-      } else if (neuThemes > posThemes && neuThemes > negThemes) {
-        insights.push(`Overall neutral theme sentiment (${neuPercent}% of themes)`);
-      } else {
-        insights.push(`Mixed theme sentiment distribution`);
+      // Only add if we have sentiment data
+      if (posThemes || neuThemes || negThemes) {
+        insights.push(`Sentiment breakdown of themes: ${posPercent}% positive, ${neuPercent}% neutral, ${negPercent}% negative.`);
       }
     }
     
     // Add specific insights for top positive and negative themes if they exist
     const topPosTheme = themes
       .filter(t => typeof t.sentiment === 'number' && t.sentiment >= 0.1)
-      .sort((a, b) => b.frequency - a.frequency)[0];
+      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))[0];
       
     const topNegTheme = themes
       .filter(t => typeof t.sentiment === 'number' && t.sentiment <= -0.1)
-      .sort((a, b) => b.frequency - a.frequency)[0];
-    
-    if (topPosTheme) {
-      insights.push(`Most prevalent positive theme: ${topPosTheme.name}`);
-    }
+      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))[0];
     
     if (topNegTheme) {
-      insights.push(`Most prevalent negative theme: ${topNegTheme.name}`);
+      insights.push(`The most discussed concern is "${topNegTheme.name}" (mentioned in ${Math.round((topNegTheme.frequency || 0) * 100)}% of responses).`);
     }
     
-    // Add actionable recommendation based on theme analysis
-    if (topNegTheme && topNegTheme.frequency > 0.2) {
-      insights.push(`Recommended focus area: Address concerns related to "${topNegTheme.name}"`);
-    } else if (topPosTheme && topPosTheme.frequency > 0.2) {
-      insights.push(`Recommended strategy: Build upon strengths in "${topPosTheme.name}"`);
+    if (topPosTheme) {
+      insights.push(`The most positive theme is "${topPosTheme.name}" (mentioned in ${Math.round((topPosTheme.frequency || 0) * 100)}% of responses).`);
     }
     
     return insights;
@@ -142,83 +129,81 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
   return (
     <div className="space-y-6">
       {/* Key Insights Section */}
-      {showKeyInsights && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Key Insights</CardTitle>
-            <CardDescription>Significant findings from the theme analysis</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="mb-2">
-                <h3 className="text-sm font-medium mb-2">Key Themes</h3>
-                <div className="space-y-3">
-                  {sortedThemes.slice(0, 3).map((theme, idx) => (
-                    <div key={`theme-${theme.id || theme.name}-${idx}`} className="flex gap-3 relative">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium absolute left-0 top-1/2 -translate-y-1/2">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1 pl-9">
-                        <div className={`border rounded-lg p-4 relative ${
-                          (typeof theme.sentiment === 'number' && theme.sentiment >= 0.1) ? 'border-green-300 bg-green-50' : 
-                          (typeof theme.sentiment === 'number' && theme.sentiment <= -0.1) ? 'border-red-300 bg-red-50' :
-                          'border-slate-300 bg-slate-50'
-                        } transition-all duration-150`}>
-                          <TooltipProvider key={theme.id} delayDuration={300}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="outline"
-                                  className="absolute top-3 right-3 cursor-default"
-                                >
-                                  {Math.round((theme.frequency || 0) * 100)}%
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent 
-                                side="left" 
-                                className="bg-white dark:bg-slate-900 border shadow-lg p-3"
-                                align="center"
+      <Card>
+        <CardHeader>
+          <CardTitle>Key Insights</CardTitle>
+          <CardDescription>Significant findings from the theme analysis</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="mb-2">
+              <h3 className="text-sm font-medium mb-2">Key Themes</h3>
+              <div className="space-y-3">
+                {sortedThemes.slice(0, 3).map((theme, idx) => (
+                  <div key={`theme-${theme.id || theme.name}-${idx}`} className="flex gap-3 relative">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium absolute left-0 top-1/2 -translate-y-1/2">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 pl-9">
+                      <div className={`border rounded-lg p-4 relative ${
+                        (typeof theme.sentiment === 'number' && theme.sentiment >= 0.1) ? 'border-green-300 bg-green-50' : 
+                        (typeof theme.sentiment === 'number' && theme.sentiment <= -0.1) ? 'border-red-300 bg-red-50' :
+                        'border-slate-300 bg-slate-50'
+                      } transition-all duration-150`}>
+                        <TooltipProvider key={theme.id} delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant="outline"
+                                className="absolute top-3 right-3 cursor-default"
                               >
-                                <div className="space-y-1">
-                                  <h4 className="font-semibold">Theme Frequency</h4>
-                                  <p className="text-sm text-muted-foreground">
-                                    Appears in {Math.round((theme.frequency || 0) * 100)}% of analyzed content
-                                  </p>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <div className="relative pr-4">
-                            <p className="text-sm leading-relaxed font-medium">
-                              {theme.name}
-                            </p>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {(theme.keywords || []).slice(0, 5).map((keyword, kidx) => (
-                              <Badge key={`${theme.id || theme.name}-keyword-${kidx}-${keyword}`} variant="secondary" className="text-xs">
-                                {keyword}
+                                {Math.round((theme.frequency || 0) * 100)}%
                               </Badge>
-                            ))}
-                          </div>
+                            </TooltipTrigger>
+                            <TooltipContent 
+                              side="left" 
+                              className="bg-white dark:bg-slate-900 border shadow-lg p-3"
+                              align="center"
+                            >
+                              <div className="space-y-1">
+                                <h4 className="font-semibold">Theme Frequency</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  Appears in {Math.round((theme.frequency || 0) * 100)}% of analyzed content
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <div className="relative pr-4">
+                          <p className="text-sm leading-relaxed font-medium">
+                            {theme.name}
+                          </p>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {(theme.keywords || []).slice(0, 5).map((keyword, kidx) => (
+                            <Badge key={`${theme.id || theme.name}-keyword-${kidx}-${keyword}`} variant="secondary" className="text-xs">
+                              {keyword}
+                            </Badge>
+                          ))}
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-2">Theme Insights</h3>
-                <ul className="space-y-2 list-disc pl-5">
-                  {getKeyInsights.map((insight, idx) => (
-                    <li key={`theme-insight-${idx}`} className="text-sm">{insight}</li>
-                  ))}
-                </ul>
+                  </div>
+                ))}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            
+            <div>
+              <h3 className="text-sm font-medium mb-2">Theme Insights</h3>
+              <ul className="space-y-2 list-disc pl-5">
+                {getKeyInsights.map((insight, idx) => (
+                  <li key={`theme-insight-${idx}`} className="text-sm">{insight}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div className="w-full sm:w-64">
@@ -254,7 +239,7 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
                       <span className="font-medium text-left flex items-center">
                         {theme.name}
                         {theme.process === 'enhanced' && (
-                          <Badge variant="outline" className="ml-2 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300 text-xs">
+                          <Badge variant="outline" className="ml-2 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">
                             Enhanced
                           </Badge>
                         )}
@@ -313,11 +298,11 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
                       )}
                       
                       {theme.codes && theme.codes.length > 0 && (
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-medium">Associated Codes:</h4>
-                          <div className="flex flex-wrap gap-1">
-                            {theme.codes.map((code, i) => (
-                              <Badge key={`${theme.id || theme.name}-code-${i}-${code}`} variant="outline" className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                        <div className="mt-3">
+                          <h4 className="text-sm font-semibold mb-1">Associated Codes</h4>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {theme.codes.map((code: string, i: number) => (
+                              <Badge key={`code-${i}`} variant="outline" className="text-xs">
                                 {code}
                               </Badge>
                             ))}
@@ -451,11 +436,11 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
                 )}
                 
                 {selectedTheme.codes && selectedTheme.codes.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Associated Codes</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedTheme.codes.map((code, i) => (
-                        <Badge key={`modal-${selectedTheme.id || selectedTheme.name}-code-${i}-${code}`} variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                  <div className="mt-3">
+                    <h4 className="text-sm font-semibold mb-1">Associated Codes</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {selectedTheme.codes.map((code: string, i: number) => (
+                        <Badge key={`code-${i}`} variant="outline" className="text-xs">
                           {code}
                         </Badge>
                       ))}
@@ -463,28 +448,30 @@ export function ThemeChart({ themes, showKeyInsights = true }: ThemeChartProps) 
                   </div>
                 )}
                 
-                {(selectedTheme.statements && selectedTheme.statements.length > 0) || (selectedTheme.examples && selectedTheme.examples.length > 0) ? (
-                  <div>
-                    <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
-                    <div className="rounded-md border p-4">
-                      <ul className="space-y-2">
-                        {selectedTheme.statements && selectedTheme.statements.map((statement, i) => (
-                          <li key={`modal-${selectedTheme.id || selectedTheme.name}-statement-${i}`} className="relative bg-muted/30 p-3 rounded-md">
-                            <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                            <p className="italic text-muted-foreground text-sm">"{statement}"</p>
-                          </li>
-                        ))}
-                        {!selectedTheme.statements && selectedTheme.examples && selectedTheme.examples.map((example, i) => (
-                          <li key={`modal-${selectedTheme.id || selectedTheme.name}-example-${i}`} className="relative bg-muted/30 p-3 rounded-md">
-                            <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                            <p className="italic text-muted-foreground text-sm">"{example}"</p>
-                          </li>
-                        ))}
-                      </ul>
+                {selectedTheme.statements && selectedTheme.statements.length > 0 && (
+                  <div className="mt-3">
+                    <h4 className="text-sm font-semibold mb-1">Supporting Statements</h4>
+                    <div className="space-y-1 mt-1 text-sm">
+                      {selectedTheme.statements.map((statement: string, i: number) => (
+                        <div key={`statement-${i}`} className="p-2 bg-muted/50 rounded text-xs">
+                          "{statement}"
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ) : (
-                  <p className="text-muted-foreground">No supporting statements available.</p>
+                )}
+                
+                {selectedTheme.examples && selectedTheme.examples.length > 0 && (
+                  <div className="mt-3">
+                    <h4 className="text-sm font-semibold mb-1">Examples</h4>
+                    <div className="space-y-1 mt-1 text-sm">
+                      {selectedTheme.examples.map((example: string, i: number) => (
+                        <div key={`example-${i}`} className="p-2 bg-muted/50 rounded text-xs">
+                          "{example}"
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 
                 <div className="mt-4 flex justify-end">

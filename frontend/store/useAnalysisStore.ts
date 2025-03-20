@@ -248,14 +248,27 @@ export const useCurrentAnalysis = () => useAnalysisStore(state => ({
 /**
  * Selector to get analysis history
  */
-export const useAnalysisHistory = () => useAnalysisStore(state => ({
-  history: state.analysisHistory,
-  isLoading: state.isLoadingHistory,
-  error: state.historyError,
-  filters: state.historyFilters,
-  setFilters: state.setHistoryFilters,
-  fetchHistory: state.fetchAnalysisHistory
-}));
+export const useAnalysisHistory = () => useAnalysisStore(state => {
+  // Use object destructuring and creating a new object
+  // to ensure consistent reference equality
+  const { 
+    analysisHistory: history, 
+    isLoadingHistory: isLoading, 
+    historyError: error,
+    historyFilters: filters,
+    setHistoryFilters: setFilters,
+    fetchAnalysisHistory: fetchHistory 
+  } = state;
+  
+  return {
+    history,
+    isLoading,
+    error,
+    filters,
+    setFilters,
+    fetchHistory
+  };
+});
 
 /**
  * Selector to get and set the visualization tab

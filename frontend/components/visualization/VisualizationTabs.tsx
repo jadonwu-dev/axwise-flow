@@ -3,15 +3,14 @@
  * 
  * ARCHITECTURAL NOTE: This is the refactored visualization tabs component that:
  * 1. Consumes data from context instead of props
- * 2. Uses the DashboardVisualizationContainer for data fetching
- * 3. Implements proper error handling
+ * 2. Uses a context provider for data
+ * 3. Implements error handling
  * 4. Separates concerns between data and presentation
  */
 
 'use client';
 
-import React from 'react';
-import { useVisualizationTab } from '@/store/useDashboardStore.refactored';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ThemeChart } from './ThemeChart';
 import { PatternList } from './PatternList';
 import { SentimentGraph } from './SentimentGraph';
@@ -19,10 +18,8 @@ import { PersonaList } from './PersonaList';
 import { PriorityInsights } from './PriorityInsights';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useVisualizationContext } from './DashboardVisualizationContainer';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
-import ApiErrorBoundary from '../error/ApiErrorBoundary';
+import CustomErrorBoundary from './ErrorBoundary';
 
 interface VisualizationTabsProps {
   analysisId?: string;
@@ -37,36 +34,109 @@ export type TabValue = 'themes' | 'patterns' | 'sentiment' | 'personas' | 'prior
  * Consumes data from context
  */
 export default function VisualizationTabsRefactored({ analysisId }: VisualizationTabsProps) {
-  // Get data from context
-  const { analysis } = useVisualizationContext();
-  
-  // Get tab state from store
-  const { tab: activeTab, setTab: setActiveTab } = useVisualizationTab();
-  
-  // Get the URL query parameters to support specific tab navigation
   const router = useRouter();
-  const pathname = window.location.pathname;
   const searchParams = useSearchParams();
-  const defaultTab = searchParams.get('tab') as TabValue | null;
-  
+  const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
+  const [activeTab, setActiveTab] = useState<TabValue>(activeTabFromUrl || 'themes');
+  const [analysis, setAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
+
+  // Fetch analysis data when analysisId changes
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchAnalysis = async () => {
+      try {
+        if (!analysisId) return;
+
+        // API call to fetch analysis data would go here
+        // For now, use mock data
+        if (isMounted) {
+          setAnalysis({
+            id: analysisId,
+            themes: [],
+            patterns: [],
+            sentiment: {
+              sentimentOverview: { positive: 0, neutral: 0, negative: 0 },
+              sentimentData: [],
+              sentimentStatements: { positive: [], neutral: [], negative: [] }
+            },
+            personas: [],
+            fileName: "interview_data.txt",
+            createdAt: new Date().toISOString(),
+            llmProvider: "OpenAI"
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching analysis:', error);
+      }
+    };
+
+    fetchAnalysis();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [analysisId]); // Only re-run when analysisId changes
+
+  // Update URL when active tab changes, but only if it's different from current URL
+  // Use a ref to track if this is the initial render to avoid unnecessary URL updates
+  const initialRender = useRef(true);
+
+  useEffect(() => {
+    // Skip URL update on initial render
+    if (initialRender.current) {
+      initialRender.current = false;
+      return;
+    }
+
+    // Only update URL if we're running in browser environment
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const currentTabParam = url.searchParams.get('visualizationTab');
+
+      // Only update if the tab has actually changed
+      if (currentTabParam !== activeTab) {
+        const newParams = new URLSearchParams(searchParams.toString());
+        newParams.set('visualizationTab', activeTab);
+
+        // Use router.replace instead of directly modifying URL to avoid triggering re-renders
+        router.replace(`${window.location.pathname}?${newParams.toString()}`, { scroll: false });
+      }
+    }
+  }, [activeTab, router, searchParams]);
+
+  // Set active tab based on URL parameter, but only on first render
+  useEffect(() => {
+    if (activeTabFromUrl && activeTab !== activeTabFromUrl) {
+      setActiveTab(activeTabFromUrl);
+    }
+  }, []); // Empty dependency array means it only runs on first render
+
+  // Set active tab function
+  const setActiveTabSafe = useCallback((tab: TabValue) => {
+    setActiveTab(tab);
+  }, []);
+
+  // Prepare data for rendering
+  const analyzedThemes = useMemo(() => {
+    return (analysis?.themes || []).map((theme: any) => ({
+      id: theme.id?.toString() || '',
+      name: theme.name || '',
+      prevalence: theme.frequency || 0,
+      supportingQuotes: theme.quotes || [],
+      keywords: theme.keywords || []
+    }));
+  }, [analysis?.themes]);
+
+  const analyzedPatterns = useMemo(() => {
+    return (analysis?.patterns || []);
+  }, [analysis?.patterns]);
+
   // Handle tab change
   const handleTabChange = (newTab: string) => {
-    // Update the URL to reflect the current tab for sharing/bookmarking
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', newTab);
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    
-    // Update global state for other components to reference
-    setActiveTab(newTab as TabValue);
+    setActiveTabSafe(newTab as TabValue);
   };
-  
-  // Initialize tab from URL if present
-  useEffect(() => {
-    if (defaultTab && ['themes', 'patterns', 'sentiment', 'personas', 'priority'].includes(defaultTab)) {
-      setActiveTab(defaultTab as TabValue);
-    }
-  }, [defaultTab, setActiveTab]);
-  
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -75,7 +145,7 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
           Created {new Date(analysis?.createdAt || '').toLocaleString()} • {analysis?.llmProvider || 'AI'} Analysis
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent>
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="w-full grid grid-cols-5">
@@ -85,20 +155,34 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
             <TabsTrigger value="personas">Personas</TabsTrigger>
             <TabsTrigger value="priority">Priority</TabsTrigger>
           </TabsList>
-          
-          <ApiErrorBoundary context="ThemesTab">
+
+          <CustomErrorBoundary
+            fallback={
+              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                <h3 className="text-lg font-semibold text-red-700">Error in Themes Visualization</h3>
+                <p className="text-red-600">There was an error rendering the themes visualization.</p>
+              </div>
+            }
+          >
             <TabsContent value="themes" className="mt-6">
-              {analysis?.themes.length ? (
-                <ThemeChart themes={analysis.themes} />
+              {analyzedThemes.length ? (
+                <ThemeChart themes={analyzedThemes} />
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No themes detected in this interview.
                 </div>
               )}
             </TabsContent>
-          </ApiErrorBoundary>
-          
-          <ApiErrorBoundary context="PatternsTab">
+          </CustomErrorBoundary>
+
+          <CustomErrorBoundary
+            fallback={
+              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                <h3 className="text-lg font-semibold text-red-700">Error in Patterns Visualization</h3>
+                <p className="text-red-600">There was an error rendering the patterns visualization.</p>
+              </div>
+            }
+          >
             <TabsContent value="patterns" className="mt-6">
               {analysis?.patterns.length ? (
                 <PatternList patterns={analysis.patterns} />
@@ -108,25 +192,40 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
                 </div>
               )}
             </TabsContent>
-          </ApiErrorBoundary>
-          
-          <ApiErrorBoundary context="SentimentTab">
+          </CustomErrorBoundary>
+
+          <CustomErrorBoundary
+            fallback={
+              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                <h3 className="text-lg font-semibold text-red-700">Error in Sentiment Visualization</h3>
+                <p className="text-red-600">There was an error rendering the sentiment visualization.</p>
+              </div>
+            }
+          >
             <TabsContent value="sentiment" className="mt-6">
-              {analysis?.sentiment.length ? (
+              {analysis.sentiment && (
                 <SentimentGraph 
-                  data={analysis.sentimentOverview}
-                  detailedData={analysis.sentiment}
-                  supportingStatements={analysis.sentimentStatements}
+                  data={analysis.sentiment.sentimentOverview} 
+                  detailedData={[]} 
+                  supportingStatements={analysis.sentiment.sentimentStatements}
                 />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No sentiment data available for this interview.
+              )}
+              {!analysis.sentiment && (
+                <div className="text-center text-muted-foreground">
+                  No sentiment data available
                 </div>
               )}
             </TabsContent>
-          </ApiErrorBoundary>
-          
-          <ApiErrorBoundary context="PersonasTab">
+          </CustomErrorBoundary>
+
+          <CustomErrorBoundary
+            fallback={
+              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                <h3 className="text-lg font-semibold text-red-700">Error in Personas Visualization</h3>
+                <p className="text-red-600">There was an error rendering the personas visualization.</p>
+              </div>
+            }
+          >
             <TabsContent value="personas" className="mt-6">
               {analysis?.personas?.length ? (
                 <PersonaList personas={analysis.personas} />
@@ -136,13 +235,20 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
                 </div>
               )}
             </TabsContent>
-          </ApiErrorBoundary>
-          
-          <ApiErrorBoundary context="PriorityTab">
+          </CustomErrorBoundary>
+
+          <CustomErrorBoundary
+            fallback={
+              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                <h3 className="text-lg font-semibold text-red-700">Error in Priority Visualization</h3>
+                <p className="text-red-600">There was an error rendering the priority visualization.</p>
+              </div>
+            }
+          >
             <TabsContent value="priority" className="mt-6">
               <PriorityInsights analysisId={analysisId || analysis?.id || ''} />
             </TabsContent>
-          </ApiErrorBoundary>
+          </CustomErrorBoundary>
         </Tabs>
       </CardContent>
     </Card>

@@ -3,6 +3,24 @@
  */
 
 /**
+ * AnalyzedTheme structure used in visualization components
+ */
+export interface AnalyzedTheme {
+  id: string;
+  name: string;
+  prevalence: number;
+  sentiment?: number;
+  frequency?: number;
+  keywords?: string[];
+  statements?: string[];
+  examples?: string[];
+  definition?: string;
+  codes?: string[];
+  reliability?: number;
+  process?: 'basic' | 'enhanced';
+}
+
+/**
  * Response from the upload endpoint
  */
 export interface UploadResponse {
@@ -41,16 +59,15 @@ export interface Theme {
 }
 
 /**
- * Pattern data structure
+ * Pattern structure used in visualization components
  */
 export interface Pattern {
-  id: number;
+  id: string;
   name: string;
-  category: string;
-  description: string;
-  frequency: number;
-  evidence?: string[];     // Supporting evidence from the LLM
-  examples?: string[];     // Legacy field for backward compatibility
+  count: number;
+  category?: string;
+  description?: string;
+  frequency?: number;
   sentiment?: number;
 }
 

@@ -3,14 +3,14 @@
 import React, { useState } from 'react';
 import { ThemeChart, PatternList, SentimentGraph } from '@/components/visualization';
 import { mockThemes, mockPatterns, mockSentimentOverview, mockSentimentData } from '@/lib/mockData';
-import type { Theme, Pattern } from '@/types/api';
+import type { AnalyzedTheme, Pattern } from '@/types/api';
 
 /**
  * Demo page for visualization components
  * This page showcases all the visualization components with mock data
  */
 export default function DemoPage() {
-  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<AnalyzedTheme | null>(null);
   const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null);
 
   return (
@@ -31,8 +31,7 @@ export default function DemoPage() {
           </p>
           
           <ThemeChart 
-            data={mockThemes} 
-            onThemeClick={(theme) => setSelectedTheme(theme)}
+            themes={mockThemes}
           />
           
           {selectedTheme && (
@@ -66,7 +65,7 @@ export default function DemoPage() {
           </p>
           
           <PatternList 
-            data={mockPatterns} 
+            patterns={mockPatterns} 
             onPatternClick={(pattern) => setSelectedPattern(pattern)}
           />
           
@@ -90,7 +89,7 @@ export default function DemoPage() {
           </p>
           
           <SentimentGraph 
-            data={mockSentimentOverview}
+            overview={mockSentimentOverview}
             detailedData={mockSentimentData}
           />
         </section>

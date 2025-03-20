@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, ReactNode, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/apiClient';
 import { useToast } from '@/components/providers/toast-provider';
@@ -31,12 +31,19 @@ export const DashboardDataProvider = ({ children }: DashboardDataProviderProps) 
   const [error, setError] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string>('testuser123'); // To be replaced with real auth
   
+  // Use a ref to track if we've already fetched the analysis to prevent infinite fetches
+  const hasAttemptedFetch = useRef(false);
+  
+  // Handle loading analysis results from URL - memoize analysisId and tab
+  const analysisId = useMemo(() => searchParams.get('analysisId'), [searchParams]);
+  const tab = useMemo(() => searchParams.get('tab'), [searchParams]);
+  
   // Handle loading analysis results from URL
   useEffect(() => {
-    const analysisId = searchParams.get('analysisId');
-    const tab = searchParams.get('tab');
-    
-    if (analysisId && tab === 'visualize') {
+    // Only fetch if we haven't attempted a fetch yet, and we have an analysisId and tab=visualize
+    if (!hasAttemptedFetch.current && analysisId && tab === 'visualize') {
+      hasAttemptedFetch.current = true;
+      
       const fetchAnalysis = async () => {
         try {
           setError(null);
@@ -54,21 +61,31 @@ export const DashboardDataProvider = ({ children }: DashboardDataProviderProps) 
       
       fetchAnalysis();
     }
-  }, [searchParams, showToast, authToken, fetchAnalysisById]);
+  }, [analysisId, tab, authToken, fetchAnalysisById, showToast]);
   
-  // Set error from dashboard if available
+  // Reset fetch attempt flag if analysisId changes
+  useEffect(() => {
+    if (analysisId) {
+      hasAttemptedFetch.current = false;
+    }
+  }, [analysisId]);
+  
+  // Set error from dashboard if available - only when dashboardError changes
   useEffect(() => {
     if (dashboardError) {
       setError(dashboardError.message);
     }
   }, [dashboardError]);
   
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    dashboardData, 
+    isLoading, 
+    error
+  }), [dashboardData, isLoading, error]);
+  
   return (
-    <DashboardDataContext.Provider value={{ 
-      dashboardData, 
-      isLoading, 
-      error 
-    }}>
+    <DashboardDataContext.Provider value={contextValue}>
       {children}
     </DashboardDataContext.Provider>
   );

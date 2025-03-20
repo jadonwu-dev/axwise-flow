@@ -163,25 +163,65 @@ class ApiClient {
    */
   async uploadData(file: File, isTextFile: boolean = false): Promise<UploadResponse> {
     try {
+      // Log the request data for debugging
+      console.log('Uploading file:', { 
+        filename: file.name, 
+        type: file.type, 
+        size: file.size, 
+        isTextFile 
+      });
+
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('is_free_text', isTextFile.toString());
+      
+      // Convert boolean to string representation expected by the backend
+      formData.append('is_free_text', String(isTextFile));
+
+      // Add additional data that might be required by the backend
+      formData.append('filename', file.name);
+      formData.append('content_type', file.type);
 
       const response = await this.client.post<UploadResponse>('/api/data', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          // Removing any headers that could interfere with file upload
+          'Accept': 'application/json',
         },
+        // Increase timeout for larger files
+        timeout: 60000,
       });
 
+      console.log('Upload response:', response.data);
       return response.data;
     } catch (error: any) {
       console.error('Error uploading data:', error);
+      
+      // Enhanced error debugging
+      if (error?.response?.data?.detail) {
+        console.error('Server error details:', error.response.data.detail);
+      }
       
       // Handle different error types safely
       if (error && error.response) {
         // Handle 401 separately as it's typically an auth issue
         if (error.response.status === 401) {
           throw new Error('Authentication required. Please log in.');
+        }
+        
+        // Handle 422 errors specifically for better feedback
+        if (error.response.status === 422) {
+          const errorDetail = error.response.data?.detail;
+          if (Array.isArray(errorDetail) && errorDetail.length > 0) {
+            // Handle FastAPI validation error format
+            const validationErrors = errorDetail.map((err: any) => 
+              `${err.loc.join('.')}: ${err.msg}`
+            ).join(', ');
+            throw new Error(`Validation error: ${validationErrors}`);
+          } else if (typeof errorDetail === 'string') {
+            throw new Error(`Validation error: ${errorDetail}`);
+          } else {
+            throw new Error('The server could not process your request. Please check your file format.');
+          }
         }
         
         // Use the server error message if available
@@ -563,12 +603,12 @@ class ApiClient {
         status: 'completed',
         createdAt: mockDate,
         themes: [
-          { id: 1, name: 'User Feedback', frequency: 0.8, keywords: ['feedback', 'review'] },
-          { id: 2, name: 'Product Features', frequency: 0.5, keywords: ['feature', 'capability'] }
+          { id: "1", name: 'User Feedback', frequency: 0.8, keywords: ['feedback', 'review'] },
+          { id: "2", name: 'Product Features', frequency: 0.5, keywords: ['feature', 'capability'] }
         ],
         patterns: [
-          { id: 1, name: 'Feature Requests', category: 'Enhancement', description: 'Users requesting specific features', frequency: 0.7 },
-          { id: 2, name: 'Pain Points', category: 'Issue', description: 'Common issues users face', frequency: 0.6 }
+          { id: "1", name: 'Feature Requests', category: 'Enhancement', description: 'Users requesting specific features', frequency: 0.7 },
+          { id: "2", name: 'Pain Points', category: 'Issue', description: 'Common issues users face', frequency: 0.6 }
         ],
         sentiment: [],
         sentimentOverview: {
@@ -579,7 +619,6 @@ class ApiClient {
         // Add mock personas to the analysis results
         personas: [
           {
-            id: "mock-persona-1",
             name: "Design Lead Alex",
             description: "Alex is an experienced design leader who values user-centered processes and design systems. They struggle with ensuring design quality while meeting business demands and securing resources for proper research.",
             confidence: 0.85,
@@ -619,7 +658,6 @@ class ApiClient {
             }
           },
           {
-            id: "mock-persona-2",
             name: "Product Owner Jordan",
             description: "Jordan is a product owner who bridges business goals with user needs. Focused on defining priorities and managing stakeholder expectations while advocating for design quality.",
             confidence: 0.8,
@@ -669,7 +707,6 @@ class ApiClient {
   private generateMockPersonas(): any[] {
     return [
       {
-        "id": "mock-persona-1",
         "name": "Design Leader Alex",
         "traits": [
           { "value": "Design team lead at medium-sized technology company", "confidence": 0.9, "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] },

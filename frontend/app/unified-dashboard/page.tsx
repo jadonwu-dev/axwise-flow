@@ -22,7 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FileText } from 'lucide-react';
 
 // Import our refactored components
-import UploadPanel from '@/components/upload/UploadPanel';
+import EmergencyUploadPanel from '@/components/upload/EmergencyUploadPanel';
 import VisualizationTabs from '@/components/visualization/VisualizationTabs';
 import HistoryPanel from '@/components/history/HistoryPanel';
 
@@ -126,7 +126,7 @@ export default function UnifiedDashboard() {
         </TabsList>
         
         <TabsContent value="upload" className="mt-6">
-          <UploadPanel />
+          <EmergencyUploadPanel />
         </TabsContent>
         
         <TabsContent value="visualize" className="mt-6">
