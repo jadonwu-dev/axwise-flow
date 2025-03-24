@@ -1,0 +1,289 @@
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+import json
+import logging
+import asyncio
+from datetime import datetime
+from typing import Dict, Any, Optional
+
+from backend.models import User, InterviewData, AnalysisResult
+from backend.services.llm import LLMServiceFactory
+from backend.services.nlp import get_nlp_processor
+from backend.core.processing_pipeline import process_data
+from infrastructure.config.settings import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+class AnalysisService:
+    """
+    Service class for handling data analysis operations.
+    Encapsulates business logic related to interview data analysis.
+    """
+    
+    def __init__(self, db: Session, user: User):
+        """
+        Initialize the AnalysisService with database session and user.
+        
+        Args:
+            db (Session): SQLAlchemy database session
+            user (User): Current authenticated user
+        """
+        self.db = db
+        self.user = user
+    
+    async def start_analysis(self, 
+                      data_id: int, 
+                      llm_provider: str,
+                      llm_model: Optional[str] = None,
+                      is_free_text: bool = False,
+                      use_enhanced_theme_analysis: bool = False,
+                      use_reliability_check: bool = False) -> dict:
+        """
+        Start analysis of interview data.
+        
+        Args:
+            data_id: ID of the interview data to analyze
+            llm_provider: LLM provider to use ('openai' or 'gemini')
+            llm_model: Optional specific model to use
+            is_free_text: Whether the data is in free-text format
+            use_enhanced_theme_analysis: Whether to use enhanced theme analysis
+            use_reliability_check: Whether to perform reliability checks
+            
+        Returns:
+            dict: Result with result_id and success status
+            
+        Raises:
+            HTTPException: For invalid configurations or missing data
+        """
+        try:
+            # Validate LLM provider and get default model if needed
+            if llm_model is None:
+                llm_model = (
+                    settings.llm_providers["openai"]["model"] if llm_provider == "openai" 
+                    else settings.llm_providers["gemini"]["model"]
+                )
+            
+            logger.info(f"Analysis parameters - data_id: {data_id}, provider: {llm_provider}, "
+                       f"model: {llm_model}, is_free_text: {is_free_text}")
+            
+            if use_enhanced_theme_analysis:
+                logger.info(f"Using enhanced thematic analysis with reliability check: {use_reliability_check}")
+
+            # Initialize services
+            llm_service = LLMServiceFactory.create(llm_provider)
+            nlp_processor = get_nlp_processor()()
+            
+            # Get interview data with user authorization check
+            interview_data = self.db.query(InterviewData).filter(
+                InterviewData.data_id == data_id,
+                InterviewData.user_id == self.user.user_id
+            ).first()
+
+            if not interview_data:
+                raise HTTPException(status_code=404, detail="Interview data not found")
+
+            # Parse data
+            data = self._parse_interview_data(interview_data, is_free_text)
+            
+            # Create initial analysis record
+            analysis_result = self._create_analysis_record(data_id, llm_provider, llm_model)
+            
+            # Start background processing task
+            asyncio.create_task(
+                self._process_data_task(
+                    analysis_result.result_id,
+                    nlp_processor,
+                    llm_service,
+                    data,
+                    {
+                        'use_enhanced_theme_analysis': use_enhanced_theme_analysis,
+                        'use_reliability_check': use_reliability_check,
+                        'llm_provider': llm_provider,
+                        'llm_model': llm_model
+                    }
+                )
+            )
+
+            # Return response
+            return {
+                "success": True,
+                "message": "Analysis started",
+                "result_id": analysis_result.result_id
+            }
+
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
+        except Exception as e:
+            logger.error(f"Error initiating analysis: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Server error: {str(e)}"
+            )
+    
+    def _parse_interview_data(self, interview_data: InterviewData, is_free_text: bool) -> Any:
+        """
+        Parse interview data from database record.
+        
+        Args:
+            interview_data: Database record containing interview data
+            is_free_text: Whether to parse as free text
+            
+        Returns:
+            Parsed data (dict, list, or string)
+            
+        Raises:
+            HTTPException: For parsing errors
+        """
+        try:
+            data = json.loads(interview_data.original_data)
+            
+            # Handle free text format
+            if is_free_text:
+                logger.info(f"Processing free-text format for data_id: {interview_data.data_id}")
+                
+                # Extract free text from various possible data structures
+                if isinstance(data, dict):
+                    # Extract content or free_text field if present
+                    if 'content' in data:
+                        data = data['content']
+                    if 'free_text' in data:
+                        data = data['free_text']
+                    elif 'metadata' in data and isinstance(data['metadata'], dict) and 'free_text' in data['metadata']:
+                        data = data['metadata']['free_text']
+                elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    # Extract from first item if it's a list
+                    if 'content' in data[0]:
+                        data = data[0]['content']
+                    elif 'free_text' in data[0]:
+                        data = data[0]['free_text']
+                    
+                # Ensure data is a string for free text processing
+                if not isinstance(data, str):
+                    try:
+                        data = json.dumps(data)
+                    except:
+                        logger.warning("Could not convert data to string, using empty string")
+                        data = ""
+                
+                # Wrap in a dict with free_text field
+                data = {'free_text': data}
+                
+                # Log the extracted free text
+                logger.info(f"Extracted free text (first 100 chars): {data['free_text'][:100]}...")
+            elif not isinstance(data, list):
+                data = [data]
+                
+            return data
+                
+        except Exception as e:
+            logger.error(f"Error parsing interview data: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to parse interview data"
+            )
+    
+    def _create_analysis_record(self, data_id: int, llm_provider: str, llm_model: str) -> AnalysisResult:
+        """
+        Create an analysis result record in the database.
+        
+        Args:
+            data_id: ID of the interview data being analyzed
+            llm_provider: LLM provider being used
+            llm_model: LLM model being used
+            
+        Returns:
+            Created AnalysisResult record
+        """
+        analysis_result = AnalysisResult(
+            data_id=data_id,
+            status='processing',
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            results=json.dumps({
+                "status": "processing",
+                "message": "Analysis has been initiated",
+                "progress": 0
+            })
+        )
+        self.db.add(analysis_result)
+        self.db.commit()
+        self.db.refresh(analysis_result)
+        logger.info(f"Created analysis result record. Result ID: {analysis_result.result_id}")
+        
+        return analysis_result
+    
+    async def _process_data_task(self, 
+                          result_id: int, 
+                          nlp_processor: Any, 
+                          llm_service: Any, 
+                          data: Any, 
+                          config: Dict[str, Any]):
+        """
+        Background task to process interview data.
+        
+        Args:
+            result_id: ID of the analysis result record
+            nlp_processor: Initialized NLP processor
+            llm_service: Initialized LLM service
+            data: Parsed interview data
+            config: Analysis configuration parameters
+        """
+        from backend.database import get_db
+        
+        try:
+            logger.info(f"Starting data processing for result_id: {result_id}")
+            
+            # Create a new session for the background task to avoid session binding issues
+            async_db = next(get_db())
+            
+            # Get a fresh reference to the analysis result
+            task_result = async_db.query(AnalysisResult).get(result_id)
+            
+            # Update status to in-progress with 5% completion
+            task_result.results = json.dumps({
+                "status": "processing",
+                "message": "Analysis in progress",
+                "progress": 5
+            })
+            async_db.commit()
+
+            # Process data
+            result = await process_data(
+                nlp_processor=nlp_processor,
+                llm_service=llm_service,
+                data=data,
+                config=config
+            )
+            
+            # Update database record with results
+            task_result.results = json.dumps(result)
+            task_result.status = "completed"
+            task_result.completed_at = datetime.utcnow()
+            async_db.commit()
+            logger.info(f"Analysis completed for result_id: {task_result.result_id}")
+
+        except Exception as e:
+            logger.error(f"Error during analysis: {str(e)}")
+            try:
+                # Create a new session if needed
+                if 'async_db' not in locals():
+                    async_db = next(get_db())
+                    task_result = async_db.query(AnalysisResult).get(result_id)
+                
+                # Update database record with error
+                task_result.results = json.dumps({
+                    "status": "error",
+                    "message": f"Analysis failed: {str(e)}",
+                    "error_details": str(e)
+                })
+                task_result.status = "failed"
+                task_result.completed_at = datetime.utcnow()
+                async_db.commit()
+            except Exception as inner_e:
+                logger.error(f"Failed to update error status: {str(inner_e)}")
+        finally:
+            # Ensure the session is closed
+            if 'async_db' in locals():
+                async_db.close() 

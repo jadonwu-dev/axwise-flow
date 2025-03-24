@@ -216,84 +216,18 @@ async def upload_data(
     Handles interview data upload (JSON format or free-text format).
     """
     try:
-        # Read file content
-        content = await file.read()
-        content_text = content.decode("utf-8")
+        # Use DataService to handle upload logic
+        from backend.services.data_service import DataService
+        data_service = DataService(db, current_user)
         
-        # Determine input type based on file extension and is_free_text flag
-        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+        # Process the upload
+        result = await data_service.upload_interview_data(file, is_free_text)
         
-        if is_free_text or file_extension in ['txt', 'text']:
-            logger.info(f"Processing as free-text format: {file.filename}")
-            input_type = "free_text"
-            
-            # Create a consistent data structure for free text
-            data = {
-                "free_text": content_text,
-                "metadata": {
-                    "filename": file.filename,
-                    "content_type": file.content_type,
-                    "is_free_text": True
-                }
-            }
-            
-            # Store as JSON string for consistency in storage
-            json_content = json.dumps(data)
-        else:
-            # Attempt to parse as JSON
-            try:
-                data = json.loads(content_text)
-            except json.JSONDecodeError:
-                # If JSON parsing fails but user didn't specify free-text, raise an error
-                if file_extension not in ['txt', 'text']:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Invalid JSON format. Please upload a valid JSON file or specify is_free_text=true for text files."
-                    )
-                # Otherwise, treat as free text
-                logger.info(f"JSON parsing failed, treating as free-text format: {file.filename}")
-                input_type = "free_text"
-                data = {
-                    "free_text": content_text,
-                    "metadata": {
-                        "filename": file.filename,
-                        "content_type": file.content_type,
-                        "is_free_text": True
-                    }
-                }
-                json_content = json.dumps(data)
-            else:
-                # Determine JSON input type
-                if isinstance(data, list):
-                    input_type = "json_array"
-                elif isinstance(data, dict):
-                    input_type = "json_object"
-                else:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Unsupported JSON structure. Expected array or object."
-                    )
-                json_content = content_text
-            
-        # Save to database
-        interview_data = InterviewData(
-            user_id=current_user.user_id,
-            filename=file.filename,
-            input_type=input_type,
-            original_data=json_content
-        )
-        
-        db.add(interview_data)
-        db.commit()
-        db.refresh(interview_data)
-        
-        logger.info(f"Data uploaded successfully for user {current_user.user_id}. Data ID: {interview_data.data_id}")
-        
-        # Return response
+        # Return UploadResponse
         return UploadResponse(
-            success=True,
-            message="Data uploaded successfully",
-            data_id=interview_data.data_id
+            success=result["success"],
+            message=result["message"],
+            data_id=result["data_id"]
         )
         
     except HTTPException:
@@ -332,174 +266,25 @@ async def analyze_data(
                 detail=f"LLM configuration error: {str(e)}"
             )
 
-        # Get and validate parameters
-        data_id = analysis_request.data_id
-        llm_provider = analysis_request.llm_provider
-        llm_model = analysis_request.llm_model or (
-            settings.llm_providers["openai"]["model"] if llm_provider == "openai" else settings.llm_providers["gemini"]["model"]
+        # Use AnalysisService to handle the analysis process
+        from backend.services.analysis_service import AnalysisService
+        analysis_service = AnalysisService(db, current_user)
+        
+        # Start the analysis and get the result
+        result = await analysis_service.start_analysis(
+            data_id=analysis_request.data_id,
+            llm_provider=analysis_request.llm_provider,
+            llm_model=analysis_request.llm_model,
+            is_free_text=analysis_request.is_free_text,
+            use_enhanced_theme_analysis=analysis_request.use_enhanced_theme_analysis,
+            use_reliability_check=analysis_request.use_reliability_check
         )
-        is_free_text = analysis_request.is_free_text
-        use_enhanced_theme_analysis = analysis_request.use_enhanced_theme_analysis
-        use_reliability_check = analysis_request.use_reliability_check
-
-        logger.info(f"Analysis parameters - data_id: {data_id}, provider: {llm_provider}, model: {llm_model}, is_free_text: {is_free_text}")
-        if use_enhanced_theme_analysis:
-            logger.info(f"Using enhanced thematic analysis with reliability check: {use_reliability_check}")
-
-        # Initialize services
-        try:
-            # Use the LLMServiceFactory with provider-specific settings from centralized config
-            llm_service = LLMServiceFactory.create(llm_provider)
-            nlp_processor = get_nlp_processor()()
-        except Exception as e:
-            logger.error(f"Error initializing services: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to initialize analysis services: {str(e)}"
-            )
-
-        # Get interview data
-        interview_data = db.query(InterviewData).filter(
-            InterviewData.data_id == data_id,
-            InterviewData.user_id == current_user.user_id
-        ).first()
-
-        if not interview_data:
-            raise HTTPException(status_code=404, detail="Interview data not found")
-
-        # Parse data
-        try:
-            data = json.loads(interview_data.original_data)
-            
-            # Handle free text format
-            if is_free_text:
-                logger.info(f"Processing free-text format for data_id: {data_id}")
-                
-                # Extract free text from various possible data structures
-                if isinstance(data, dict):
-                    # Extract content or free_text field if present
-                    if 'content' in data:
-                        data = data['content']
-                    if 'free_text' in data:
-                        data = data['free_text']
-                    elif 'metadata' in data and isinstance(data['metadata'], dict) and 'free_text' in data['metadata']:
-                        data = data['metadata']['free_text']
-                elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-                    # Extract from first item if it's a list
-                    if 'content' in data[0]:
-                        data = data[0]['content']
-                    elif 'free_text' in data[0]:
-                        data = data[0]['free_text']
-                    
-                # Ensure data is a string for free text processing
-                if not isinstance(data, str):
-                    try:
-                        data = json.dumps(data)
-                    except:
-                        logger.warning("Could not convert data to string, using empty string")
-                        data = ""
-                
-                # Wrap in a dict with free_text field
-                data = {'free_text': data}
-                
-                # Log the extracted free text
-                logger.info(f"Extracted free text (first 100 chars): {data['free_text'][:100]}...")
-            elif not isinstance(data, list):
-                data = [data]
-        except Exception as e:
-            logger.error(f"Error parsing interview data: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to parse interview data"
-            )
-
-        # Create initial analysis record
-        analysis_result = AnalysisResult(
-            data_id=data_id,
-            status='processing',
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            results=json.dumps({
-                "status": "processing",
-                "message": "Analysis has been initiated",
-                "progress": 0
-            })
-        )
-        db.add(analysis_result)
-        db.commit()
-        db.refresh(analysis_result)
-        logger.info(f"Created analysis result record. Result ID: {analysis_result.result_id}")
-
-        # Start processing in background task
-        async def process_data_task():
-            try:
-                logger.info(f"Starting data processing for result_id: {analysis_result.result_id}")
-                
-                # Create a new session for the background task to avoid session binding issues
-                async_db = next(get_db())
-                # Get a fresh reference to the analysis result
-                task_result = async_db.query(AnalysisResult).get(analysis_result.result_id)
-                
-                # Update status to in-progress with 5% completion
-                task_result.results = json.dumps({
-                    "status": "processing",
-                    "message": "Analysis in progress",
-                    "progress": 5
-                })
-                async_db.commit()
-
-                # Process data
-                result = await process_data(
-                    nlp_processor=nlp_processor,
-                    llm_service=llm_service,
-                    data=data,
-                    config={
-                        'use_enhanced_theme_analysis': use_enhanced_theme_analysis,
-                        'use_reliability_check': use_reliability_check,
-                        'llm_provider': llm_provider,
-                        'llm_model': llm_model
-                    }
-                )
-                
-                # Update database record with results
-                task_result.results = json.dumps(result)
-                task_result.status = "completed"
-                task_result.completed_at = datetime.utcnow()
-                async_db.commit()
-                logger.info(f"Analysis completed for result_id: {task_result.result_id}")
-
-            except Exception as e:
-                logger.error(f"Error during analysis: {str(e)}")
-                try:
-                    # Create a new session if needed
-                    if not 'async_db' in locals():
-                        async_db = next(get_db())
-                        task_result = async_db.query(AnalysisResult).get(analysis_result.result_id)
-                    
-                    # Update database record with error
-                    task_result.results = json.dumps({
-                        "status": "error",
-                        "message": f"Analysis failed: {str(e)}",
-                        "error_details": str(e)
-                    })
-                    task_result.status = "failed"
-                    task_result.completed_at = datetime.utcnow()
-                    async_db.commit()
-                except Exception as inner_e:
-                    logger.error(f"Failed to update error status: {str(inner_e)}")
-            finally:
-                # Ensure the session is closed
-                if 'async_db' in locals():
-                    async_db.close()
-
-        # Start background task
-        asyncio.create_task(process_data_task())
-
+        
         # Return response
         return AnalysisResponse(
-            success=True,
-            message="Analysis started",
-            result_id=analysis_result.result_id
+            success=result["success"],
+            message=result["message"],
+            result_id=result["result_id"]
         )
 
     except HTTPException:
@@ -529,128 +314,14 @@ async def get_results(
     Retrieves analysis results.
     """
     try:
-        logger.info(f"Retrieving results for result_id: {result_id}, user: {current_user.user_id}")
+        # Use ResultsService to handle fetching and formatting the results
+        from backend.services.results_service import ResultsService
+        results_service = ResultsService(db, current_user)
         
-        # Query for results with user authorization check
-        analysis_result = db.query(AnalysisResult).join(
-            InterviewData
-        ).filter(
-            AnalysisResult.result_id == result_id,
-            InterviewData.user_id == current_user.user_id
-        ).first()
-
-        if not analysis_result:
-            logger.error(f"Results not found - result_id: {result_id}, user_id: {current_user.user_id}")
-            raise HTTPException(
-                status_code=404,
-                detail=f"Results not found for result_id: {result_id}"
-            )
-
-        # Check if results are available
-        if not analysis_result.results:
-            return ResultResponse(
-                status="processing",
-                message="Analysis is still in progress."
-            )
-
-        # Check for error in results
-        if isinstance(analysis_result.results, dict) and "error" in analysis_result.results:
-            return ResultResponse(
-                status="error",
-                result_id=analysis_result.result_id,
-                error=analysis_result.results["error"]
-            )
-
-        # Format the results to match the DetailedAnalysisResult schema
-        formatted_results = None
+        # Get formatted results
+        result = results_service.get_analysis_result(result_id)
         
-        try:
-            # Parse stored results to Python dict
-            results_dict = (
-                json.loads(analysis_result.results) 
-                if isinstance(analysis_result.results, str)
-                else analysis_result.results
-            )
-            
-            # Enhanced logging for personas debug
-            logger.info(f"Results keys available: {list(results_dict.keys())}")
-            if "personas" in results_dict:
-                persona_count = len(results_dict.get("personas", []))
-                logger.info(f"Found {persona_count} personas in results for result_id: {result_id}")
-                if persona_count > 0:
-                    # Log first persona structure
-                    first_persona = results_dict["personas"][0]
-                    logger.info(f"First persona keys: {list(first_persona.keys())}")
-                else:
-                    logger.warning(f"Personas array is empty for result_id: {result_id}")
-            else:
-                logger.warning(f"No 'personas' key found in results for result_id: {result_id}")
-                # Add mock personas to ensure frontend receives valid data
-                results_dict["personas"] = [{
-                    "id": "mock-persona-1",
-                    "name": "Design Lead Alex",
-                    "description": "Alex is an experienced design leader who values user-centered processes and design systems.",
-                    "confidence": 0.85,
-                    "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"],
-                    "role_context": { 
-                        "value": "Design team lead at medium-sized technology company", 
-                        "confidence": 0.9, 
-                        "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] 
-                    },
-                    "key_responsibilities": { 
-                        "value": "Oversees design system implementation. Manages team of designers.", 
-                        "confidence": 0.85, 
-                        "evidence": ["Mentioned regular design system review meetings", "Discussed designer performance reviews"] 
-                    },
-                    "tools_used": { 
-                        "value": "Figma, Sketch, Adobe Creative Suite, Jira, Confluence", 
-                        "confidence": 0.8, 
-                        "evidence": ["Referenced Figma components", "Mentioned Jira ticketing system"] 
-                    },
-                    "collaboration_style": { 
-                        "value": "Cross-functional collaboration with tight integration between design and development", 
-                        "confidence": 0.75, 
-                        "evidence": ["Weekly sync meetings with engineering", "Design hand-off process improvements"] 
-                    },
-                    "analysis_approach": { 
-                        "value": "Data-informed design decisions with emphasis on usability testing", 
-                        "confidence": 0.7, 
-                        "evidence": ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"] 
-                    },
-                    "pain_points": { 
-                        "value": "Limited resources for user research. Engineering-driven decision making.", 
-                        "confidence": 0.9, 
-                        "evidence": ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"] 
-                    }
-                }]
-                logger.info("Added mock persona to results")
-            
-            # Create formatted response
-            formatted_results = {
-                "status": "completed",
-                "result_id": analysis_result.result_id,
-                "analysis_date": analysis_result.analysis_date,
-                "results": {
-                    "themes": results_dict.get("themes", []),
-                    "patterns": results_dict.get("patterns", []),
-                    "sentiment": results_dict.get("sentiment", []),
-                    "sentimentOverview": results_dict.get("sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW),
-                    "insights": results_dict.get("insights", []),
-                    "personas": results_dict.get("personas", []),  # Include personas in response
-                },
-                "llm_provider": analysis_result.llm_provider,
-                "llm_model": analysis_result.llm_model
-            }
-            
-            return formatted_results
-            
-        except (json.JSONDecodeError, AttributeError, KeyError) as e:
-            logger.error(f"Error formatting results: {str(e)}")
-            return ResultResponse(
-                status="error",
-                result_id=analysis_result.result_id,
-                error=f"Error formatting results: {str(e)}"
-            )
+        return result
             
     except Exception as e:
         logger.error(f"Error retrieving results: {str(e)}")
@@ -698,17 +369,11 @@ async def list_analyses(
         # Add very detailed debug logging
         logger.info(f"list_analyses called - user_id: {current_user.user_id}")
         logger.info(f"Request parameters - sortBy: {sortBy}, sortDirection: {sortDirection}, status: {status}")
-        logger.info(f"Current request headers: {dict(request.headers)}")
         
         # Test database connection with detailed error handling
         try:
             db.execute(text("SELECT 1")).fetchone()
             logger.info("Database connection test successful")
-            
-            # Log database type
-            import inspect
-            db_info = inspect.getmodule(db.bind.__class__).__name__
-            logger.info(f"Using database type: {db_info}")
         except Exception as db_error:
             logger.error(f"Database connection error: {str(db_error)}", exc_info=True)
             # Return a detailed JSONResponse with CORS headers
@@ -727,97 +392,21 @@ async def list_analyses(
                 }
             )
         
-        # Build the query with user authorization check
-        query = db.query(AnalysisResult).join(
-            InterviewData
-        ).filter(
-            InterviewData.user_id == current_user.user_id
+        # Use ResultsService to handle fetching and formatting the results
+        from backend.services.results_service import ResultsService
+        results_service = ResultsService(db, current_user)
+        
+        # Get all analyses for the current user
+        analyses = results_service.get_all_analyses(
+            sort_by=sortBy,
+            sort_direction=sortDirection,
+            status=status
         )
-        
-        # Apply status filter if provided
-        if status:
-            query = query.filter(AnalysisResult.status == status)
-        
-        # Apply sorting
-        if sortBy == "createdAt" or sortBy is None:
-            # Default sorting by creation date
-            if sortDirection == "asc":
-                query = query.order_by(AnalysisResult.analysis_date.asc())
-            else:
-                query = query.order_by(AnalysisResult.analysis_date.desc())
-        elif sortBy == "fileName":
-            # Sorting by filename requires joining with InterviewData
-            if sortDirection == "asc":
-                query = query.order_by(InterviewData.filename.asc())
-            else:
-                query = query.order_by(InterviewData.filename.desc())
-                
-        # Execute query
-        analysis_results = query.all()
-        
-        # Format the results
-        formatted_results = []
-        for result in analysis_results:
-            # Skip results with no data
-            if not result or not result.interview_data:
-                continue
-                
-            # Format data to match frontend schema
-            formatted_result = {
-                "id": str(result.result_id),
-                "status": result.status,
-                "createdAt": result.analysis_date.isoformat(),
-                "fileName": result.interview_data.filename if result.interview_data else "Unknown",
-                "fileSize": None,  # We don't store this currently
-                "themes": [],
-                "patterns": [],
-                "sentimentOverview": DEFAULT_SENTIMENT_OVERVIEW,
-                "sentiment": [],
-                "personas": [],  # Initialize empty personas list
-            }
-            
-            # Add results data if available
-            if result.results and isinstance(result.results, dict):
-                # Parse themes, patterns, etc. from results
-                results_data = result.results
-                if "themes" in results_data and isinstance(results_data["themes"], list):
-                    formatted_result["themes"] = results_data["themes"]
-                if "patterns" in results_data and isinstance(results_data["patterns"], list):
-                    formatted_result["patterns"] = results_data["patterns"]
-                if "sentimentOverview" in results_data and isinstance(results_data["sentimentOverview"], dict):
-                    formatted_result["sentimentOverview"] = results_data["sentimentOverview"]
-                if "sentiment" in results_data:
-                    formatted_result["sentiment"] = results_data["sentiment"] if isinstance(results_data["sentiment"], list) else []
-                # Add personas if available
-                if "personas" in results_data:
-                    formatted_result["personas"] = results_data["personas"] if isinstance(results_data["personas"], list) else []
-            
-            # Add error info if available - fixed to use the results dict for error
-            if result.status == 'failed' and result.results and isinstance(result.results, dict) and "error" in result.results:
-                formatted_result["error"] = result.results["error"]
-                
-            # Map API status to schema status values
-            if result.status == 'processing':
-                formatted_result["status"] = "pending"  # This needs to stay as "pending" for DetailedAnalysisResult schema
-            elif result.status == 'error':
-                formatted_result["status"] = "failed"  # This needs to stay as "failed" for DetailedAnalysisResult schema
-                
-            formatted_results.append(formatted_result)
-            
-        logger.info(f"Returning {len(formatted_results)} analyses for user {current_user.user_id}")
-        
-        # Log detailed format of first result for debugging (if available)
-        if formatted_results and len(formatted_results) > 0:
-            logger.info(f"First result sample keys: {list(formatted_results[0].keys())}")
-            logger.info(f"First result ID: {formatted_results[0].get('id')}")
-            logger.info(f"First result contains themes: {len(formatted_results[0].get('themes', []))}")
-        else:
-            logger.warning(f"No analyses found for user {current_user.user_id}")
         
         # Ensure CORS headers and consistent format
         from fastapi.responses import JSONResponse
         return JSONResponse(
-            content=formatted_results,
+            content=analyses,
             headers={
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Credentials": "true",
@@ -875,119 +464,18 @@ async def generate_persona_from_text(
     Generate a persona directly from interview text.
     """
     try:
-        # Validate input
-        if not persona_request.text:
-            raise HTTPException(status_code=400, detail="No text provided for persona generation")
+        # Use PersonaService to handle the persona generation
+        from backend.services.persona_service import PersonaService
+        persona_service = PersonaService(db, current_user)
         
-        # Log request
-        logger.info(f"Generating persona from text ({len(persona_request.text)} chars)")
+        # Generate the persona
+        result = await persona_service.generate_persona(
+            text=persona_request.text,
+            llm_provider=persona_request.llm_provider,
+            llm_model=persona_request.llm_model
+        )
         
-        # If we're in development mode (not using clerk validation), return a mock persona
-        if not ENABLE_CLERK_VALIDATION:
-            logger.info("Development mode: Returning mock persona")
-            
-            # Create a mock persona
-            mock_persona = {
-                "id": "mock-persona-1",
-                "name": "Design Lead Alex",
-                "description": "Alex is an experienced design leader who values user-centered processes and design systems. They struggle with ensuring design quality while meeting business demands and securing resources for proper research.",
-                "confidence": 0.85,
-                "evidence": [
-                    "Manages UX team of 5-7 designers", 
-                    "Responsible for design system implementation"
-                ],
-                "role_context": { 
-                    "value": "Design team lead at medium-sized technology company", 
-                    "confidence": 0.9, 
-                    "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] 
-                },
-                "key_responsibilities": { 
-                    "value": "Oversees design system implementation. Manages team of designers. Coordinates with product and engineering", 
-                    "confidence": 0.85, 
-                    "evidence": ["Mentioned regular design system review meetings", "Discussed designer performance reviews"] 
-                },
-                "tools_used": { 
-                    "value": "Figma, Sketch, Adobe Creative Suite, Jira, Confluence", 
-                    "confidence": 0.8, 
-                    "evidence": ["Referenced Figma components", "Mentioned Jira ticketing system"] 
-                },
-                "collaboration_style": { 
-                    "value": "Cross-functional collaboration with tight integration between design and development", 
-                    "confidence": 0.75, 
-                    "evidence": ["Weekly sync meetings with engineering", "Design hand-off process improvements"] 
-                },
-                "analysis_approach": { 
-                    "value": "Data-informed design decisions with emphasis on usability testing", 
-                    "confidence": 0.7, 
-                    "evidence": ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"] 
-                },
-                "pain_points": { 
-                    "value": "Limited resources for user research. Engineering-driven decision making. Maintaining design quality with tight deadlines", 
-                    "confidence": 0.9, 
-                    "evidence": ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"] 
-                }
-            }
-            
-            return {
-                "success": True,
-                "message": "Mock persona generated successfully",
-                "persona": mock_persona
-            }
-        
-        # Initialize LLM service
-        llm_provider = persona_request.llm_provider or "gemini"
-        llm_model = persona_request.llm_model or "gemini-2.0-flash"
-        
-        try:
-            # Update this line to use the create_llm_service method correctly
-            llm_config = dict(settings.llm_providers[llm_provider])
-            llm_config['model'] = llm_model
-            llm_service = LLMServiceFactory.create(llm_provider, llm_config)
-            
-            # Create PersonaFormationService
-            from infrastructure.data.config import SystemConfig
-            
-            # Create a minimal SystemConfig for the persona formation service
-            class MinimalSystemConfig:
-                def __init__(self):
-                    self.llm = type('obj', (object,), {
-                        'provider': llm_provider,
-                        'model': llm_model,
-                        'REDACTED_API_KEY': settings.llm_providers[llm_provider].get('REDACTED_API_KEY', ''),
-                        'temperature': 0.3,
-                        'max_tokens': 2000
-                    })
-                    self.processing = type('obj', (object,), {
-                        'batch_size': 10,
-                        'max_tokens': 2000
-                    })
-                    self.validation = type('obj', (object,), {
-                        'min_confidence': 0.4
-                    })
-            
-            system_config = MinimalSystemConfig()
-            persona_service = PersonaFormationService(system_config, llm_service)
-            
-            # Generate persona
-            personas = await persona_service.generate_persona_from_text(
-                persona_request.text,
-                {'original_text': persona_request.text}
-            )
-            
-            if not personas or len(personas) == 0:
-                logger.error("No personas were generated from text")
-                raise HTTPException(status_code=500, detail="Failed to generate persona from text")
-            
-            # Return the generated persona
-            return {
-                "success": True,
-                "message": "Persona generated successfully",
-                "persona": personas[0] if personas else None
-            }
-            
-        except Exception as service_error:
-            logger.error(f"Service error during persona generation: {str(service_error)}")
-            raise HTTPException(status_code=500, detail=f"Persona generation error: {str(service_error)}")
+        return result
             
     except HTTPException:
         # Re-raise HTTP exceptions
