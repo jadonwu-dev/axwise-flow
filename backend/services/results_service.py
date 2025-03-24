@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
 from sqlalchemy import desc, asc
 
-from backend.models import User, InterviewData, AnalysisResult
+from backend.models import User, InterviewData, AnalysisResult, Persona
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class ResultsService:
                 
                 # Enhanced logging for personas debug
                 logger.info(f"Results keys available: {list(results_dict.keys())}")
-                self._ensure_personas_present(results_dict)
+                self._ensure_personas_present(results_dict, result_id)
                 
                 # Create formatted response
                 formatted_results = {
@@ -200,63 +200,28 @@ class ResultsService:
                 detail=f"Internal server error: {str(e)}"
             )
     
-    def _ensure_personas_present(self, results_dict: Dict[str, Any]) -> None:
+    def _ensure_personas_present(self, results_dict: Dict[str, Any], result_id: int) -> None:
         """
-        Ensure personas are present in the results, add mock personas if not.
+        Ensure personas are present in the results dictionary.
+        Instead of querying the personas table, this extracts personas directly from the results JSON.
         
         Args:
-            results_dict: Analysis results dictionary to check/modify
+            results_dict: Analysis results dictionary to modify
+            result_id: ID of the analysis result
         """
-        if "personas" in results_dict:
+        # Log the method call for debugging
+        logger.info(f"_ensure_personas_present called with result_id: {result_id}")
+        
+        # Check if personas are already in the results dictionary
+        if "personas" in results_dict and results_dict["personas"]:
             persona_count = len(results_dict.get("personas", []))
-            logger.info(f"Found {persona_count} personas in results")
-            if persona_count > 0:
-                # Log first persona structure
-                first_persona = results_dict["personas"][0]
-                logger.info(f"First persona keys: {list(first_persona.keys())}")
-            else:
-                logger.warning(f"Personas array is empty")
-        else:
-            logger.warning(f"No 'personas' key found in results")
-            # Add mock personas to ensure frontend receives valid data
-            results_dict["personas"] = [{
-                "id": "mock-persona-1",
-                "name": "Design Lead Alex",
-                "description": "Alex is an experienced design leader who values user-centered processes and design systems.",
-                "confidence": 0.85,
-                "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"],
-                "role_context": { 
-                    "value": "Design team lead at medium-sized technology company", 
-                    "confidence": 0.9, 
-                    "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] 
-                },
-                "key_responsibilities": { 
-                    "value": "Oversees design system implementation. Manages team of designers.", 
-                    "confidence": 0.85, 
-                    "evidence": ["Mentioned regular design system review meetings", "Discussed designer performance reviews"] 
-                },
-                "tools_used": { 
-                    "value": "Figma, Sketch, Adobe Creative Suite, Jira, Confluence", 
-                    "confidence": 0.8, 
-                    "evidence": ["Referenced Figma components", "Mentioned Jira ticketing system"] 
-                },
-                "collaboration_style": { 
-                    "value": "Cross-functional collaboration with tight integration between design and development", 
-                    "confidence": 0.75, 
-                    "evidence": ["Weekly sync meetings with engineering", "Design hand-off process improvements"] 
-                },
-                "analysis_approach": { 
-                    "value": "Data-informed design decisions with emphasis on usability testing", 
-                    "confidence": 0.7, 
-                    "evidence": ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"] 
-                },
-                "pain_points": { 
-                    "value": "Limited resources for user research. Engineering-driven decision making.", 
-                    "confidence": 0.9, 
-                    "evidence": ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"] 
-                }
-            }]
-            logger.info("Added mock persona to results")
+            logger.info(f"Found {persona_count} personas already in results dictionary")
+            return  # Personas already exist in the results, no need to modify
+        
+        # No personas in the results dict, initialize empty array
+        # Note: We're not adding mock personas anymore since we want real data only
+        logger.info(f"No personas found in results dictionary for result_id: {result_id}")
+        results_dict["personas"] = []
     
     def _format_analysis_list_item(self, result: AnalysisResult) -> Dict[str, Any]:
         """
