@@ -99,11 +99,10 @@ const HistoryTab = ({ initialAnalyses }: HistoryTabProps) => {
   // Handle viewing an analysis
   const handleViewAnalysis = (id: string) => {
     try {
-      // First reset any previous analysis state
+      // Reset store state with only valid properties from AnalysisState
       useAnalysisStore.setState({
         currentAnalysis: null,
-        analysisStatus: null,
-        isAnalysisLoading: true
+        isLoadingAnalysis: true
       });
       
       // Add cache-busting parameter to ensure a fresh fetch
@@ -228,7 +227,17 @@ const HistoryTab = ({ initialAnalyses }: HistoryTabProps) => {
                 You haven't performed any analyses yet or none match your current filters.
               </p>
               <Button 
-                onClick={() => router.push('/unified-dashboard?tab=upload')}
+                onClick={() => {
+                  // Reset only valid store properties
+                  useAnalysisStore.setState({
+                    currentAnalysis: null,
+                    isLoadingAnalysis: false
+                  });
+                  
+                  // Add cache busting to ensure clean state
+                  const cacheBuster = Date.now();
+                  router.push(`/unified-dashboard?tab=upload&_=${cacheBuster}`);
+                }}
                 variant="outline"
               >
                 Start a New Analysis
