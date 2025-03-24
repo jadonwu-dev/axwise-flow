@@ -13,18 +13,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@clerk/nextjs';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { FileText } from 'lucide-react';
+import { FileText, Clock, Database } from 'lucide-react';
+import Link from 'next/link';
+import { Card } from '@/components/ui/card';
 
 // Import our refactored components
 import EmergencyUploadPanel from '@/components/upload/EmergencyUploadPanel';
 import VisualizationTabs from '@/components/visualization/VisualizationTabs';
-import HistoryPanel from '@/components/history/HistoryPanel';
 
 // Import stores
 import { useAnalysisStore } from '@/store/useAnalysisStore';
@@ -36,6 +37,8 @@ import { useUploadStore } from '@/store/useUploadStore';
  */
 export default function UnifiedDashboard() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { userId, isLoaded } = useAuth();
   
@@ -59,44 +62,52 @@ export default function UnifiedDashboard() {
   
   // Get tab from URL query parameter
   useEffect(() => {
-    // Only run on the client side
-    if (typeof window !== 'undefined') {
-      // Check for URL parameters
-      const searchParams = new URLSearchParams(window.location.search);
-      const tabParam = searchParams.get('tab');
-      
-      if (tabParam) {
-        // Set the active tab based on URL parameter
-        if (tabParam === 'history' || tabParam === 'documentation' || 
-            tabParam === 'visualize' || tabParam === 'upload') {
-          setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
-        }
+    const tabParam = searchParams?.get('tab');
+    
+    if (tabParam) {
+      // Set the active tab based on URL parameter
+      if (tabParam === 'history' || tabParam === 'documentation' || 
+          tabParam === 'visualize' || tabParam === 'upload') {
+        setActiveTab(tabParam as 'upload' | 'visualize' | 'history' | 'documentation');
       }
     }
-  }, []);
-  
-  // Update URL when tabs change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', activeTab);
-      window.history.pushState({}, '', url);
+    
+    // Check for analysisId in URL and load it if needed
+    const analysisId = searchParams?.get('analysisId');
+    if (analysisId && tabParam === 'visualize') {
+      // Load the analysis if it's not already loaded
+      const currentId = currentAnalysis?.id;
+      if (!currentId || currentId !== analysisId) {
+        // Get analysis store and fetch the analysis by ID
+        const analysisStore = useAnalysisStore.getState();
+        analysisStore.fetchAnalysisById(analysisId);
+      }
     }
-  }, [activeTab]);
+  }, [searchParams, currentAnalysis]);
   
-  // Handle tab change and automate some tab switching
+  // Handle simple tab changes (only for upload, visualize, documentation)
+  const handleTabChange = (tab: string) => {
+    if (tab === 'history') {
+      // History tab is handled through the Link component directly
+      return;
+    }
+    
+    setActiveTab(tab as any);
+    
+    // Update the URL to reflect the tab change
+    const params = new URLSearchParams(searchParams?.toString());
+    params.set('tab', tab);
+    router.push(`/unified-dashboard?${params.toString()}`);
+  };
+  
+  // Handle auto-tab switching for analyses
   useEffect(() => {
     // Auto-switch to visualization tab when analysis is loaded
     if (currentAnalysis && activeTab !== 'visualize') {
-      setActiveTab('visualize');
+      handleTabChange('visualize');
       showToast('Analysis loaded successfully', { variant: 'success' });
     }
-    
-    // Auto-switch to history tab when first accessing the app with history
-    if (analysisHistory.length > 0 && !currentAnalysis && !uploadResponse && activeTab === 'upload') {
-      setActiveTab('history');
-    }
-  }, [currentAnalysis, analysisHistory, uploadResponse, activeTab, showToast]);
+  }, [currentAnalysis, activeTab, showToast]);
   
   // If still loading auth state, show spinner
   if (!isLoaded) {
@@ -104,27 +115,8 @@ export default function UnifiedDashboard() {
   }
   
   return (
-    <div className="container mx-auto py-6 space-y-8">
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="upload">
-            <FileText className="mr-2 h-4 w-4" />
-            Upload
-          </TabsTrigger>
-          <TabsTrigger 
-            value="visualize" 
-            disabled={!currentAnalysis && !analysisResponse}
-          >
-            Visualize
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            History
-          </TabsTrigger>
-          <TabsTrigger value="documentation">
-            Documentation
-          </TabsTrigger>
-        </TabsList>
-        
+    <div className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsContent value="upload" className="mt-6">
           <EmergencyUploadPanel />
         </TabsContent>
@@ -145,7 +137,18 @@ export default function UnifiedDashboard() {
         </TabsContent>
         
         <TabsContent value="history" className="mt-6">
-          <HistoryPanel />
+          <Card className="p-4">
+            <div className="text-center py-4">
+              <Database className="h-8 w-8 mx-auto text-primary mb-2" />
+              <h3 className="text-lg font-medium mb-2">Analysis History</h3>
+              <p className="text-muted-foreground mb-4">
+                View and manage your analysis history
+              </p>
+              <Link href="/unified-dashboard/history" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+                Go to Analysis History
+              </Link>
+            </div>
+          </Card>
         </TabsContent>
         
         <TabsContent value="documentation" className="mt-6">

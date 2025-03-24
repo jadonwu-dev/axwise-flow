@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,64 +9,102 @@ import { DetailedAnalysisResult } from '@/types/api';
 import { useToast } from '@/components/providers/toast-provider';
 import { apiClient } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
+import { useAnalysisStore } from '@/store/useAnalysisStore';
 
 /**
- * Tab for displaying analysis history
+ * Props interface for HistoryTab
  */
-const HistoryTab = () => {
+interface HistoryTabProps {
+  initialAnalyses: DetailedAnalysisResult[];
+}
+
+/**
+ * Tab for displaying analysis history 
+ * Now refactored to receive initial data from server component
+ */
+const HistoryTab = ({ initialAnalyses }: HistoryTabProps) => {
   const router = useRouter();
   const { showToast } = useToast();
   
   // History state
-  const [analyses, setAnalyses] = useState<DetailedAnalysisResult[]>([]);
+  const [analyses, setAnalyses] = useState<DetailedAnalysisResult[]>(initialAnalyses);
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [authToken] = useState<string>('testuser123'); // In future, this will come from auth store
   
-  // Fetch analysis history
+  // Temporary: Update Zustand store with initial analyses for compatibility
   useEffect(() => {
-    async function fetchAnalyses() {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Set auth token
-        apiClient.setAuthToken(authToken);
-        
-        // Use the API client to fetch real data
-        try {
-          const apiParams = {
-            sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
-            sortDirection: sortDirection,
-            status: filterStatus === 'all' ? undefined : filterStatus,
-          };
-          
-          const data = await apiClient.listAnalyses(apiParams);
-          setAnalyses(data);
-        } catch (apiError) {
-          console.error('API error:', apiError);
-          setError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
-          showToast('Failed to fetch analysis history', { variant: 'error' });
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching analyses:', err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
-        setLoading(false);
-        showToast('Failed to load analyses', { variant: 'error' });
-      }
+    if (initialAnalyses.length > 0) {
+      useAnalysisStore.setState({
+        analysisHistory: initialAnalyses,
+        isLoadingHistory: false,
+        historyError: null
+      });
     }
-
-    fetchAnalyses();
-  }, [showToast, sortBy, sortDirection, filterStatus, authToken]);
+  }, [initialAnalyses]);
+  
+  // Client-side refresh for analyses (when filters change or manual refresh)
+  const refreshAnalyses = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Set auth token
+      apiClient.setAuthToken(authToken);
+      
+      // Use the API client to fetch real data
+      try {
+        const apiParams = {
+          sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
+          sortDirection: sortDirection,
+          status: filterStatus === 'all' ? undefined : filterStatus,
+        };
+        
+        const data = await apiClient.listAnalyses(apiParams);
+        setAnalyses(data);
+        
+        // Temporary: Update Zustand store for compatibility
+        useAnalysisStore.setState({
+          analysisHistory: data,
+          isLoadingHistory: false,
+          historyError: null
+        });
+      } catch (apiError) {
+        console.error('API error:', apiError);
+        setError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
+        showToast('Failed to fetch analysis history', { variant: 'error' });
+      }
+    } catch (err) {
+      console.error('Error fetching analyses:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
+      showToast('Failed to load analyses', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [sortBy, sortDirection, filterStatus, authToken, showToast]);
+  
+  // Refresh analyses when filters change
+  useEffect(() => {
+    refreshAnalyses();
+  }, [sortBy, sortDirection, filterStatus, refreshAnalyses]);
+  
+  // Handle manual refresh
+  const handleRefresh = () => {
+    refreshAnalyses();
+  };
   
   // Handle viewing an analysis
-  const handleViewAnalysis = (analysisId: string) => {
-    router.push(`/unified-dashboard?tab=visualize&analysisId=${analysisId}`);
+  const handleViewAnalysis = (id: string) => {
+    // Navigate to visualization tab with the analysis ID
+    router.push(`/unified-dashboard?tab=visualize&analysisId=${id}`);
+    
+    // Also update the Zustand store for backward compatibility
+    // This ensures components that still rely on the store also get updated
+    const analysisStore = useAnalysisStore.getState();
+    analysisStore.fetchAnalysisById(id);
   };
   
   // Format date for display
@@ -142,6 +180,12 @@ const HistoryTab = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex items-end">
+              <Button variant="outline" onClick={handleRefresh} disabled={loading}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
           </div>
           
           {/* Loading state */}
@@ -180,7 +224,7 @@ const HistoryTab = () => {
             <div className="space-y-4">
               {analyses.map((analysis) => (
                 <div 
-                  key={analysis.analysisId} 
+                  key={analysis.id} 
                   className="p-4 border rounded-md hover:bg-accent hover:border-accent transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -196,7 +240,7 @@ const HistoryTab = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => handleViewAnalysis(analysis.analysisId)}
+                      onClick={() => handleViewAnalysis(analysis.id)}
                     >
                       View <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
