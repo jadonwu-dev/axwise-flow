@@ -98,13 +98,30 @@ const HistoryTab = ({ initialAnalyses }: HistoryTabProps) => {
   
   // Handle viewing an analysis
   const handleViewAnalysis = (id: string) => {
-    // Navigate to visualization tab with the analysis ID
-    router.push(`/unified-dashboard?tab=visualize&analysisId=${id}`);
-    
-    // Also update the Zustand store for backward compatibility
-    // This ensures components that still rely on the store also get updated
-    const analysisStore = useAnalysisStore.getState();
-    analysisStore.fetchAnalysisById(id);
+    try {
+      // First reset any previous analysis state
+      useAnalysisStore.setState({
+        currentAnalysis: null,
+        analysisStatus: null,
+        isAnalysisLoading: true
+      });
+      
+      // Add cache-busting parameter to ensure a fresh fetch
+      const cacheBuster = Date.now();
+      
+      // Navigate to visualization tab with the analysis ID and cache buster
+      router.push(`/unified-dashboard?tab=visualize&analysisId=${id}&_=${cacheBuster}`);
+      
+      // Also update the Zustand store for backward compatibility
+      // This ensures components that still rely on the store also get updated
+      const analysisStore = useAnalysisStore.getState();
+      analysisStore.fetchAnalysisById(id);
+      
+      console.log('Navigating to analysis:', id, 'with cache buster:', cacheBuster);
+    } catch (error) {
+      console.error('Error navigating to analysis:', error);
+      showToast('Error loading analysis. Please try again.', { variant: 'error' });
+    }
   };
   
   // Format date for display

@@ -40,38 +40,61 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(activeTabFromUrl || 'themes');
   const [analysis, setAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const lastFetchedId = useRef<string | null>(null);
 
-  // Fetch analysis data when analysisId changes
+  // Extract result_id from URL if analysisId is not provided as prop
+  const urlAnalysisId = searchParams.get('analysisId') || searchParams.get('result_id');
+  const effectiveAnalysisId = analysisId || urlAnalysisId;
+
+  // Reset analysis data when analysisId changes and fetch new data
   useEffect(() => {
     let isMounted = true;
-
+    
+    // Skip if no analysis ID is available
+    if (!effectiveAnalysisId) {
+      console.log('No analysis ID available, skipping fetch');
+      return;
+    }
+    
+    // Skip duplicate fetches for the same ID
+    if (lastFetchedId.current === effectiveAnalysisId) {
+      console.log('Already fetched this analysis ID, skipping:', effectiveAnalysisId);
+      return;
+    }
+    
     const fetchAnalysis = async () => {
       try {
-        if (!analysisId) return;
-
-        // Make actual API call to fetch the data instead of using mock data
+        console.log('Fetching analysis for ID:', effectiveAnalysisId);
+        setLoading(true);
+        setError(null);
+        
+        // Reset analysis data first to avoid mixing with previous data
         if (isMounted) {
-          const result = await apiClient.getAnalysisById(analysisId);
-          
-          // Debug: Log the raw theme data from API
-          console.log('Raw API theme data:', result.themes);
-          
-          // Debug: Check for statements, supporting_quotes, and examples in the first theme
-          if (result.themes && result.themes.length > 0) {
-            const firstTheme = result.themes[0];
-            console.log('First theme details:', {
-              name: firstTheme.name,
-              statements: firstTheme.statements,
-              supporting_quotes: (firstTheme as any).supporting_quotes,
-              examples: firstTheme.examples,
-              quotes: (firstTheme as any).quotes
-            });
-          }
-          
+          setAnalysis({ themes: [], patterns: [], sentiment: null, personas: [] });
+        }
+        
+        // Make actual API call to fetch the data
+        const result = await apiClient.getAnalysisById(effectiveAnalysisId);
+        
+        // Debug: Log the raw theme data from API
+        console.log('Raw API response:', result);
+        console.log('Themes count:', result.themes?.length || 0);
+        
+        if (isMounted) {
           setAnalysis(result);
+          lastFetchedId.current = effectiveAnalysisId;
         }
       } catch (error) {
         console.error('Error fetching analysis:', error);
+        if (isMounted) {
+          setError('Failed to load analysis data');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -80,7 +103,7 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
     return () => {
       isMounted = false;
     };
-  }, [analysisId]); // Only re-run when analysisId changes
+  }, [effectiveAnalysisId]); // Use effectiveAnalysisId instead of just analysisId
 
   // Update URL when active tab changes, but only if it's different from current URL
   // Use a ref to track if this is the initial render to avoid unnecessary URL updates
@@ -149,114 +172,152 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
       <CardHeader>
         <CardTitle>Analysis Results: {analysis?.fileName}</CardTitle>
         <CardDescription>
-          Created {new Date(analysis?.createdAt || '').toLocaleString()} • {analysis?.llmProvider || 'AI'} Analysis
+          Created {analysis?.createdAt ? new Date(analysis.createdAt).toLocaleString() : 'Date unavailable'} • {analysis?.llmProvider || 'AI'} Analysis
         </CardDescription>
       </CardHeader>
 
       <CardContent>
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full grid grid-cols-5">
-            <TabsTrigger value="themes">Themes</TabsTrigger>
-            <TabsTrigger value="patterns">Patterns</TabsTrigger>
-            <TabsTrigger value="sentiment">Sentiment</TabsTrigger>
-            <TabsTrigger value="personas">Personas</TabsTrigger>
-            <TabsTrigger value="priority">Priority</TabsTrigger>
-          </TabsList>
+        {loading && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading analysis data...</p>
+          </div>
+        )}
+        
+        {error && (
+          <div className="p-4 border border-red-300 bg-red-50 rounded-md">
+            <h3 className="text-lg font-semibold text-red-700">Error</h3>
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+        
+        {!loading && !error && (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="w-full grid grid-cols-5">
+              <TabsTrigger value="themes">Themes</TabsTrigger>
+              <TabsTrigger value="patterns">Patterns</TabsTrigger>
+              <TabsTrigger value="sentiment">Sentiment</TabsTrigger>
+              <TabsTrigger value="personas">Personas</TabsTrigger>
+              <TabsTrigger value="priority">Priority</TabsTrigger>
+            </TabsList>
 
-          <CustomErrorBoundary
-            fallback={
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                <h3 className="text-lg font-semibold text-red-700">Error in Themes Visualization</h3>
-                <p className="text-red-600">There was an error rendering the themes visualization.</p>
-              </div>
-            }
-          >
-            <TabsContent value="themes" className="mt-6">
-              {analyzedThemes.length ? (
-                <ThemeChart themes={analyzedThemes} />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No themes detected in this interview.
+            <CustomErrorBoundary
+              fallback={
+                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                  <h3 className="text-lg font-semibold text-red-700">Error in Themes Visualization</h3>
+                  <p className="text-red-600">There was an error rendering the themes visualization.</p>
                 </div>
-              )}
-            </TabsContent>
-          </CustomErrorBoundary>
+              }
+            >
+              <TabsContent value="themes" className="mt-6">
+                {analyzedThemes.length ? (
+                  <ThemeChart themes={analyzedThemes} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No themes detected in this interview.
+                  </div>
+                )}
+              </TabsContent>
+            </CustomErrorBoundary>
 
-          <CustomErrorBoundary
-            fallback={
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                <h3 className="text-lg font-semibold text-red-700">Error in Patterns Visualization</h3>
-                <p className="text-red-600">There was an error rendering the patterns visualization.</p>
-              </div>
-            }
-          >
-            <TabsContent value="patterns" className="mt-6">
-              {analysis?.patterns.length ? (
-                <PatternList patterns={analysis.patterns} />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No patterns detected in this interview.
+            <CustomErrorBoundary
+              fallback={
+                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                  <h3 className="text-lg font-semibold text-red-700">Error in Patterns Visualization</h3>
+                  <p className="text-red-600">There was an error rendering the patterns visualization.</p>
                 </div>
-              )}
-            </TabsContent>
-          </CustomErrorBoundary>
+              }
+            >
+              <TabsContent value="patterns" className="mt-6">
+                {analysis?.patterns.length ? (
+                  <PatternList patterns={analysis.patterns} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No patterns detected in this interview.
+                  </div>
+                )}
+              </TabsContent>
+            </CustomErrorBoundary>
 
-          <CustomErrorBoundary
-            fallback={
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                <h3 className="text-lg font-semibold text-red-700">Error in Sentiment Visualization</h3>
-                <p className="text-red-600">There was an error rendering the sentiment visualization.</p>
-              </div>
-            }
-          >
-            <TabsContent value="sentiment" className="mt-6">
-              {analysis.sentiment && (
-                <SentimentGraph 
-                  data={analysis.sentiment.sentimentOverview} 
-                  detailedData={[]} 
-                  supportingStatements={analysis.sentiment.sentimentStatements}
-                />
-              )}
-              {!analysis.sentiment && (
-                <div className="text-center text-muted-foreground">
-                  No sentiment data available
+            <CustomErrorBoundary
+              fallback={
+                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                  <h3 className="text-lg font-semibold text-red-700">Error in Sentiment Visualization</h3>
+                  <p className="text-red-600">There was an error rendering the sentiment visualization.</p>
                 </div>
-              )}
-            </TabsContent>
-          </CustomErrorBoundary>
+              }
+            >
+              <TabsContent value="sentiment" className="mt-6">
+                {analysis.sentiment && (
+                  <SentimentGraph 
+                    data={analysis.sentiment.sentimentOverview} 
+                    detailedData={[]} 
+                    supportingStatements={analysis.sentiment.sentimentStatements}
+                  />
+                )}
+                {!analysis.sentiment && (
+                  <div className="text-center text-muted-foreground">
+                    No sentiment data available
+                  </div>
+                )}
+              </TabsContent>
+            </CustomErrorBoundary>
 
-          <CustomErrorBoundary
-            fallback={
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                <h3 className="text-lg font-semibold text-red-700">Error in Personas Visualization</h3>
-                <p className="text-red-600">There was an error rendering the personas visualization.</p>
-              </div>
-            }
-          >
-            <TabsContent value="personas" className="mt-6">
-              {analysis?.personas?.length ? (
-                <PersonaList personas={analysis.personas} />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No personas detected in this interview.
+            <CustomErrorBoundary
+              fallback={
+                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                  <h3 className="text-lg font-semibold text-red-700">Error in Personas Visualization</h3>
+                  <p className="text-red-600">There was an error rendering the personas visualization.</p>
                 </div>
-              )}
-            </TabsContent>
-          </CustomErrorBoundary>
+              }
+            >
+              <TabsContent value="personas" className="mt-6">
+                {analysis?.personas?.length ? (
+                  <PersonaList personas={analysis.personas} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No personas detected in this interview.
+                  </div>
+                )}
+              </TabsContent>
+            </CustomErrorBoundary>
 
-          <CustomErrorBoundary
-            fallback={
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                <h3 className="text-lg font-semibold text-red-700">Error in Priority Visualization</h3>
-                <p className="text-red-600">There was an error rendering the priority visualization.</p>
-              </div>
-            }
-          >
-            <TabsContent value="priority" className="mt-6">
-              <PriorityInsights analysisId={analysisId || analysis?.id || ''} />
-            </TabsContent>
-          </CustomErrorBoundary>
-        </Tabs>
+            <CustomErrorBoundary
+              fallback={
+                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
+                  <h3 className="text-lg font-semibold text-red-700">Error in Priority Visualization</h3>
+                  <p className="text-red-600">There was an error rendering the priority visualization.</p>
+                </div>
+              }
+            >
+              <TabsContent value="priority" className="mt-6">
+                <PriorityInsights analysisId={effectiveAnalysisId || ''} />
+              </TabsContent>
+            </CustomErrorBoundary>
+          </Tabs>
+        )}
+        
+        {/* Debug panel for development - hidden in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-8 p-4 border border-gray-200 rounded-md bg-gray-50">
+            <h3 className="font-medium mb-2">Debug Information</h3>
+            <div className="space-y-2">
+              <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
+              <p><strong>Error:</strong> {error || 'None'}</p>
+              <p><strong>Analysis ID:</strong> {effectiveAnalysisId || 'None'}</p>
+              <p><strong>Active Tab:</strong> {activeTab}</p>
+              <p><strong>Theme Count:</strong> {analysis?.themes?.length || 0}</p>
+              <p><strong>Has Results Property:</strong> {analysis?.results ? 'Yes' : 'No'}</p>
+              
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm font-medium">Raw Analysis Data</summary>
+                <pre className="text-xs p-2 bg-gray-100 rounded mt-2 overflow-auto max-h-96">
+                  {JSON.stringify(analysis, null, 2)}
+                </pre>
+              </details>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
