@@ -4,11 +4,10 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileText, BarChart3, Clock, BookOpen } from 'lucide-react';
-import { useAnalysisStore } from '@/store/useAnalysisStore';
 
 /**
  * Client Component for Dashboard Navigation
- * Handles interactive elements and state changes
+ * Handles interactive elements and state changes using URL parameters
  */
 export default function DashboardNav() {
   const router = useRouter();
@@ -20,14 +19,8 @@ export default function DashboardNav() {
     setIsHistory(pathname?.includes('/history'));
   }, [pathname]);
   
-  // Handle tab navigation with state reset
+  // Handle tab navigation with clean URL parameters
   const handleTabNavigation = (tab: string) => {
-    // Reset store state before navigation
-    useAnalysisStore.setState({
-      currentAnalysis: null,
-      isLoadingAnalysis: false
-    });
-    
     // Add cache busting to ensure clean state
     const cacheBuster = Date.now();
     router.push(`/unified-dashboard?tab=${tab}&_=${cacheBuster}`);

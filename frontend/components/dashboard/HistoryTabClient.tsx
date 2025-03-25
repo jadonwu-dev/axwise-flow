@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, FileText, Calendar, Clock, ChevronRight } from 'lucide-react';
 import { DetailedAnalysisResult } from '@/types/api';
 import { useToast } from '@/components/providers/toast-provider';
-import { useAnalysisStore } from '@/store/useAnalysisStore';
+import { apiClient } from '@/lib/apiClient';
 
 /**
  * Props interface for HistoryTabClient
@@ -36,17 +36,6 @@ const HistoryTabClient = ({
   const [analyses] = useState<DetailedAnalysisResult[]>(initialAnalyses);
   const [loading, setLoading] = useState(false);
   
-  // Temporary: Update Zustand store with initial analyses for compatibility
-  useState(() => {
-    if (initialAnalyses.length > 0) {
-      useAnalysisStore.setState({
-        analysisHistory: initialAnalyses,
-        isLoadingHistory: false,
-        historyError: null
-      });
-    }
-  });
-  
   // Handle URL parameter updates
   const updateUrlParams = (param: string, value: string) => {
     // Update the URL parameters to trigger a server refetch
@@ -63,21 +52,11 @@ const HistoryTabClient = ({
   // Handle viewing an analysis
   const handleViewAnalysis = (id: string) => {
     try {
-      // Reset store state with only valid properties from AnalysisState
-      useAnalysisStore.setState({
-        currentAnalysis: null,
-        isLoadingAnalysis: true
-      });
-      
       // Add cache-busting parameter to ensure a fresh fetch
       const cacheBuster = Date.now();
       
       // Navigate to visualization tab with the analysis ID and cache buster
       router.push(`/unified-dashboard/visualize?analysisId=${id}&_=${cacheBuster}`);
-      
-      // Also update the Zustand store for backward compatibility
-      const analysisStore = useAnalysisStore.getState();
-      analysisStore.fetchAnalysisById(id);
       
       console.log('Navigating to analysis:', id, 'with cache buster:', cacheBuster);
     } catch (error) {
@@ -184,12 +163,6 @@ const HistoryTabClient = ({
               </p>
               <Button 
                 onClick={() => {
-                  // Reset only valid store properties
-                  useAnalysisStore.setState({
-                    currentAnalysis: null,
-                    isLoadingAnalysis: false
-                  });
-                  
                   // Add cache busting to ensure clean state
                   const cacheBuster = Date.now();
                   router.push(`/unified-dashboard/upload?_=${cacheBuster}`);
