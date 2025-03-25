@@ -8,7 +8,7 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
-import type { UploadResponse, AnalysisResponse } from '@/types/api';
+import type { UploadResponse, AnalysisResponse, DetailedAnalysisResult } from '@/types/api';
 import { cookies } from 'next/headers';
 
 /**
@@ -101,4 +101,32 @@ export async function analyzeAction(
  */
 export async function getRedirectUrl(analysisId: string) {
   return `/unified-dashboard/visualize?analysisId=${analysisId}`;
+}
+
+/**
+ * Server-side analysis data fetcher
+ * Fetches analysis data using server component
+ */
+export async function getServerSideAnalysis(analysisId: string): Promise<DetailedAnalysisResult | null> {
+  if (!analysisId) return null;
+  
+  try {
+    // Get auth token from cookie
+    const cookieStore = cookies();
+    const authToken = cookieStore.get('auth_token')?.value;
+    
+    if (!authToken) {
+      console.error('No auth token available for server fetch');
+      return null;
+    }
+    
+    // Set the token on the API client
+    apiClient.setAuthToken(authToken);
+    
+    // Fetch analysis data
+    return await apiClient.getAnalysisById(analysisId);
+  } catch (error) {
+    console.error('Error fetching analysis data server-side:', error);
+    return null;
+  }
 } 

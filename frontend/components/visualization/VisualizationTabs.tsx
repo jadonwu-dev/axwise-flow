@@ -21,9 +21,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomErrorBoundary from './ErrorBoundary';
 import { apiClient } from '@/lib/apiClient';
+import type { DetailedAnalysisResult } from '@/types/api';
 
 interface VisualizationTabsProps {
   analysisId?: string;
+  analysisData?: DetailedAnalysisResult | null;
 }
 
 // Define a type for the tab values
@@ -32,15 +34,18 @@ export type TabValue = 'themes' | 'patterns' | 'sentiment' | 'personas' | 'prior
 /**
  * VisualizationTabs Component (Refactored)
  * Displays visualization tabs for themes, patterns, sentiment, and personas
- * Consumes data from context
+ * Can consume data from props (server-fetched) or client-side fetch as fallback
  */
-export default function VisualizationTabsRefactored({ analysisId }: VisualizationTabsProps) {
+export default function VisualizationTabsRefactored({ 
+  analysisId,
+  analysisData: serverAnalysisData 
+}: VisualizationTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(activeTabFromUrl || 'themes');
-  const [analysis, setAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
-  const [loading, setLoading] = useState<boolean>(false);
+  const [localAnalysis, setLocalAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
+  const [loading, setLoading] = useState<boolean>(!serverAnalysisData);
   const [error, setError] = useState<string | null>(null);
   const lastFetchedId = useRef<string | null>(null);
 
@@ -48,8 +53,17 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
   const urlAnalysisId = searchParams.get('analysisId') || searchParams.get('result_id');
   const effectiveAnalysisId = analysisId || urlAnalysisId;
 
+  // Use server data if available, otherwise use local state
+  const analysis = serverAnalysisData || localAnalysis;
+
   // Reset analysis data when analysisId changes and fetch new data
   useEffect(() => {
+    // Skip if we have server-provided data
+    if (serverAnalysisData) {
+      console.log('Using server-provided analysis data');
+      return;
+    }
+    
     let isMounted = true;
     
     // Skip if no analysis ID is available
@@ -66,13 +80,13 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
     
     const fetchAnalysis = async () => {
       try {
-        console.log('Fetching analysis for ID:', effectiveAnalysisId);
+        console.log('Client-side fallback fetch for ID:', effectiveAnalysisId);
         setLoading(true);
         setError(null);
         
         // Reset analysis data first to avoid mixing with previous data
         if (isMounted) {
-          setAnalysis({ themes: [], patterns: [], sentiment: null, personas: [] });
+          setLocalAnalysis({ themes: [], patterns: [], sentiment: null, personas: [] });
         }
         
         // Make actual API call to fetch the data
@@ -83,7 +97,7 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
         console.log('Themes count:', result.themes?.length || 0);
         
         if (isMounted) {
-          setAnalysis(result);
+          setLocalAnalysis(result);
           lastFetchedId.current = effectiveAnalysisId;
         }
       } catch (error) {
@@ -103,7 +117,7 @@ export default function VisualizationTabsRefactored({ analysisId }: Visualizatio
     return () => {
       isMounted = false;
     };
-  }, [effectiveAnalysisId]); // Use effectiveAnalysisId instead of just analysisId
+  }, [effectiveAnalysisId, serverAnalysisData]); // Added serverAnalysisData as dependency
 
   // Update URL when active tab changes, but only if it's different from current URL
   // Use a ref to track if this is the initial render to avoid unnecessary URL updates
