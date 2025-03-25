@@ -1,284 +1,38 @@
-'use client';
+// Server component for fetching history data
+import { serverApiClient } from '@/lib/serverApiClient';
+import HistoryTabClient from './HistoryTabClient';
+import { ListAnalysesParams } from '@/types/api';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, FileText, Calendar, Clock, ChevronRight } from 'lucide-react';
-import { DetailedAnalysisResult } from '@/types/api';
-import { useToast } from '@/components/providers/toast-provider';
-import { apiClient } from '@/lib/apiClient';
-import { useRouter } from 'next/navigation';
-import { useAnalysisStore } from '@/store/useAnalysisStore';
-
-/**
- * Props interface for HistoryTab
- */
 interface HistoryTabProps {
-  initialAnalyses: DetailedAnalysisResult[];
+  searchParams?: { 
+    sortBy?: 'date' | 'name',
+    sortDirection?: 'asc' | 'desc',
+    status?: 'all' | 'completed' | 'pending' | 'failed'
+  }
 }
 
-/**
- * Tab for displaying analysis history 
- * Now refactored to receive initial data from server component
- */
-const HistoryTab = ({ initialAnalyses }: HistoryTabProps) => {
-  const router = useRouter();
-  const { showToast } = useToast();
+export default async function HistoryTab({ searchParams }: HistoryTabProps) {
+  // Default sorting and filtering parameters
+  const sortBy = searchParams?.sortBy || 'date';
+  const sortDirection = searchParams?.sortDirection || 'desc';
+  const filterStatus = searchParams?.status || 'all';
   
-  // History state
-  const [analyses, setAnalyses] = useState<DetailedAnalysisResult[]>(initialAnalyses);
-  const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [authToken] = useState<string>('testuser123'); // In future, this will come from auth store
-  
-  // Temporary: Update Zustand store with initial analyses for compatibility
-  useEffect(() => {
-    if (initialAnalyses.length > 0) {
-      useAnalysisStore.setState({
-        analysisHistory: initialAnalyses,
-        isLoadingHistory: false,
-        historyError: null
-      });
-    }
-  }, [initialAnalyses]);
-  
-  // Client-side refresh for analyses (when filters change or manual refresh)
-  const refreshAnalyses = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Set auth token
-      apiClient.setAuthToken(authToken);
-      
-      // Use the API client to fetch real data
-      try {
-        const apiParams = {
-          sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
-          sortDirection: sortDirection,
-          status: filterStatus === 'all' ? undefined : filterStatus,
-        };
-        
-        const data = await apiClient.listAnalyses(apiParams);
-        setAnalyses(data);
-        
-        // Temporary: Update Zustand store for compatibility
-        useAnalysisStore.setState({
-          analysisHistory: data,
-          isLoadingHistory: false,
-          historyError: null
-        });
-      } catch (apiError) {
-        console.error('API error:', apiError);
-        setError(apiError instanceof Error ? apiError : new Error('Failed to fetch analyses'));
-        showToast('Failed to fetch analysis history', { variant: 'error' });
-      }
-    } catch (err) {
-      console.error('Error fetching analyses:', err);
-      setError(err instanceof Error ? err : new Error('Failed to fetch analyses'));
-      showToast('Failed to load analyses', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [sortBy, sortDirection, filterStatus, authToken, showToast]);
-  
-  // Refresh analyses when filters change
-  useEffect(() => {
-    refreshAnalyses();
-  }, [sortBy, sortDirection, filterStatus, refreshAnalyses]);
-  
-  // Handle manual refresh
-  const handleRefresh = () => {
-    refreshAnalyses();
+  // Convert to API params format
+  const apiParams: ListAnalysesParams = {
+    sortBy: sortBy === 'date' ? 'createdAt' : 'fileName',
+    sortDirection: sortDirection,
+    status: filterStatus === 'all' ? undefined : filterStatus,
   };
   
-  // Handle viewing an analysis
-  const handleViewAnalysis = (id: string) => {
-    try {
-      // Reset store state with only valid properties from AnalysisState
-      useAnalysisStore.setState({
-        currentAnalysis: null,
-        isLoadingAnalysis: true
-      });
-      
-      // Add cache-busting parameter to ensure a fresh fetch
-      const cacheBuster = Date.now();
-      
-      // Navigate to visualization tab with the analysis ID and cache buster
-      router.push(`/unified-dashboard?tab=visualize&analysisId=${id}&_=${cacheBuster}`);
-      
-      // Also update the Zustand store for backward compatibility
-      // This ensures components that still rely on the store also get updated
-      const analysisStore = useAnalysisStore.getState();
-      analysisStore.fetchAnalysisById(id);
-      
-      console.log('Navigating to analysis:', id, 'with cache buster:', cacheBuster);
-    } catch (error) {
-      console.error('Error navigating to analysis:', error);
-      showToast('Error loading analysis. Please try again.', { variant: 'error' });
-    }
-  };
-  
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-  
-  // Format time for display
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString();
-  };
+  // Fetch analyses using serverApiClient
+  const analyses = await serverApiClient.listAnalyses(apiParams);
   
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Analysis History</CardTitle>
-        <CardDescription>
-          View and manage your previous analyses
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Filters */}
-          <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
-            <div className="flex-1">
-              <label className="text-sm font-medium mb-1 block">Sort By</label>
-              <Select 
-                value={sortBy} 
-                onValueChange={(value) => setSortBy(value as 'date' | 'name')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="name">File Name</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex-1">
-              <label className="text-sm font-medium mb-1 block">Direction</label>
-              <Select 
-                value={sortDirection} 
-                onValueChange={(value) => setSortDirection(value as 'asc' | 'desc')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="asc">Ascending</SelectItem>
-                  <SelectItem value="desc">Descending</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex-1">
-              <label className="text-sm font-medium mb-1 block">Status</label>
-              <Select 
-                value={filterStatus} 
-                onValueChange={(value) => setFilterStatus(value as any)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-end">
-              <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-                {loading ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            </div>
-          </div>
-          
-          {/* Loading state */}
-          {loading && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          )}
-          
-          {/* Error state */}
-          {error && !loading && (
-            <div className="p-4 border border-red-200 bg-red-50 text-red-600 rounded-md">
-              {error.message}
-            </div>
-          )}
-          
-          {/* Empty state */}
-          {!loading && !error && analyses.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No analyses found</h3>
-              <p className="text-muted-foreground mb-4">
-                You haven't performed any analyses yet or none match your current filters.
-              </p>
-              <Button 
-                onClick={() => {
-                  // Reset only valid store properties
-                  useAnalysisStore.setState({
-                    currentAnalysis: null,
-                    isLoadingAnalysis: false
-                  });
-                  
-                  // Add cache busting to ensure clean state
-                  const cacheBuster = Date.now();
-                  router.push(`/unified-dashboard?tab=upload&_=${cacheBuster}`);
-                }}
-                variant="outline"
-              >
-                Start a New Analysis
-              </Button>
-            </div>
-          )}
-          
-          {/* Analysis list */}
-          {!loading && !error && analyses.length > 0 && (
-            <div className="space-y-4">
-              {analyses.map((analysis) => (
-                <div 
-                  key={analysis.id} 
-                  className="p-4 border rounded-md hover:bg-accent hover:border-accent transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">{analysis.fileName || 'Unnamed Analysis'}</h3>
-                      <div className="flex items-center text-sm text-muted-foreground mt-1">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {analysis.createdAt && formatDate(analysis.createdAt)}
-                        <Clock className="h-4 w-4 ml-3 mr-1" />
-                        {analysis.createdAt && formatTime(analysis.createdAt)}
-                      </div>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleViewAnalysis(analysis.id)}
-                    >
-                      View <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <HistoryTabClient 
+      initialAnalyses={analyses}
+      sortBy={sortBy}
+      sortDirection={sortDirection}
+      filterStatus={filterStatus}
+    />
   );
-};
-
-export default HistoryTab;
+}

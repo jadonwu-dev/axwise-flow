@@ -23,7 +23,7 @@ export default async function VisualizePage({ searchParams }: VisualizePageProps
     <Suspense fallback={<Loading />}>
       <VisualizationTabs 
         analysisId={analysisId} 
-        analysisData={analysisData} 
+        analysisData={analysisData}
       />
     </Suspense>
   );
