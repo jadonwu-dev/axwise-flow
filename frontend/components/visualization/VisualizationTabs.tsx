@@ -60,7 +60,6 @@ export default function VisualizationTabsRefactored({
   useEffect(() => {
     // Skip if we have server-provided data
     if (serverAnalysisData) {
-      console.log('Using server-provided analysis data');
       return;
     }
     
@@ -68,19 +67,16 @@ export default function VisualizationTabsRefactored({
     
     // Skip if no analysis ID is available
     if (!effectiveAnalysisId) {
-      console.log('No analysis ID available, skipping fetch');
       return;
     }
     
     // Skip duplicate fetches for the same ID
     if (lastFetchedId.current === effectiveAnalysisId) {
-      console.log('Already fetched this analysis ID, skipping:', effectiveAnalysisId);
       return;
     }
     
     const fetchAnalysis = async () => {
       try {
-        console.log('Client-side fallback fetch for ID:', effectiveAnalysisId);
         setLoading(true);
         setError(null);
         
@@ -91,10 +87,6 @@ export default function VisualizationTabsRefactored({
         
         // Make actual API call to fetch the data
         const result = await apiClient.getAnalysisById(effectiveAnalysisId);
-        
-        // Debug: Log the raw theme data from API
-        console.log('Raw API response:', result);
-        console.log('Themes count:', result.themes?.length || 0);
         
         if (isMounted) {
           setLocalAnalysis(result);
@@ -262,12 +254,6 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="sentiment" className="mt-6">
-                {console.log("Sentiment tab rendering with data:", analysis.sentiment)}
-                {console.log("SentimentStatements available:", 
-                  analysis.sentimentStatements || 
-                  (analysis.sentiment && analysis.sentiment.sentimentStatements) || 
-                  "MISSING")}
-                
                 {analysis.sentiment && (
                   <SentimentGraph 
                     data={analysis.sentiment.sentimentOverview || analysis.sentimentOverview} 
