@@ -422,7 +422,6 @@ class ApiClient {
         };
       }
       
-      // Update the sentimentStatements extraction logic with more robust handling
       // Ensure proper sentimentStatements structure
       if (!results.sentimentStatements || 
           !results.sentimentStatements.positive || 
@@ -461,60 +460,7 @@ class ApiClient {
         }
       }
       
-      // Add placeholder positive statements if none exist but other sentiment types do
-      if (Array.isArray(results.sentimentStatements.positive) && 
-          results.sentimentStatements.positive.length === 0 &&
-          ((Array.isArray(results.sentimentStatements.neutral) && results.sentimentStatements.neutral.length > 0) || 
-          (Array.isArray(results.sentimentStatements.negative) && results.sentimentStatements.negative.length > 0))) {
-            
-        console.log("Adding placeholder positive statements");
-        
-        // Generate positive statements based on context of the data
-        const topicHints: string[] = [];
-        
-        // Extract potential topics from neutral statements
-        if (Array.isArray(results.sentimentStatements.neutral)) {
-          results.sentimentStatements.neutral.forEach((stmt: string) => {
-            const words = stmt.split(' ');
-            topicHints.push(...words.filter((w: string) => w.length > 5));
-          });
-        }
-        
-        // Also check negative statements for context
-        if (Array.isArray(results.sentimentStatements.negative)) {
-          results.sentimentStatements.negative.forEach((stmt: string) => {
-            const words = stmt.split(' ');
-            topicHints.push(...words.filter((w: string) => w.length > 5));
-          });
-        }
-        
-        // Generate synthetic positive statements
-        results.sentimentStatements.positive = [
-          "I really appreciate the ability to collaborate effectively with the team.",
-          "The design process helps us create better solutions for our users."
-        ];
-        
-        // Add more context-specific statements if we have topic hints
-        if (topicHints.length > 0) {
-          // Get unique topics
-          const uniqueTopics = [...new Set(topicHints)].slice(0, 3);
-          if (uniqueTopics.includes('design') || uniqueTopics.includes('designer')) {
-            results.sentimentStatements.positive.push(
-              "The design workflow allows us to iterate quickly and improve our solutions."
-            );
-          }
-          if (uniqueTopics.includes('ideation') || uniqueTopics.includes('process')) {
-            results.sentimentStatements.positive.push(
-              "Our ideation process helps us generate innovative ideas and solutions."
-            );
-          }
-          if (uniqueTopics.includes('feedback') || uniqueTopics.includes('meeting')) {
-            results.sentimentStatements.positive.push(
-              "The feedback sessions are valuable for refining our designs and approaches."
-            );
-          }
-        }
-      }
+      // Removed synthetic statement generation to only show actual statements from interviews
       
       // Ensure other required fields
       if (!Array.isArray(results.themes)) results.themes = [];

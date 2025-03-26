@@ -511,19 +511,52 @@ class GeminiService:
                             "EXACT POSITIVE QUOTE FROM TEXT 1",
                             "EXACT POSITIVE QUOTE FROM TEXT 2",
                             "EXACT POSITIVE QUOTE FROM TEXT 3",
-                            "EXACT POSITIVE QUOTE FROM TEXT 4"
+                            "EXACT POSITIVE QUOTE FROM TEXT 4",
+                            "EXACT POSITIVE QUOTE FROM TEXT 5",
+                            "EXACT POSITIVE QUOTE FROM TEXT 6",
+                            "EXACT POSITIVE QUOTE FROM TEXT 7",
+                            "EXACT POSITIVE QUOTE FROM TEXT 8",
+                            "EXACT POSITIVE QUOTE FROM TEXT 9",
+                            "EXACT POSITIVE QUOTE FROM TEXT 10",
+                            "EXACT POSITIVE QUOTE FROM TEXT 11",
+                            "EXACT POSITIVE QUOTE FROM TEXT 12",
+                            "EXACT POSITIVE QUOTE FROM TEXT 13",
+                            "EXACT POSITIVE QUOTE FROM TEXT 14",
+                            "EXACT POSITIVE QUOTE FROM TEXT 15"
                         ],
                         "neutral": [
                             "EXACT NEUTRAL QUOTE FROM TEXT 1",
                             "EXACT NEUTRAL QUOTE FROM TEXT 2",
                             "EXACT NEUTRAL QUOTE FROM TEXT 3",
-                            "EXACT NEUTRAL QUOTE FROM TEXT 4"
+                            "EXACT NEUTRAL QUOTE FROM TEXT 4",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 5",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 6",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 7",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 8",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 9",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 10",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 11",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 12",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 13",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 14",
+                            "EXACT NEUTRAL QUOTE FROM TEXT 15"
                         ],
                         "negative": [
                             "EXACT NEGATIVE QUOTE FROM TEXT 1",
                             "EXACT NEGATIVE QUOTE FROM TEXT 2",
                             "EXACT NEGATIVE QUOTE FROM TEXT 3",
-                            "EXACT NEGATIVE QUOTE FROM TEXT 4"
+                            "EXACT NEGATIVE QUOTE FROM TEXT 4",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 5",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 6",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 7",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 8",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 9",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 10",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 11",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 12",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 13",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 14",
+                            "EXACT NEGATIVE QUOTE FROM TEXT 15"
                         ]
                     }
                 }
@@ -532,9 +565,10 @@ class GeminiService:
             Ensure that:
             - The sentiment scores are between 0 and 1
             - The breakdown percentages sum to 1.0
-            - Each statement category has at least 3-5 supporting statements
-            - Statements are EXACT QUOTES from the text - do not rewrite, summarize, or paraphrase anything.
+            - Each statement category should include 15-20 supporting statements (find as many as possible)
+            - Statements are EXACT QUOTES from the text - do not rewrite, summarize, or paraphrase anything
             - Each statement is a complete sentence or paragraph from the original text
+            - Extract diverse statements that represent different aspects or topics discussed
             
             IMPORTANT: Use EXACT quotes from the text. Do not rewrite, summarize, or paraphrase anything.
             """
@@ -1250,16 +1284,18 @@ class GeminiService:
                 interview_text = interview_text[:max_length]
             
             prompt = f"""
-            Analyze the sentiment in these interview statements. For each sentiment category (positive, neutral, negative), 
-            identify representative statements from the interview that reflect that sentiment.
+            Analyze the sentiment in these interview statements comprehensively. For each sentiment category (positive, neutral, negative), 
+            identify a robust set of representative statements from the interview that reflect that sentiment.
             
             INTERVIEW TEXT:
             {interview_text}
             
             INSTRUCTIONS:
             1. Calculate the overall sentiment distribution as percentages
-            2. Find 3-5 direct quotes from the interview for each sentiment category
-            3. Ensure quotes are taken verbatim from the text
+            2. Find 15-20 direct quotes from the interview for EACH sentiment category (positive, neutral, negative)
+            3. Ensure quotes are taken verbatim from the text - use EXACT sentences or statements
+            4. Extract diverse statements that represent different aspects or topics discussed
+            5. Include the most representative and sentiment-rich statements for each category
             
             FORMAT YOUR RESPONSE AS JSON:
             {{
@@ -1276,9 +1312,21 @@ class GeminiService:
                 // additional sentiment items
               ],
               "supporting_statements": {{
-                "positive": ["direct quote 1", "direct quote 2", ...],
-                "neutral": ["direct quote 1", "direct quote 2", ...],
-                "negative": ["direct quote 1", "direct quote 2", ...]
+                "positive": [
+                  "direct positive quote 1", 
+                  "direct positive quote 2",
+                  // Include up to 15-20 positive statements
+                ],
+                "neutral": [
+                  "direct neutral quote 1", 
+                  "direct neutral quote 2",
+                  // Include up to 15-20 neutral statements
+                ],
+                "negative": [
+                  "direct negative quote 1", 
+                  "direct negative quote 2",
+                  // Include up to 15-20 negative statements
+                ]
               }}
             }}
             
