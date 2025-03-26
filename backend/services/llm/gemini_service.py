@@ -1353,6 +1353,15 @@ class GeminiService:
             3. Ensure quotes are taken verbatim from the text - use EXACT sentences or statements
             4. Extract diverse statements that represent different aspects or topics discussed
             5. Include the most representative and sentiment-rich statements for each category
+            6. Filter out the following types of noise from the statements:
+               - Interview metadata, headers, or labels (e.g., "Interview // Person - Interviewer - Date")
+               - Procedural statements (e.g., "I consent to all three", "You're free to go")
+               - Truncated sentences ending with "..." unless they express complete thoughts
+               - Simple conversation fillers (e.g., "Mhm", "Yeah", "Looks like it's on")
+               - Transcript metadata (e.g., "This editable transcript was computer generated")
+               - Interviewer questions (focus on interviewee responses)
+               - Generic greetings and farewells with no sentiment content
+            7. Prioritize meaningful, complete statements that express clear opinions or experiences
             
             FORMAT YOUR RESPONSE AS JSON:
             {{

@@ -452,37 +452,78 @@ class ApiClient {
         const sentimentObj = results.sentiment;
         
         // Check if sentiment has direct positive/neutral/negative arrays
-        if (Array.isArray(sentimentObj.positive) && sentimentObj.positive.length > 0) {
+        if (Array.isArray(sentimentObj.positive)) {
           console.log(`Found ${sentimentObj.positive.length} positive statements in sentiment object`);
           
-          // Merge unique statements from sentiment.positive into sentimentStatements.positive
-          sentimentObj.positive.forEach((statement: string) => {
-            if (!results.sentimentStatements.positive.includes(statement)) {
-              results.sentimentStatements.positive.push(statement);
-            }
-          });
+          // Only merge if there are actually statements
+          if (sentimentObj.positive.length > 0) {
+            // Merge unique statements from sentiment.positive into sentimentStatements.positive
+            sentimentObj.positive.forEach((statement: string) => {
+              if (!results.sentimentStatements.positive.includes(statement)) {
+                results.sentimentStatements.positive.push(statement);
+              }
+            });
+          }
         }
         
-        if (Array.isArray(sentimentObj.neutral) && sentimentObj.neutral.length > 0) {
+        if (Array.isArray(sentimentObj.neutral)) {
           console.log(`Found ${sentimentObj.neutral.length} neutral statements in sentiment object`);
           
-          // Merge unique statements from sentiment.neutral into sentimentStatements.neutral
-          sentimentObj.neutral.forEach((statement: string) => {
-            if (!results.sentimentStatements.neutral.includes(statement)) {
-              results.sentimentStatements.neutral.push(statement);
-            }
-          });
+          // Only merge if there are actually statements
+          if (sentimentObj.neutral.length > 0) {
+            // Merge unique statements from sentiment.neutral into sentimentStatements.neutral
+            sentimentObj.neutral.forEach((statement: string) => {
+              if (!results.sentimentStatements.neutral.includes(statement)) {
+                results.sentimentStatements.neutral.push(statement);
+              }
+            });
+          }
         }
         
-        if (Array.isArray(sentimentObj.negative) && sentimentObj.negative.length > 0) {
+        if (Array.isArray(sentimentObj.negative)) {
           console.log(`Found ${sentimentObj.negative.length} negative statements in sentiment object`);
           
-          // Merge unique statements from sentiment.negative into sentimentStatements.negative
-          sentimentObj.negative.forEach((statement: string) => {
-            if (!results.sentimentStatements.negative.includes(statement)) {
-              results.sentimentStatements.negative.push(statement);
-            }
-          });
+          // Only merge if there are actually statements
+          if (sentimentObj.negative.length > 0) {
+            // Merge unique statements from sentiment.negative into sentimentStatements.negative
+            sentimentObj.negative.forEach((statement: string) => {
+              if (!results.sentimentStatements.negative.includes(statement)) {
+                results.sentimentStatements.negative.push(statement);
+              }
+            });
+          }
+        }
+        
+        // Check for raw supporting_statements
+        if (sentimentObj.supporting_statements && typeof sentimentObj.supporting_statements === 'object') {
+          const supportingStmts = sentimentObj.supporting_statements;
+          
+          if (Array.isArray(supportingStmts.positive) && supportingStmts.positive.length > 0) {
+            // Merge unique statements from supporting_statements.positive
+            supportingStmts.positive.forEach((statement: string) => {
+              if (!results.sentimentStatements.positive.includes(statement)) {
+                results.sentimentStatements.positive.push(statement);
+              }
+            });
+          }
+          
+          if (Array.isArray(supportingStmts.neutral) && supportingStmts.neutral.length > 0) {
+            // Merge unique statements from supporting_statements.neutral
+            supportingStmts.neutral.forEach((statement: string) => {
+              if (!results.sentimentStatements.neutral.includes(statement)) {
+                results.sentimentStatements.neutral.push(statement);
+              }
+            });
+          }
+          
+          if (Array.isArray(supportingStmts.negative) && supportingStmts.negative.length > 0) {
+            // Merge unique statements from supporting_statements.negative
+            supportingStmts.negative.forEach((statement: string) => {
+              if (!results.sentimentStatements.negative.includes(statement)) {
+                results.sentimentStatements.negative.push(statement);
+              }
+            });
+          }
         }
         
         // Log combined results

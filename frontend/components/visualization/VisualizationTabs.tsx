@@ -259,39 +259,31 @@ export default function VisualizationTabsRefactored({
                     data={analysis.sentiment.sentimentOverview || analysis.sentimentOverview} 
                     detailedData={Array.isArray(analysis.sentiment) ? analysis.sentiment : []} 
                     supportingStatements={
-                      // First try to get real sentimentStatements from various possible locations
-                      (analysis.sentimentStatements && 
-                       analysis.sentimentStatements.positive && 
-                       analysis.sentimentStatements.positive.length > 0) 
+                      // Always prioritize sentimentStatements as it's more reliable and comprehensive
+                      analysis.sentimentStatements && 
+                      typeof analysis.sentimentStatements === 'object' &&
+                      Array.isArray(analysis.sentimentStatements.positive) && 
+                      Array.isArray(analysis.sentimentStatements.neutral) && 
+                      Array.isArray(analysis.sentimentStatements.negative)
                         ? analysis.sentimentStatements
-                        : (analysis.sentiment && 
-                           analysis.sentiment.sentimentStatements && 
-                           analysis.sentiment.sentimentStatements.positive && 
-                           analysis.sentiment.sentimentStatements.positive.length > 0)
-                          ? analysis.sentiment.sentimentStatements
-                          : (analysis.results && 
-                             analysis.results.sentimentStatements && 
-                             analysis.results.sentimentStatements.positive && 
-                             analysis.results.sentimentStatements.positive.length > 0)
-                            ? analysis.results.sentimentStatements
-                            // If no real data is found, use explicit sample data for development
-                            : process.env.NODE_ENV === 'development'
-                              ? {
-                                  positive: [
-                                    "I really appreciated how intuitive the interface was.",
-                                    "The new features save me a lot of time on my daily tasks."
-                                  ],
-                                  neutral: [
-                                    "It works as expected for the most part.",
-                                    "The application performs standard functions adequately."
-                                  ],
-                                  negative: [
-                                    "The system occasionally freezes when processing large files.",
-                                    "Error messages could be more descriptive."
-                                  ]
-                                }
-                              // In production, use empty arrays
-                              : {positive: [], neutral: [], negative: []}
+                        : // Use combined statements only as fallback
+                        {
+                          positive: [
+                            ...(analysis.sentiment && Array.isArray(analysis.sentiment.positive) ? analysis.sentiment.positive : []),
+                            ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.positive) ? analysis.supporting_statements.positive : []),
+                            ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.positive) ? analysis.results.sentimentStatements.positive : [])
+                          ].filter((v, i, a) => a.indexOf(v) === i), // Remove duplicates
+                          neutral: [
+                            ...(analysis.sentiment && Array.isArray(analysis.sentiment.neutral) ? analysis.sentiment.neutral : []),
+                            ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.neutral) ? analysis.supporting_statements.neutral : []),
+                            ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.neutral) ? analysis.results.sentimentStatements.neutral : [])
+                          ].filter((v, i, a) => a.indexOf(v) === i), // Remove duplicates
+                          negative: [
+                            ...(analysis.sentiment && Array.isArray(analysis.sentiment.negative) ? analysis.sentiment.negative : []),
+                            ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.negative) ? analysis.supporting_statements.negative : []),
+                            ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.negative) ? analysis.results.sentimentStatements.negative : [])
+                          ].filter((v, i, a) => a.indexOf(v) === i) // Remove duplicates
+                        }
                     }
                   />
                 )}

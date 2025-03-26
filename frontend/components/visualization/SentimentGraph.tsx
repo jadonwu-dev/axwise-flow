@@ -247,14 +247,13 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   const processedStatements = useMemo(() => {
     try {
       // Enhanced logging for debugging
-      console.log('Processing supporting statements:', JSON.stringify({
-        positive: supportingStatements?.positive?.length || 0,
-        neutral: supportingStatements?.neutral?.length || 0,
-        negative: supportingStatements?.negative?.length || 0
-      }));
-      
-      // Examine raw statements for debugging
-      console.log('Raw supportingStatements:', supportingStatements);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Processing supporting statements:', JSON.stringify({
+          positive: supportingStatements?.positive?.length || 0,
+          neutral: supportingStatements?.neutral?.length || 0,
+          negative: supportingStatements?.negative?.length || 0
+        }));
+      }
       
       // Ensure all categories exist and contain arrays
       const processed = {
@@ -302,10 +301,10 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
             const scoreB = Math.abs(statementScores.get(b) || 0);
             return scoreA - scoreB; // Closer to 0 first
           });
-        } else {
+        } else if (process.env.NODE_ENV === 'development') {
           console.log('No statement scores available for sorting');
         }
-      } else {
+      } else if (process.env.NODE_ENV === 'development') {
         console.log('No detailed sentiment data available for sorting');
       }
       
@@ -313,13 +312,6 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
       processed.positive = processed.positive.slice(0, 10);
       processed.neutral = processed.neutral.slice(0, 10);
       processed.negative = processed.negative.slice(0, 10);
-      
-      // Log final processed statements count
-      console.log('Final processed statements count:', {
-        positive: processed.positive.length,
-        neutral: processed.neutral.length,
-        negative: processed.negative.length
-      });
       
       return processed;
     } catch (error) {
@@ -336,39 +328,8 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   const renderStatements = () => {
     if (!showStatements) return null;
 
-    // Make sure we always have statements to display
-    const safeStatements = {
-      positive: processedStatements?.positive || [],
-      neutral: processedStatements?.neutral || [],
-      negative: processedStatements?.negative || []
-    };
-
-    // Fall back to original supporting statements if processed ones are empty
-    if (safeStatements.positive.length === 0 && 
-        safeStatements.neutral.length === 0 && 
-        safeStatements.negative.length === 0) {
-      
-      console.log('No processed statements found, falling back to original supporting statements');
-      
-      if (supportingStatements) {
-        safeStatements.positive = Array.isArray(supportingStatements.positive) ? 
-          supportingStatements.positive.slice(0, 10) : [];
-        safeStatements.neutral = Array.isArray(supportingStatements.neutral) ? 
-          supportingStatements.neutral.slice(0, 10) : [];
-        safeStatements.negative = Array.isArray(supportingStatements.negative) ? 
-          supportingStatements.negative.slice(0, 10) : [];
-      }
-      
-      // If we still have no statements, add development samples
-      if (process.env.NODE_ENV === 'development' &&
-          safeStatements.positive.length === 0 && 
-          safeStatements.neutral.length === 0 && 
-          safeStatements.negative.length === 0) {
-        safeStatements.positive = ["I really appreciate the intuitive interface."];
-        safeStatements.neutral = ["It works as expected for the most part."];
-        safeStatements.negative = ["The system freezes when processing large files."];
-      }
-    }
+    // Use the processed statements directly - no fallbacks to synthetic data
+    const safeStatements = processedStatements;
 
     // Make sure we have rendering keys that won't cause runtime errors
     const getStatementKey = (type: string, index: number, text: string) => {
@@ -574,33 +535,32 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
         </div>
       )}
 
-      {/* Supporting Statements Section */}
-      {renderStatements()}
+      {showStatements && renderStatements()}
       
-      {/* Debug section - only visible in development */}
+      {/* Debug panel for development - hidden in production */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="mt-8 p-4 border border-dashed border-gray-300 rounded-md bg-gray-50">
-          <h3 className="text-base font-semibold mb-2">Debug Information</h3>
-          <div className="space-y-2 text-xs">
-            <p><strong>Has Supporting Statements:</strong> {supportingStatements ? 'Yes' : 'No'}</p>
-            <p><strong>Positive Statements:</strong> {processedStatements.positive.length}</p>
-            <p><strong>Neutral Statements:</strong> {processedStatements.neutral.length}</p>
-            <p><strong>Negative Statements:</strong> {processedStatements.negative.length}</p>
-            <p><strong>Has Detailed Data:</strong> {detailedData && detailedData.length > 0 ? 'Yes' : 'No'}</p>
-            <p><strong>Detailed Data Count:</strong> {detailedData?.length || 0}</p>
-            <details>
-              <summary className="cursor-pointer font-medium">Raw Supporting Statements</summary>
-              <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
-                {JSON.stringify(supportingStatements, null, 2)}
-              </pre>
-            </details>
-            <details>
-              <summary className="cursor-pointer font-medium">Raw Detailed Data (First 3 items)</summary>
-              <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
-                {JSON.stringify(detailedData?.slice(0, 3) || [], null, 2)}
-              </pre>
-            </details>
-          </div>
+        <div className="space-y-2 text-xs mt-8 p-2 border border-gray-200 rounded-md bg-gray-50">
+          <p><strong>Has Supporting Statements:</strong> {supportingStatements && 
+            (supportingStatements.positive.length > 0 || 
+             supportingStatements.neutral.length > 0 || 
+             supportingStatements.negative.length > 0) ? 'Yes' : 'No'}</p>
+          <p><strong>Positive Statements:</strong> {processedStatements.positive.length}</p>
+          <p><strong>Neutral Statements:</strong> {processedStatements.neutral.length}</p>
+          <p><strong>Negative Statements:</strong> {processedStatements.negative.length}</p>
+          <p><strong>Has Detailed Data:</strong> {detailedData && detailedData.length > 0 ? 'Yes' : 'No'}</p>
+          <p><strong>Detailed Data Count:</strong> {detailedData ? detailedData.length : 0}</p>
+          <details>
+            <summary className="cursor-pointer font-medium">Raw Supporting Statements</summary>
+            <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
+              {JSON.stringify(supportingStatements, null, 2)}
+            </pre>
+          </details>
+          <details>
+            <summary className="cursor-pointer font-medium">Raw Detailed Data (First 3 items)</summary>
+            <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
+              {JSON.stringify(detailedData?.slice(0, 3) || [], null, 2)}
+            </pre>
+          </details>
         </div>
       )}
     </div>
