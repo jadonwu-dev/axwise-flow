@@ -17,6 +17,29 @@ const Skeleton = ({ className }: { className: string }) => (
 // Error types for more semantic error handling
 type ErrorType = 'auth' | 'network' | 'server' | 'notFound' | 'parsing' | 'unknown';
 
+// Enhanced type definitions for pattern and theme original data
+interface PatternOriginal {
+  name?: string;
+  description?: string;
+  sentiment?: number;
+  frequency?: number;
+  category?: string;
+  evidence?: string[];
+  [key: string]: any; // Allow for additional properties
+}
+
+interface ThemeOriginal {
+  name?: string;
+  definition?: string;
+  sentiment?: number;
+  frequency?: number;
+  examples?: string[];
+  [key: string]: any; // Allow for additional properties
+}
+
+// Enhanced types for PrioritizedInsight to include proper original data typing
+type PrioritizedInsightWithOriginal = PrioritizedInsight & { original: ThemeOriginal | PatternOriginal };
+
 interface ErrorState {
   message: string;
   type: ErrorType;
@@ -293,7 +316,7 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredInsights.map((insight, index) => (
+                {filteredInsights.map((insight: PrioritizedInsightWithOriginal, index) => (
                   <div
                     key={`${insight.type}-${insight.name}-${index}`}
                     className={`border rounded-lg p-4 ${getUrgencyColorClass(insight.urgency)}`}
@@ -314,8 +337,33 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
                       </Badge>
                     </div>
                     
-                    <h3 className="text-base font-semibold mb-1">{insight.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
+                    <h3 className="text-base font-semibold mb-1">
+                      {/* Use description for pattern name if it starts with "Unnamed Pattern" */}
+                      {insight.type === 'pattern' && insight.name.startsWith('Unnamed Pattern') 
+                        ? insight.description 
+                        : insight.name}
+                    </h3>
+                    
+                    {/* Show description only if it's different from the displayed name */}
+                    {!(insight.type === 'pattern' && insight.name.startsWith('Unnamed Pattern')) && (
+                      <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
+                    )}
+                    
+                    {/* Display supporting statements (evidence for patterns, examples for themes) */}
+                    {insight.type === 'pattern' && (insight.original as PatternOriginal).evidence && (insight.original as PatternOriginal).evidence!.length > 0 && (
+                      <div className="mt-2 mb-3 pl-3 border-l-2 border-gray-200">
+                        {(insight.original as PatternOriginal).evidence!.map((evidence: string, i: number) => (
+                          <p key={i} className="text-sm text-muted-foreground italic mb-2">{evidence}</p>
+                        ))}
+                      </div>
+                    )}
+                    {insight.type === 'theme' && (insight.original as ThemeOriginal).examples && (insight.original as ThemeOriginal).examples!.length > 0 && (
+                      <div className="mt-2 mb-3 pl-3 border-l-2 border-gray-200">
+                        {(insight.original as ThemeOriginal).examples!.map((example: string, i: number) => (
+                          <p key={i} className="text-sm text-muted-foreground italic mb-2">{example}</p>
+                        ))}
+                      </div>
+                    )}
                     
                     <div className="flex items-center gap-3 text-xs">
                       <span className="flex items-center gap-1">
