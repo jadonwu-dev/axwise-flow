@@ -266,10 +266,53 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
           [...supportingStatements.negative] : []
       };
       
-      // Limit to 5 statements per category for better UI
-      processed.positive = processed.positive.slice(0, 5);
-      processed.neutral = processed.neutral.slice(0, 5);
-      processed.negative = processed.negative.slice(0, 5);
+      // Only attempt to sort if we have detailed sentiment data with scores
+      // Otherwise, keep the original order from the API
+      if (detailedData && detailedData.length > 0) {
+        // Create a map of statements to their sentiment scores
+        const statementScores = new Map<string, number>();
+        detailedData.forEach(item => {
+          if (item.text) {
+            statementScores.set(item.text, item.score);
+          }
+        });
+
+        // Only attempt to sort if we have matches in our map
+        const hasScores = processed.positive.some(text => statementScores.has(text)) ||
+                          processed.neutral.some(text => statementScores.has(text)) ||
+                          processed.negative.some(text => statementScores.has(text));
+        
+        if (hasScores) {
+          // Sort each category by sentiment strength
+          processed.positive.sort((a, b) => {
+            const scoreA = statementScores.get(a) || 0;
+            const scoreB = statementScores.get(b) || 0;
+            return scoreB - scoreA; // Higher scores first
+          });
+
+          processed.negative.sort((a, b) => {
+            const scoreA = statementScores.get(a) || 0;
+            const scoreB = statementScores.get(b) || 0;
+            return scoreA - scoreB; // Lower scores first (more negative)
+          });
+
+          // For neutral, sort by proximity to 0
+          processed.neutral.sort((a, b) => {
+            const scoreA = Math.abs(statementScores.get(a) || 0);
+            const scoreB = Math.abs(statementScores.get(b) || 0);
+            return scoreA - scoreB; // Closer to 0 first
+          });
+        } else {
+          console.log('No statement scores available for sorting');
+        }
+      } else {
+        console.log('No detailed sentiment data available for sorting');
+      }
+      
+      // Limit to 10 statements per category for better UI
+      processed.positive = processed.positive.slice(0, 10);
+      processed.neutral = processed.neutral.slice(0, 10);
+      processed.negative = processed.negative.slice(0, 10);
       
       // Log final processed statements count
       console.log('Final processed statements count:', {
@@ -287,11 +330,59 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
         negative: []
       };
     }
-  }, [supportingStatements]);
+  }, [supportingStatements, detailedData]);
 
-  // Render statements section with proper colors
+  // Render statements section with proper colors and ranking
   const renderStatements = () => {
     if (!showStatements) return null;
+
+    // Make sure we always have statements to display
+    const safeStatements = {
+      positive: processedStatements?.positive || [],
+      neutral: processedStatements?.neutral || [],
+      negative: processedStatements?.negative || []
+    };
+
+    // Fall back to original supporting statements if processed ones are empty
+    if (safeStatements.positive.length === 0 && 
+        safeStatements.neutral.length === 0 && 
+        safeStatements.negative.length === 0) {
+      
+      console.log('No processed statements found, falling back to original supporting statements');
+      
+      if (supportingStatements) {
+        safeStatements.positive = Array.isArray(supportingStatements.positive) ? 
+          supportingStatements.positive.slice(0, 10) : [];
+        safeStatements.neutral = Array.isArray(supportingStatements.neutral) ? 
+          supportingStatements.neutral.slice(0, 10) : [];
+        safeStatements.negative = Array.isArray(supportingStatements.negative) ? 
+          supportingStatements.negative.slice(0, 10) : [];
+      }
+      
+      // If we still have no statements, add development samples
+      if (process.env.NODE_ENV === 'development' &&
+          safeStatements.positive.length === 0 && 
+          safeStatements.neutral.length === 0 && 
+          safeStatements.negative.length === 0) {
+        safeStatements.positive = ["I really appreciate the intuitive interface."];
+        safeStatements.neutral = ["It works as expected for the most part."];
+        safeStatements.negative = ["The system freezes when processing large files."];
+      }
+    }
+
+    // Make sure we have rendering keys that won't cause runtime errors
+    const getStatementKey = (type: string, index: number, text: string) => {
+      let key = `${type}-statement-${index}`;
+      try {
+        // Try to add some text from the statement if available
+        if (text && typeof text === 'string') {
+          key += `-${text.slice(0, 10).replace(/\s+/g, '-')}`;
+        }
+      } catch (e) {
+        // Ignore any errors in key generation
+      }
+      return key;
+    };
 
     return (
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -304,12 +395,16 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
             Positive Statements
           </h3>
           <ul className="space-y-2">
-            {processedStatements.positive.map((statement, index) => (
-              <li key={`positive-statement-${index}-${statement.slice(0, 10).replace(/\s+/g, '-')}`} className="text-sm text-muted-foreground">
+            {safeStatements.positive.map((statement, index) => (
+              <li key={getStatementKey('positive', index, statement)} 
+                  className="text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-xs font-medium" style={{ color: SENTIMENT_COLORS.positive }}>
+                  #{index + 1}
+                </span>
                 {statement}
               </li>
             ))}
-            {processedStatements.positive.length === 0 && (
+            {safeStatements.positive.length === 0 && (
               <li className="text-sm text-muted-foreground italic">No positive statements found</li>
             )}
           </ul>
@@ -324,12 +419,16 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
             Neutral Statements
           </h3>
           <ul className="space-y-2">
-            {processedStatements.neutral.map((statement, index) => (
-              <li key={`neutral-statement-${index}-${statement.slice(0, 10).replace(/\s+/g, '-')}`} className="text-sm text-muted-foreground">
+            {safeStatements.neutral.map((statement, index) => (
+              <li key={getStatementKey('neutral', index, statement)}
+                  className="text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-xs font-medium" style={{ color: SENTIMENT_COLORS.neutral }}>
+                  #{index + 1}
+                </span>
                 {statement}
               </li>
             ))}
-            {processedStatements.neutral.length === 0 && (
+            {safeStatements.neutral.length === 0 && (
               <li className="text-sm text-muted-foreground italic">No neutral statements found</li>
             )}
           </ul>
@@ -344,12 +443,16 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
             Negative Statements
           </h3>
           <ul className="space-y-2">
-            {processedStatements.negative.map((statement, index) => (
-              <li key={`negative-statement-${index}-${statement.slice(0, 10).replace(/\s+/g, '-')}`} className="text-sm text-muted-foreground">
+            {safeStatements.negative.map((statement, index) => (
+              <li key={getStatementKey('negative', index, statement)}
+                  className="text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-xs font-medium" style={{ color: SENTIMENT_COLORS.negative }}>
+                  #{index + 1}
+                </span>
                 {statement}
               </li>
             ))}
-            {processedStatements.negative.length === 0 && (
+            {safeStatements.negative.length === 0 && (
               <li className="text-sm text-muted-foreground italic">No negative statements found</li>
             )}
           </ul>
@@ -483,10 +586,18 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
             <p><strong>Positive Statements:</strong> {processedStatements.positive.length}</p>
             <p><strong>Neutral Statements:</strong> {processedStatements.neutral.length}</p>
             <p><strong>Negative Statements:</strong> {processedStatements.negative.length}</p>
+            <p><strong>Has Detailed Data:</strong> {detailedData && detailedData.length > 0 ? 'Yes' : 'No'}</p>
+            <p><strong>Detailed Data Count:</strong> {detailedData?.length || 0}</p>
             <details>
               <summary className="cursor-pointer font-medium">Raw Supporting Statements</summary>
               <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
                 {JSON.stringify(supportingStatements, null, 2)}
+              </pre>
+            </details>
+            <details>
+              <summary className="cursor-pointer font-medium">Raw Detailed Data (First 3 items)</summary>
+              <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-60">
+                {JSON.stringify(detailedData?.slice(0, 3) || [], null, 2)}
               </pre>
             </details>
           </div>

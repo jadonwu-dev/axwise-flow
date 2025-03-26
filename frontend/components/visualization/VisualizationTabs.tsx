@@ -271,7 +271,7 @@ export default function VisualizationTabsRefactored({
                 {analysis.sentiment && (
                   <SentimentGraph 
                     data={analysis.sentiment.sentimentOverview || analysis.sentimentOverview} 
-                    detailedData={[]} 
+                    detailedData={Array.isArray(analysis.sentiment) ? analysis.sentiment : []} 
                     supportingStatements={
                       // First try to get real sentimentStatements from various possible locations
                       (analysis.sentimentStatements && 
