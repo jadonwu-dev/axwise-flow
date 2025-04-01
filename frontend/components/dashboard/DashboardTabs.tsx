@@ -16,7 +16,7 @@ interface DashboardTabsProps {
  * Main navigation tabs for the dashboard
  * Handles tab switching and URL state synchronization
  */
-const DashboardTabs = ({ dashboardData }: DashboardTabsProps) => {
+const DashboardTabs = ({ dashboardData }: DashboardTabsProps): JSX.Element => { // Add return type
   // State for active tab will be moved to a Zustand store in future improvement
   const [activeTab, setActiveTab] = useState<'upload' | 'visualize' | 'history' | 'documentation'>('upload');
   
@@ -61,7 +61,7 @@ const DashboardTabs = ({ dashboardData }: DashboardTabsProps) => {
   }, [activeTab]);
   
   return (
-    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'upload' | 'visualize' | 'history' | 'documentation')} className="w-full"> {/* Use specific type */}
       <TabsList className="grid grid-cols-4 mb-8">
         <TabsTrigger value="upload">Upload</TabsTrigger>
         <TabsTrigger value="visualize">Visualize</TabsTrigger>

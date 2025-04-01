@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import UploadTab from '../UploadTab';
 import { apiClient } from '@/lib/apiClient';
 import { vi } from 'vitest';
+import type { UploadResponse, AnalysisResponse } from '@/types/api'; // Import response types
 
 // Mock the toast provider
 vi.mock('@/components/providers/toast-provider', () => ({
@@ -82,15 +83,17 @@ describe('UploadTab', () => {
     fireEvent.click(screen.getByTestId('select-file-btn'));
     
     // Now the upload button should be enabled
-    expect(uploadButton).not.toBeDisabled();
+    expect(uploadButton).toBeEnabled(); // Use toBeEnabled()
   });
   
   it('calls the API client when uploading a file', async () => {
     // Mock successful upload response
-    (apiClient.uploadData as any).mockResolvedValue({ 
+    vi.mocked(apiClient.uploadData).mockResolvedValue({ 
+// Use vi.mocked and ensure type matches UploadResponse
       data_id: 123,
       filename: 'test.txt',
-      status: 'uploaded'
+      status: 'success', // Correct status
+      upload_date: new Date().toISOString() // Add missing property
     });
     
     render(<UploadTab />);
@@ -109,10 +112,12 @@ describe('UploadTab', () => {
   
   it('enables start analysis button after successful upload', async () => {
     // Mock successful upload response
-    (apiClient.uploadData as any).mockResolvedValue({ 
+    vi.mocked(apiClient.uploadData).mockResolvedValue({ 
+// Use vi.mocked and ensure type matches UploadResponse
       data_id: 123,
       filename: 'test.txt',
-      status: 'uploaded'
+      status: 'success', // Correct status
+      upload_date: new Date().toISOString() // Add missing property
     });
     
     render(<UploadTab />);
@@ -121,7 +126,7 @@ describe('UploadTab', () => {
     fireEvent.click(screen.getByTestId('select-file-btn'));
     
     // Upload button should be enabled, start analysis should be disabled
-    expect(screen.getByRole('button', { name: /upload/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /upload/i })).toBeEnabled(); // Use toBeEnabled()
     expect(screen.getByRole('button', { name: /start analysis/i })).toBeDisabled();
     
     // Click upload
@@ -129,22 +134,26 @@ describe('UploadTab', () => {
     
     // After upload, start analysis should be enabled
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /start analysis/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /start analysis/i })).toBeEnabled(); // Use toBeEnabled()
     });
   });
   
   it('shows progress when analysis is started', async () => {
     // Mock successful upload response
-    (apiClient.uploadData as any).mockResolvedValue({ 
+    vi.mocked(apiClient.uploadData).mockResolvedValue({ 
+// Use vi.mocked and ensure type matches UploadResponse
       data_id: 123,
       filename: 'test.txt',
-      status: 'uploaded'
+      status: 'success', // Correct status
+      upload_date: new Date().toISOString() // Add missing property
     });
     
     // Mock successful analysis response
-    (apiClient.analyzeData as any).mockResolvedValue({ 
-      result_id: '456',
-      status: 'processing'
+    vi.mocked(apiClient.analyzeData).mockResolvedValue({ 
+// Use vi.mocked and ensure type matches AnalysisResponse
+      result_id: 456, // Correct type (number)
+      status: 'started', // Correct status
+      message: 'Analysis started' // Add missing property
     });
     
     render(<UploadTab />);
@@ -155,7 +164,7 @@ describe('UploadTab', () => {
     
     // Wait for upload to complete
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /start analysis/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /start analysis/i })).toBeEnabled(); // Use toBeEnabled()
     });
     
     // Start analysis
@@ -163,8 +172,11 @@ describe('UploadTab', () => {
     
     // Check that progress is shown
     await waitFor(() => {
+      // Wait for progress element
       expect(screen.getByTestId('analysis-progress')).toBeInTheDocument();
-      expect(screen.getByText(/analysis id: 456/i)).toBeInTheDocument();
+ 
     });
+    // Assert text content outside waitFor
+    expect(screen.getByText(/analysis id: 456/i)).toBeInTheDocument();
   });
 });

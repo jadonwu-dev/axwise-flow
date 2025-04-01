@@ -8,13 +8,19 @@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 
+import type { ReactNode } from 'react'; // Import ReactNode type
+
+// Define the props interface
+interface UnifiedDashboardLayoutProps {
+  children: ReactNode;
+  searchParams: { [key: string]: string | string[] | undefined };
+ // Make non-optional
+}
+
 export default function UnifiedDashboardLayout({
   children,
   searchParams,
-}: {
-  children: React.ReactNode;
-  searchParams?: { tab?: string; analysisId?: string };
-}) {
+}: UnifiedDashboardLayoutProps): JSX.Element { // Add return type
   // Default to 'upload' if no tab is specified
   const activeTab = searchParams?.tab || 'upload';
   const analysisId = searchParams?.analysisId || '';

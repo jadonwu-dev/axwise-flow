@@ -11,7 +11,7 @@ interface HistoryTabProps {
   }
 }
 
-export default async function HistoryTab({ searchParams }: HistoryTabProps) {
+export default async function HistoryTab({ searchParams }: HistoryTabProps): Promise<JSX.Element> { // Add return type
   // Default sorting and filtering parameters
   const sortBy = searchParams?.sortBy || 'date';
   const sortDirection = searchParams?.sortDirection || 'desc';
@@ -29,8 +29,8 @@ export default async function HistoryTab({ searchParams }: HistoryTabProps) {
   
   return (
     <HistoryTabClient 
-      initialAnalyses={analyses}
-      sortBy={sortBy}
+      // Pass the correct type expected by HistoryTabClient
+      sortBy={sortBy === 'date' ? 'createdAt' : 'fileName'} 
       sortDirection={sortDirection}
       filterStatus={filterStatus}
     />

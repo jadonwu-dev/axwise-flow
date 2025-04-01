@@ -20,7 +20,7 @@ describe('LoadingSpinner', () => {
 
   it('applies size classes correctly', () => {
     const { rerender } = render(<LoadingSpinner size="sm" />);
-    const getSpinnerIcon = () => screen.getByTestId('loading-spinner').querySelector('svg');
+    const getSpinnerIcon = () => screen.getByTestId('loader-icon'); // Use testid
     
     // Small size
     expect(getSpinnerIcon()).toHaveClass('h-4', 'w-4');
@@ -56,7 +56,7 @@ describe('LoadingSpinner', () => {
     expect(spinner).toBeInTheDocument();
     
     // Icon should be aria-hidden
-    const icon = spinner.querySelector('svg');
+    const icon = screen.getByTestId('loader-icon'); // Use testid
     expect(icon).toHaveAttribute('aria-hidden', 'true');
     
     // Should have visually hidden text
@@ -66,7 +66,7 @@ describe('LoadingSpinner', () => {
   it('maintains proper animation classes', () => {
     render(<LoadingSpinner />);
     
-    const icon = screen.getByTestId('loading-spinner').querySelector('svg');
+    const icon = screen.getByTestId('loader-icon'); // Use testid
     expect(icon).toHaveClass('animate-spin');
   });
 });

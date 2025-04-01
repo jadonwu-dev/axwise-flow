@@ -1,31 +1,6 @@
 import { apiClient } from '@/lib/apiClient';
 import type { ProcessingStage, ProcessingStatus, ProcessingStep } from '@/components/ProcessingStepsLoader';
 
-/**
- * Interface for processing status response from the API
- */
-interface ProcessingStatusResponse {
-  current_stage: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  stage_states: Record<string, {
-    status: string;
-    message: string;
-    started_at: string | null;
-    completed_at: string | null;
-    error: string | null;
-    quality: any | null;
-    progress: number;
-  }>;
-  error_state: {
-    stage: string;
-    message: string;
-    error: string;
-    occurred_at: string;
-  } | null;
-  event_count: number;
-  progress: number;
-}
 
 /**
  * Maps a backend stage to a frontend ProcessingStage

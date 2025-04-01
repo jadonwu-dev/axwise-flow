@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FileUpload } from '../FileUpload';
-import userEvent from '@testing-library/user-event';
+// import userEvent from '@testing-library/user-event';
+ // Unused import
 import type { UploadResponse } from '@/types/api';
 
 // Mock the API client
@@ -56,12 +57,16 @@ describe('FileUpload Component', () => {
     const originalConsoleError = console.error;
     console.error = vi.fn();
     
-    const { rerender } = render(<FileUpload onUploadComplete={mockOnUploadComplete} />);
+    render(<FileUpload onUploadComplete={mockOnUploadComplete} />);
+ // Removed unused rerender
     
     // Create test files
-    const jsonFile = new File(['{}'], 'test.json', { type: 'application/json' });
-    const txtFile = new File(['text'], 'test.txt', { type: 'text/plain' });
-    const pngFile = new File(['invalid'], 'test.png', { type: 'image/png' });
+    // const jsonFile = new File(['{}'], 'test.json', { type: 'application/json' });
+ // Unused variable
+   //  const txtFile = new File(['text'], 'test.txt', { type: 'text/plain' });
+ // Unused variable
+   //  const pngFile = new File(['invalid'], 'test.png', { type: 'image/png' });
+ // Unused variable
     
     // Test with JSON file - modify component props to test with our file
     vi.spyOn(apiClient, 'uploadData').mockResolvedValue({
@@ -101,7 +106,8 @@ describe('FileUpload Component', () => {
     const fileList = {
       0: jsonFile,
       length: 1,
-      item: (index: number) => jsonFile
+      item: (_index: number) => jsonFile
+ // Prefix unused index
     };
     
     // Directly trigger onChange event on the file input
@@ -127,7 +133,8 @@ describe('FileUpload Component', () => {
     const fileList = {
       0: jsonFile,
       length: 1,
-      item: (index: number) => jsonFile
+      item: (_index: number) => jsonFile
+ // Prefix unused index
     };
     
     // Directly trigger onChange event on the file input

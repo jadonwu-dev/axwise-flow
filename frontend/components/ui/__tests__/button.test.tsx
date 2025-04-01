@@ -101,7 +101,6 @@ describe('Button Component', () => {
       </Button>
     )
     
-    const button = screen.getByRole('button')
     const icon = screen.getByTestId('button-icon')
     expect(icon).toBeInTheDocument()
     expect(icon).toHaveClass('mr-2', 'h-4', 'w-4')

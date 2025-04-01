@@ -13,7 +13,7 @@ import HistoryPanel from '@/components/history/HistoryPanel';
 // Force dynamic rendering to ensure fresh data
 export const dynamic = 'force-dynamic';
 
-export default function HistoryPage() {
+export default function HistoryPage(): JSX.Element { // Add return type
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Card className="p-4">

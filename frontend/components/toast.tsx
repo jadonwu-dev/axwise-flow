@@ -74,9 +74,9 @@ export function Toast({
   if (!isVisible) return null;
 
   const icons = {
-    success: <CheckCircle className="h-5 w-5" />,
-    error: <AlertCircle className="h-5 w-5" />,
-    info: <Info className="h-5 w-5" />,
+    success: <CheckCircle className="h-5 w-5" data-testid="toast-icon-success" />, // Add testid
+    error: <AlertCircle className="h-5 w-5" data-testid="toast-icon-error" />, // Add testid
+    info: <Info className="h-5 w-5" data-testid="toast-icon-info" />, // Add testid
   };
 
   return (

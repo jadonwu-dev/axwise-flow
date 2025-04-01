@@ -11,10 +11,12 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button' 
 import { useCallback, useState, useEffect } from 'react'
 import { apiClient } from '@/lib/apiClient'
-import { AlertCircle, CheckCircle2, UploadCloud, FileUp } from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileUp } from 'lucide-react'
+ // Removed unused UploadCloud
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
-import type { UploadResponse } from '@/types/api'
+// import type { UploadResponse } from '@/types/api'
+; // Unused import
 
 interface FileUploadProps {
   onUploadComplete?: (dataId: number) => void;
@@ -175,7 +177,7 @@ export function FileUpload({
   )
   
   // Build the content for the component
-  const renderContent = () => (
+  const renderContent = (): JSX.Element => ( // Add return type
     <>
       {/* Optional title and description */}
       {(title || description) && (

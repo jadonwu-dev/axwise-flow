@@ -61,7 +61,8 @@ describe('Form Component', () => {
                   <Input placeholder="Enter email" type="email" {...field} />
                 </FormControl>
                 <FormDescription>
-                  We'll never share your email.
+                  We&apos;ll never share your email.
+ {/* Fix unescaped entity */}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -109,9 +110,13 @@ describe('Form Component', () => {
     await userEvent.click(screen.getByText('Submit'))
     
     await waitFor(() => {
+      // Wait for the first error message
       expect(screen.getByText('Username must be at least 2 characters')).toBeInTheDocument()
-      expect(screen.getByText('Invalid email address')).toBeInTheDocument()
-    })
+;
+    });
+    // Assert the second error message outside waitFor
+    expect(screen.getByText('Invalid email address')).toBeInTheDocument()
+;
   })
 
   it('clears validation errors when input becomes valid', async () => {
@@ -140,9 +145,9 @@ describe('Form Component', () => {
         <FormField
           name="test"
           render={() => (
-            <FormItem className="custom-item">
+            <FormItem className="custom-item" data-testid="form-item-custom"> {/* Add testid */}
               <FormLabel className="custom-label">Label</FormLabel>
-              <FormControl className="custom-control">
+              <FormControl className="custom-control" data-testid="form-control-custom"> {/* Add testid */}
                 <input />
               </FormControl>
               <FormDescription className="custom-desc">Description</FormDescription>
@@ -153,9 +158,11 @@ describe('Form Component', () => {
       </Form>
     )
     
-    expect(screen.getByText('Label').parentElement).toHaveClass('custom-item')
+    expect(screen.getByTestId('form-item-custom')).toHaveClass('custom-item')
+ // Use testid
     expect(screen.getByText('Label')).toHaveClass('custom-label')
-    expect(screen.getByRole('textbox').parentElement).toHaveClass('custom-control')
+    expect(screen.getByTestId('form-control-custom')).toHaveClass('custom-control')
+ // Use testid
     expect(screen.getByText('Description')).toHaveClass('custom-desc')
   })
 

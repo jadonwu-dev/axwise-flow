@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 /**
  * Component displayed when no analysis results are available
  */
-const NoResultsView = () => {
+const NoResultsView = (): JSX.Element => { // Add return type
   const router = useRouter();
   
   return (
@@ -17,7 +17,8 @@ const NoResultsView = () => {
         <FileQuestion className="h-16 w-16 text-muted-foreground mb-4" />
         <h3 className="text-xl font-medium mb-2">No Analysis Results</h3>
         <p className="text-center text-muted-foreground mb-6 max-w-md">
-          You haven't analyzed any interview data yet or no results are available.
+          You haven&apos;t analyzed any interview data yet or no results are available.
+ {/* Escape quote */}
           Upload your interview data and start analysis to see results here.
         </p>
         <Button 

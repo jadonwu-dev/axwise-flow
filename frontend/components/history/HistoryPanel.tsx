@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
  * HistoryPanel Component
  * Displays a list of past analyses and allows selecting one for visualization
  */
-export default function HistoryPanel() {
+export default function HistoryPanel(): JSX.Element { // Add return type
   const router = useRouter();
   
   // Get history state from the store - each value is now properly memoized by the hook
@@ -71,7 +71,7 @@ export default function HistoryPanel() {
   }, [filters]);
   
   // Format file size for display - memoize as it's a pure function
-  const formatFileSize = useMemo(() => (bytes: number | undefined) => {
+  const formatFileSize = useMemo(() => (bytes: number | undefined): string => { // Add return type
     if (!bytes) return 'Unknown';
     const kb = bytes / 1024;
     if (kb < 1024) return `${kb.toFixed(2)} KB`;
@@ -79,8 +79,8 @@ export default function HistoryPanel() {
     return `${mb.toFixed(2)} MB`;
   }, []);
   
-  // Get status badge with valid variants
-  const getStatusBadge = useMemo(() => (status: string) => {
+  // Get status badge with valid variants - Simplified to return JSX directly
+  const getStatusBadge = useCallback((status: string): JSX.Element => { // Add return type
     switch (status) {
       case 'completed':
         return <Badge variant="secondary">Completed</Badge>;
@@ -91,7 +91,7 @@ export default function HistoryPanel() {
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
-  }, []);
+  }, []); // Removed useMemo, simplified return
   
   // Loading state
   if (isLoading && history.length === 0) {
@@ -140,7 +140,8 @@ export default function HistoryPanel() {
           <div className="flex gap-2">
             <Select
               value={filters.status}
-              onValueChange={(value) => changeStatusFilter(value as any)}
+              // Use specific type for value in onValueChange
+              onValueChange={(value: string) => changeStatusFilter(value as 'all' | 'completed' | 'pending' | 'failed')} 
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Status" />

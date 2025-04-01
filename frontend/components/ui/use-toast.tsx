@@ -23,7 +23,7 @@ const actionTypes = {
 
 let count = 0
 
-function genId() {
+function genId(): string { // Add return type
   count = (count + 1) % Number.MAX_VALUE
   return count.toString()
 }
@@ -55,7 +55,7 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
-const addToRemoveQueue = (toastId: string) => {
+const addToRemoveQueue = (toastId: string): void => { // Add return type
   if (toastTimeouts.has(toastId)) {
     return
   }
@@ -132,7 +132,7 @@ const listeners: Array<(state: State) => void> = []
 
 let memoryState: State = { toasts: [] }
 
-function dispatch(action: Action) {
+function dispatch(action: Action): void { // Add return type
   memoryState = reducer(memoryState, action)
   listeners.forEach((listener) => {
     listener(memoryState)
@@ -141,10 +141,17 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+// Define return type for the toast function
+type ToastReturnType = {
+  id: string;
+  dismiss: () => void;
+  update: (props: ToasterToast) => void;
+};
+
+function toast({ ...props }: Toast): ToastReturnType { // Add return type
   const id = genId()
 
-  const update = (props: ToasterToast) =>
+  const update = (props: ToasterToast): void => // Add return type for inner function
     dispatch({
       type: "UPDATE_TOAST",
       id,
@@ -159,7 +166,7 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      onOpenChange: (open) => {
+      onOpenChange: (open: boolean) => { // Add type for 'open'
         if (!open) dismiss()
       },
     },
@@ -172,7 +179,13 @@ function toast({ ...props }: Toast) {
   }
 }
 
-function useToast() {
+// Define return type for the useToast hook
+type UseToastReturnType = State & {
+  toast: typeof toast;
+  dismiss: (toastId?: string) => void;
+};
+
+function useToast(): UseToastReturnType { // Add return type
   const [state, setState] = React.useState<State>(memoryState)
 
   React.useEffect(() => {

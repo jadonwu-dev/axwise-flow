@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { SentimentOverview, SentimentData, Theme } from '@/types/api';
+import { SentimentOverview, Theme } from '@/types/api'; // Removed unused SentimentData
 import {
   BarChart,
   Bar,
@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Removed unused TabsContent
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -23,8 +23,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 interface SentimentGraphProps {
   /** The sentiment overview data to visualize */
   data: SentimentOverview;
-  /** Detailed sentiment data (optional) - used for showing sentiment trends */
-  detailedData?: SentimentData[];
   /** Supporting statements for each sentiment category */
   supportingStatements?: {
     positive: string[];
@@ -71,10 +69,9 @@ const DEFAULT_SENTIMENT = {
  */
 export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   data,
-  detailedData = [],
   supportingStatements = { positive: [], neutral: [], negative: [] },
-  height = 300,
-  showLegend = false,
+  // height = 300, // Removed unused prop
+  // showLegend = false, // Removed unused prop
   showStatements = true,
   className,
   sentimentData,
@@ -481,9 +478,9 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
           {/* Results summary */}
           <div className="text-sm text-muted-foreground mb-3">
             {searchTerm && filteredStatements.length > 0 ? (
-              <span>Found {filteredStatements.length} statements matching "{searchTerm}"</span>
+              <span>Found {filteredStatements.length} statements matching &quot;{searchTerm}&quot;</span> // Escape quotes
             ) : searchTerm ? (
-              <span>No statements found matching "{searchTerm}"</span>
+              <span>No statements found matching &quot;{searchTerm}&quot;</span> // Escape quotes
             ) : (
               <span>Showing {getHighQualityStatements().length} meaningful statements {sentimentFilter !== 'all' ? `(${sentimentFilter} only)` : ''}</span>
             )}

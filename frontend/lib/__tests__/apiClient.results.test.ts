@@ -187,7 +187,7 @@ describe('API Client - Results Retrieval Operations', () => {
     
     test('should validate analysis ID parameter', async () => {
       // Act & Assert
-      // @ts-ignore - Testing with invalid parameter
+      // @ts-expect-error - Testing with invalid parameter
       await expect(apiClient.getAnalysisById()).rejects.toThrow();
       await expect(apiClient.getAnalysisById('')).rejects.toThrow();
     });

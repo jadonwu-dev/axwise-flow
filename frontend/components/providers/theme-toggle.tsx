@@ -27,12 +27,12 @@ export function ThemeToggle({
 }: ThemeToggleProps): JSX.Element {
   const { theme, setTheme } = useTheme();
 
-  const toggleTheme = () => {
+  const toggleTheme = (): void => { // Add return type
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
   // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent): void => { // Add return type
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       toggleTheme();

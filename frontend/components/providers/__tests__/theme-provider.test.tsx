@@ -8,7 +8,7 @@ jest.mock('next-themes', () => ({
 }));
 
 describe('ThemeProvider', () => {
-  const TestComponent = () => {
+  const TestComponent = (): JSX.Element => { // Add return type
     const { theme, setTheme } = useTheme();
     return (
       <div>
@@ -36,9 +36,9 @@ describe('ThemeProvider', () => {
     );
 
     const button = screen.getByRole('button');
-    await act(async () => {
-      await userEvent.click(button);
-    });
+    // Remove unnecessary act wrapper around userEvent
+    await userEvent.click(button);
+ 
 
     expect(screen.getByTestId('current-theme')).toHaveTextContent('dark');
   });

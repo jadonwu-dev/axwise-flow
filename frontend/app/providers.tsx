@@ -4,7 +4,6 @@ import { type ReactNode } from 'react';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { ClerkProvider } from '@clerk/nextjs';
-import { apiClient } from '@/lib/apiClient';
 
 interface ProvidersProps {
   children: ReactNode;

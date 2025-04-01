@@ -5,19 +5,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// import { ScrollArea } from '@/components/ui/scroll-area';
+ // Unused
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Tooltip } from 'react-tooltip';
-import { 
-  TooltipTrigger, 
-  TooltipContent, 
-  TooltipProvider 
-} from '@/components/ui/tooltip';
+// Removed unused Tooltip compoten
+// components from @/components/ui/tooltip
 
 // Define types for Persona data structure
+// Define the nested object structure for trait values
+type PersonaTraitValueObject = {
+  description: string;
+  evidence?: string[]; // Optional based on provided JSON
+  confidence?: number; // Optional based on provided JSON
+};
+
+// Update PersonaTrait to allow value to be the nested object
 type PersonaTrait = {
-  value: string | string[] | number | boolean | null;
+  // Allow value to be the nested object, string, array, or other primitives
+  value: string | string[] | number | boolean | null | PersonaTraitValueObject; 
   confidence: number;
   evidence: string[];
 };
@@ -105,6 +112,77 @@ export function PersonaList({ personas, className }: PersonaListProps) {
     return 'Limited confidence: Based on inferences with minimal evidence';
   };
 
+  // Helper function to render trait values consistently for the Card view (split sentences)
+  const renderTraitList = (trait: PersonaTrait): React.ReactNode => {
+    let textToRender: string | null = null;
+
+    // Check if value is an object with a description property first
+    if (typeof trait.value === 'object' && trait.value !== null && 'description' in trait.value && typeof trait.value.description === 'string') {
+      textToRender = trait.value.description.trim();
+    } 
+    // Then check if value is a direct string
+    else if (typeof trait.value === 'string') {
+      textToRender = trait.value.trim();
+    }
+    // Then check if value is an array
+    else if (Array.isArray(trait.value)) {
+      // Filter out non-string items just in case
+      const stringItems = trait.value.filter(item => typeof item === 'string');
+      if (stringItems.length > 0) {
+        return stringItems.map((item: string, i: number) => (
+          <li key={i}>{item}</li>
+        ));
+      } else {
+         textToRender = null; // Treat empty array or array of non-strings as N/A
+      }
+    }
+
+    // If we have text, split it into sentences for list items
+    if (textToRender && textToRender.length > 0) {
+      return textToRender.split('. ').filter(s => s.trim().length > 0).map((sentence, i) => (
+        // Add period back if split removed it and it wasn't the last character
+        <li key={i}>{sentence.trim()}{textToRender?.endsWith(sentence.trim()) ? '' : '.'}</li> 
+      ));
+    }
+    
+    // Fallback for null, empty string, boolean, number, or unexpected object structure
+    return <li className="text-muted-foreground italic">N/A</li>; 
+  };
+
+  // Helper function to get the display value for the comparison table (no splitting)
+  const getComparisonValue = (trait: PersonaTrait): string => {
+      // Check for nested description object
+      if (typeof trait.value === 'object' && trait.value !== null && 'description' in trait.value && typeof trait.value.description === 'string') {
+          return trait.value.description.trim() || 'N/A';
+      } 
+      // Check for direct string
+      else if (typeof trait.value === 'string') {
+          return trait.value.trim() || 'N/A';
+      } 
+      // Check for array
+      else if (Array.isArray(trait.value)) {
+          // Filter only strings and join
+          return trait.value.filter(item => typeof item === 'string').join(', ') || 'N/A';
+      }
+      // Handle potential nested value object in comparison table as well
+      else if (typeof trait.value === 'object' && trait.value !== null) {
+          // Attempt to stringify, but might still result in [object Object] if complex
+          try {
+            // Check specifically for the nested description object structure
+            if ('description' in trait.value && typeof trait.value.description === 'string') {
+                return trait.value.description.trim() || 'N/A';
+            }
+            const strVal = JSON.stringify(trait.value);
+            // Avoid showing empty object string representation
+            return strVal === '{}' ? 'N/A' : strVal; 
+          } catch (e) {
+            return '[Object]'; // Fallback if stringify fails
+          }
+      }
+      return String(trait.value ?? 'N/A'); // Handle null/undefined/other primitives
+  };
+
+
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader>
@@ -178,7 +256,8 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                               <li><strong>90-100%:</strong> Direct statements from interview</li>
                               <li><strong>70-80%:</strong> Strong evidence across multiple mentions</li>
                               <li><strong>50-60%:</strong> Contextual clues and moderate evidence</li>
-                              <li><strong>&lt;50%:</strong> Limited evidence based on inferences</li>
+                              {/* Escaped the less than sign */}
+                              <li><strong>&lt;50%:</strong> Limited evidence based on inferences</li> 
                             </ul>
                           </div>
                         </CardContent>
@@ -197,7 +276,8 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                           </div>
                         </CardHeader>
                         <CardContent>
-                          <p>{activePersona.role_context.value}</p>
+                          {/* Role context seems to be direct string, render as paragraph */}
+                          <p>{typeof activePersona.role_context.value === 'string' ? activePersona.role_context.value : 'N/A'}</p>
                           
                           {activePersona.role_context.evidence.length > 0 && (
                             <div className="mt-2">
@@ -239,17 +319,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {typeof activePersona.key_responsibilities.value === 'string' 
-                              ? activePersona.key_responsibilities.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
-                              <li key={i}>{item.trim()}</li>
-                                ))
-                              : (Array.isArray(activePersona.key_responsibilities.value) 
-                                  ? (activePersona.key_responsibilities.value as string[]).map((item: string, i: number) => (
-                                      <li key={i}>{item}</li>
-                                    ))
-                                  : <li>{String(activePersona.key_responsibilities.value ?? '')}</li>
-                                )
-                            }
+                            {renderTraitList(activePersona.key_responsibilities)}
                           </ul>
                           
                           {activePersona.key_responsibilities.evidence.length > 0 && (
@@ -292,17 +362,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {typeof activePersona.tools_used.value === 'string' 
-                              ? activePersona.tools_used.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
-                              <li key={i}>{item.trim()}</li>
-                                ))
-                              : (Array.isArray(activePersona.tools_used.value) 
-                                  ? (activePersona.tools_used.value as string[]).map((item: string, i: number) => (
-                                      <li key={i}>{item}</li>
-                                    ))
-                                  : <li>{String(activePersona.tools_used.value ?? '')}</li>
-                                )
-                            }
+                            {renderTraitList(activePersona.tools_used)}
                           </ul>
                           
                           {activePersona.tools_used.evidence.length > 0 && (
@@ -345,17 +405,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {typeof activePersona.pain_points.value === 'string' 
-                              ? activePersona.pain_points.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
-                              <li key={i}>{item.trim()}</li>
-                                ))
-                              : (Array.isArray(activePersona.pain_points.value) 
-                                  ? (activePersona.pain_points.value as string[]).map((item: string, i: number) => (
-                                      <li key={i}>{item}</li>
-                                    ))
-                                  : <li>{String(activePersona.pain_points.value ?? '')}</li>
-                                )
-                            }
+                            {renderTraitList(activePersona.pain_points)}
                           </ul>
                           
                           {activePersona.pain_points.evidence.length > 0 && (
@@ -398,17 +448,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {typeof activePersona.collaboration_style.value === 'string' 
-                              ? activePersona.collaboration_style.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
-                              <li key={i}>{item.trim()}</li>
-                                ))
-                              : (Array.isArray(activePersona.collaboration_style.value) 
-                                  ? (activePersona.collaboration_style.value as string[]).map((item: string, i: number) => (
-                                      <li key={i}>{item}</li>
-                                    ))
-                                  : <li>{String(activePersona.collaboration_style.value ?? '')}</li>
-                                )
-                            }
+                            {renderTraitList(activePersona.collaboration_style)}
                           </ul>
                           
                           {activePersona.collaboration_style.evidence.length > 0 && (
@@ -451,17 +491,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                         </CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5">
-                            {typeof activePersona.analysis_approach.value === 'string' 
-                              ? activePersona.analysis_approach.value.split('. ').filter(item => item.trim().length > 0).map((item: string, i: number) => (
-                              <li key={i}>{item.trim()}</li>
-                                ))
-                              : (Array.isArray(activePersona.analysis_approach.value) 
-                                  ? (activePersona.analysis_approach.value as string[]).map((item: string, i: number) => (
-                                      <li key={i}>{item}</li>
-                                    ))
-                                  : <li>{String(activePersona.analysis_approach.value ?? '')}</li>
-                                )
-                            }
+                            {renderTraitList(activePersona.analysis_approach)}
                           </ul>
                           
                           {activePersona.analysis_approach.evidence.length > 0 && (
@@ -555,19 +585,14 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Role Context</td>
                     {personas.map((persona, index) => (
-                      <td key={index} className="p-2">{persona.role_context.value}</td>
+                      <td key={index} className="p-2">{getComparisonValue(persona.role_context)}</td>
                     ))}
                   </tr>
                   <tr className="border-b hover:bg-muted/50">
                     <td className="p-2 font-medium">Key Responsibilities</td>
                     {personas.map((persona, index) => (
                       <td key={index} className="p-2">
-                        {typeof persona.key_responsibilities.value === 'string' 
-                          ? persona.key_responsibilities.value 
-                          : Array.isArray(persona.key_responsibilities.value)
-                            ? persona.key_responsibilities.value.join(', ')
-                            : String(persona.key_responsibilities.value ?? '')
-                        }
+                        {getComparisonValue(persona.key_responsibilities)}
                       </td>
                     ))}
                   </tr>
@@ -575,12 +600,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                     <td className="p-2 font-medium">Tools Used</td>
                     {personas.map((persona, index) => (
                       <td key={index} className="p-2">
-                        {typeof persona.tools_used.value === 'string' 
-                          ? persona.tools_used.value 
-                          : Array.isArray(persona.tools_used.value)
-                            ? persona.tools_used.value.join(', ')
-                            : String(persona.tools_used.value ?? '')
-                        }
+                        {getComparisonValue(persona.tools_used)}
                       </td>
                     ))}
                   </tr>
@@ -588,12 +608,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                     <td className="p-2 font-medium">Pain Points</td>
                     {personas.map((persona, index) => (
                       <td key={index} className="p-2">
-                        {typeof persona.pain_points.value === 'string' 
-                          ? persona.pain_points.value 
-                          : Array.isArray(persona.pain_points.value)
-                            ? persona.pain_points.value.join(', ')
-                            : String(persona.pain_points.value)
-                        }
+                        {getComparisonValue(persona.pain_points)}
                       </td>
                     ))}
                   </tr>
@@ -601,12 +616,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                     <td className="p-2 font-medium">Collaboration Style</td>
                     {personas.map((persona, index) => (
                       <td key={index} className="p-2">
-                        {typeof persona.collaboration_style.value === 'string' 
-                          ? persona.collaboration_style.value 
-                          : Array.isArray(persona.collaboration_style.value)
-                            ? persona.collaboration_style.value.join(', ')
-                            : String(persona.collaboration_style.value ?? '')
-                        }
+                        {getComparisonValue(persona.collaboration_style)}
                       </td>
                     ))}
                   </tr>
@@ -614,12 +624,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                     <td className="p-2 font-medium">Analysis Approach</td>
                     {personas.map((persona, index) => (
                       <td key={index} className="p-2">
-                        {typeof persona.analysis_approach.value === 'string' 
-                          ? persona.analysis_approach.value 
-                          : Array.isArray(persona.analysis_approach.value)
-                            ? persona.analysis_approach.value.join(', ')
-                            : String(persona.analysis_approach.value ?? '')
-                        }
+                        {getComparisonValue(persona.analysis_approach)}
                       </td>
                     ))}
                   </tr>
@@ -633,4 +638,4 @@ export function PersonaList({ personas, className }: PersonaListProps) {
   );
 }
 
-export default PersonaList; 
+export default PersonaList;

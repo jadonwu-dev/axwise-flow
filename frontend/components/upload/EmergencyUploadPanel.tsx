@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useRef, useState, useCallback, useEffect, useTransition } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react'; // Removed unused useTransition
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
-import { AlertCircle, CheckCircle2, FileUp, FileText, FilePen, X } from 'lucide-react';
+import { AlertCircle, FileUp, FileText, FilePen, X } from 'lucide-react'; // Removed unused CheckCircle2
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { UploadResponse } from '@/types/api';
@@ -24,7 +24,7 @@ import { setCookie } from 'cookies-next';
 export default function EmergencyUploadPanel() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  // const [isPending, startTransition] = useTransition(); // Removed unused variables
   
   // Reference to file input
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +40,6 @@ export default function EmergencyUploadPanel() {
   const [uploadError, setUploadError] = useState<Error | null>(null);
   const [analysisError, setAnalysisError] = useState<Error | null>(null);
   const [resultId, setResultId] = useState<string | null>(null);
-  const [analysisComplete, setAnalysisComplete] = useState<boolean>(false);
   const [uploadResponse, setUploadResponse] = useState<UploadResponse | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [pollingActive, setPollingActive] = useState<boolean>(false);
@@ -358,6 +357,7 @@ export default function EmergencyUploadPanel() {
             <input
               ref={fileInputRef}
               type="file"
+              data-testid="file-input" // Add test ID
               className="hidden"
               onChange={handleFileChange}
               accept={isTextFile ? ".txt,.md,.doc,.docx" : ".csv,.xlsx,.xls,.json"}

@@ -6,7 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 /**
  * Tab for displaying application documentation
  */
-const DocumentationTab = () => {
+const DocumentationTab = (): JSX.Element => { // Add return type
   return (
     <Card className="w-full">
       <CardHeader>
@@ -73,7 +73,7 @@ const DocumentationTab = () => {
                     For raw interview transcripts, use plain text files. The application supports:
                   </p>
                   <ul className="list-disc pl-5 space-y-1">
-                    <li>Q&A format (questions prefixed with "Q:", answers with "A:")</li>
+                    <li>Q&A format (questions prefixed with &quot;Q:&quot;, answers with &quot;A:&quot;)</li> {/* Escape quotes */}
                     <li>Chat transcript format (name followed by message)</li>
                     <li>Free-form text</li>
                   </ul>

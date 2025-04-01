@@ -40,7 +40,7 @@ describe('NotFound Page', () => {
 
   it('renders FileQuestion icon', () => {
     render(<NotFound />);
-    const icon = document.querySelector('svg');
+    const icon = screen.getByTestId('not-found-icon'); // Use testid
     expect(icon).toBeInTheDocument();
     expect(icon).toHaveClass('h-12', 'w-12');
   });
@@ -65,24 +65,23 @@ describe('NotFound Page', () => {
   it('applies responsive styles to button container', () => {
     render(<NotFound />);
     
-    const buttonContainer = screen.getByText('Go Home').closest('div');
+    const buttonContainer = screen.getByTestId('not-found-buttons'); // Use testid
     expect(buttonContainer).toHaveClass('flex-col', 'sm:flex-row');
   });
 
   it('maintains consistent button styling', () => {
     render(<NotFound />);
     
-    const homeButton = screen.getByText('Go Home').closest('a');
-    const backButton = screen.getByText('Go Back');
+    const homeButton = screen.getByTestId('mock-link'); // Use testid from mock
+    const backButton = screen.getByRole('button', { name: /Go Back/i }); // Use getByRole
 
     expect(homeButton).toHaveClass('flex-1', 'sm:flex-initial');
     expect(backButton).toHaveClass('flex-1', 'sm:flex-initial');
   });
 
   it('centers content vertically and horizontally', () => {
-    const { container } = render(<NotFound />);
-    
-    const wrapper = container.firstChild as HTMLElement;
+    render(<NotFound />);
+    const wrapper = screen.getByTestId('not-found-wrapper'); // Use testid
     expect(wrapper).toHaveClass(
       'min-h-screen',
       'flex',
@@ -94,7 +93,8 @@ describe('NotFound Page', () => {
   it('maintains proper spacing between elements', () => {
     render(<NotFound />);
     
-    const contentContainer = screen.getByText('404').closest('div');
-    expect(contentContainer?.parentElement).toHaveClass('space-y-6');
+    const contentContainer = screen.getByTestId('not-found-content'); // Use testid
+    expect(contentContainer).toHaveClass('space-y-6');
+ // Check class directly
   });
 });

@@ -42,6 +42,7 @@ export function LoadingSpinner({
       data-testid="loading-spinner"
     >
       <Loader2
+        data-testid="loader-icon" // Add test ID
         className={cn(
           'animate-spin text-primary',
           sizeClasses[size]

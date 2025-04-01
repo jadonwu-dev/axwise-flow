@@ -4,18 +4,24 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 
 // Create a self-contained component for testing with no external dependencies
-const MinimalDashboard = () => {
+const MinimalDashboard = (): JSX.Element => { // Add return type
   const [uploadedId, setUploadedId] = React.useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-  const [result, setResult] = React.useState<any>(null);
+  // Define a more specific type for the result state based on mock data
+  type MockResult = {
+    themes: { id: number; name: string; frequency: number }[];
+    patterns: { id: number; description: string; sentiment: number }[];
+    sentiment: { overview: { positive: number; neutral: number; negative: number } };
+  } | null;
+  const [result, setResult] = React.useState<MockResult>(null); // Use specific type
 
   // Simulate the upload process
-  const handleUpload = (id: number) => {
+  const handleUpload = (id: number): void => { // Add return type
     setUploadedId(id);
   };
 
   // Simulate the analysis process
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (): Promise<void> => { // Add return type
     setIsAnalyzing(true);
     
     // Simulate API delay

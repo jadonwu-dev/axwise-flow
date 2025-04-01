@@ -5,8 +5,8 @@ import { LoadingSpinner } from '@/components/loading-spinner';
  */
 export default function Loading(): JSX.Element {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="text-center space-y-4">
+    <div className="min-h-screen flex items-center justify-center p-4" data-testid="loading-page-wrapper"> {/* Add testid */}
+      <div className="text-center space-y-4" data-testid="loading-content-wrapper"> {/* Add testid */}
         <LoadingSpinner 
           size="lg"
           label="Loading..."

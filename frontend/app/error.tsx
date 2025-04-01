@@ -22,7 +22,7 @@ export default function Error({ error, reset }: ErrorProps): JSX.Element {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md p-6 bg-background rounded-lg shadow-lg">
         <div className="flex items-center space-x-2 text-destructive mb-4">
-          <AlertCircle className="h-6 w-6" />
+          <AlertCircle className="h-6 w-6" data-testid="error-icon" /> {/* Add testid */}
           <h1 className="text-xl font-semibold">Something went wrong!</h1>
         </div>
         

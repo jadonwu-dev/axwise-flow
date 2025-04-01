@@ -22,11 +22,12 @@ describe('Card Components', () => {
 
     it('applies custom className', () => {
       render(
-        <Card className="custom-class">
+        <Card className="custom-class" data-testid="card-custom"> {/* Add testid */}
           <div>Card content</div>
         </Card>
       )
-      expect(screen.getByText('Card content').parentElement).toHaveClass('custom-class')
+      expect(screen.getByTestId('card-custom')).toHaveClass('custom-class')
+ // Use testid
     })
 
     it('forwards ref correctly', () => {
@@ -52,11 +53,12 @@ describe('Card Components', () => {
 
     it('applies custom className', () => {
       render(
-        <CardHeader className="custom-header">
+        <CardHeader className="custom-header" data-testid="header-custom"> {/* Add testid */}
           <div>Header content</div>
         </CardHeader>
       )
-      expect(screen.getByText('Header content').parentElement).toHaveClass('custom-header')
+      expect(screen.getByTestId('header-custom')).toHaveClass('custom-header')
+ // Use testid
     })
   })
 
@@ -72,11 +74,12 @@ describe('Card Components', () => {
 
     it('applies custom className', () => {
       render(
-        <CardFooter className="custom-footer">
+        <CardFooter className="custom-footer" data-testid="footer-custom"> {/* Add testid */}
           <div>Footer content</div>
         </CardFooter>
       )
-      expect(screen.getByText('Footer content').parentElement).toHaveClass('custom-footer')
+      expect(screen.getByTestId('footer-custom')).toHaveClass('custom-footer')
+ // Use testid
     })
   })
 
@@ -123,11 +126,12 @@ describe('Card Components', () => {
 
     it('applies custom className', () => {
       render(
-        <CardContent className="custom-content">
+        <CardContent className="custom-content" data-testid="content-custom"> {/* Add testid */}
           <div>Content area</div>
         </CardContent>
       )
-      expect(screen.getByText('Content area').parentElement).toHaveClass('custom-content')
+      expect(screen.getByTestId('content-custom')).toHaveClass('custom-content')
+ // Use testid
     })
   })
 
@@ -157,18 +161,20 @@ describe('Card Components', () => {
     it('maintains proper spacing and layout', () => {
       render(
         <Card>
-          <CardHeader>
+          <CardHeader data-testid="int-header"> {/* Add testid */}
             <CardTitle>Title</CardTitle>
             <CardDescription>Description</CardDescription>
           </CardHeader>
-          <CardContent>Content</CardContent>
-          <CardFooter>Footer</CardFooter>
+          <CardContent data-testid="int-content">Content</CardContent>
+ {/* Add testid */}
+          <CardFooter data-testid="int-footer">Footer</CardFooter>
+ {/* Add testid */}
         </Card>
       )
 
-      const header = screen.getByText('Title').closest('div')
-      const content = screen.getByText('Content').parentElement
-      const footer = screen.getByText('Footer').parentElement
+      const header = screen.getByTestId('int-header') // Use testid
+      const content = screen.getByTestId('int-content') // Use testid
+      const footer = screen.getByTestId('int-footer') // Use testid
 
       expect(header).toHaveClass('space-y-1.5', 'p-6')
       expect(content).toHaveClass('p-6', 'pt-0')

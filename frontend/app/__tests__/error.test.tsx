@@ -91,14 +91,14 @@ describe('Error Page', () => {
   it('renders error icon', () => {
     render(<Error error={mockError} reset={mockReset} />);
     expect(screen.getByText('Something went wrong!')).toBeInTheDocument();
-    expect(document.querySelector('svg')).toBeInTheDocument(); // AlertCircle icon
+    expect(screen.getByTestId('error-icon')).toBeInTheDocument(); // Use testid
   });
 
   it('maintains proper button styling', () => {
     render(<Error error={mockError} reset={mockReset} />);
     
-    const tryAgainButton = screen.getByText('Try again').closest('button');
-    const goHomeButton = screen.getByText('Go home').closest('button');
+    const tryAgainButton = screen.getByRole('button', { name: /Try again/i }); // Use getByRole
+    const goHomeButton = screen.getByRole('button', { name: /Go home/i }); // Use getByRole
 
     expect(tryAgainButton).toHaveClass('variant-default');
     expect(goHomeButton).toHaveClass('variant-outline');

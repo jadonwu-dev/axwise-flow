@@ -11,7 +11,7 @@ interface AnalysisOptionsProps {
 /**
  * Component for selecting analysis options (LLM provider)
  */
-const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps) => {
+const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): JSX.Element => { // Add return type
   return (
     <div className="space-y-4">
       <div>

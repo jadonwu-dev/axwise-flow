@@ -1,9 +1,10 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, RenderResult } from '@testing-library/react';
+ // Import RenderResult
 import { ThemeProvider } from 'next-themes';
 import { Header } from '../Header';
 
 describe('Header', () => {
-  const renderHeader = () => {
+  const renderHeader = (): RenderResult => { // Add return type
     return render(
       <ThemeProvider attribute="class">
         <Header />
@@ -31,7 +32,9 @@ describe('Header', () => {
     expect(themeButton).toBeInTheDocument();
 
     // Icons should be present
-    expect(themeButton.querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByTestId('sun-icon')).toBeInTheDocument(); // Use testid
+    expect(screen.getByTestId('moon-icon')).toBeInTheDocument();
+ // Use testid
   });
 
   it('toggles theme when button is clicked', () => {

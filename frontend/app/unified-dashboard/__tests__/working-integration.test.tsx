@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import { apiClient } from '@/lib/apiClient'; // Corrected import path using alias
+import type { DetailedAnalysisResult } from '@/types/api'; // Import the type
+import EmergencyUploadPanel from '@/components/upload/EmergencyUploadPanel'; // Import the correct component
 
 // IMPORTANT: Mock setup must be done before importing the component being tested
 
@@ -63,11 +66,14 @@ vi.mock('../../../components/loading-spinner', () => ({
 }));
 
 vi.mock('../../../components/unified-visualization', () => ({
-  default: ({ data }: { data: Record<string, any> }) => (
+  // Use DetailedAnalysisResult (or a relevant subset) instead of any
+  default: ({ data }: { data: DetailedAnalysisResult | null }) => (
+ 
     <div data-testid="visualization">
       <div data-testid="themes-count">{data?.themes?.length || 0} Themes</div>
       <div data-testid="patterns-count">{data?.patterns?.length || 0} Patterns</div>
-      <div data-testid="sentiment-score">Sentiment: {data?.sentiment?.overview?.positive || 0}</div>
+      <div data-testid="sentiment-score">Sentiment: {data?.sentimentOverview?.positive || 0}</div>
+ {/* Correct path */}
     </div>
   )
 }));
@@ -91,18 +97,15 @@ vi.mock('../../../components/ui/toast-provider', () => ({
   })
 }));
 
-// NOW import the component under test (after all mocks are setup)
-import Dashboard from '../page';
+// Removed incorrect Dashboard import
 
 describe('Dashboard Integration Tests', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     
-    // Get references to the mocked functions
-    const { apiClient } = require('../../../lib/apiClient');
-    
     // Reset mock implementations if needed
-    apiClient.getProcessingStatus
+    // Use vi.mocked() to inform TypeScript about mock methods
+    vi.mocked(apiClient.getProcessingStatus) 
       .mockResolvedValueOnce({ 
         id: 'analysis-456', 
         status: 'processing', 
@@ -116,7 +119,7 @@ describe('Dashboard Integration Tests', () => {
   });
 
   it('renders the initial upload state correctly', () => {
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Check for file upload component
     expect(screen.getByTestId('file-upload')).toBeInTheDocument();
@@ -125,7 +128,7 @@ describe('Dashboard Integration Tests', () => {
 
   it('completes the full analysis workflow', async () => {
     const user = userEvent.setup();
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Step 1: Upload a file
     await user.click(screen.getByTestId('mock-upload-button'));
@@ -149,4 +152,4 @@ describe('Dashboard Integration Tests', () => {
     expect(screen.getByTestId('patterns-count')).toHaveTextContent('2 Patterns');
     expect(screen.getByTestId('sentiment-score')).toHaveTextContent('Sentiment: 0.45');
   });
-}); 
+});

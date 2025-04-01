@@ -73,11 +73,11 @@ const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const handleViewResults = () => {
+  const handleViewResults = (): void => { // Add return type
     window.location.href = `/results/${analysisId}`;
   };
 
-  const handleRetry = () => {
+  const handleRetry = (): void => { // Add return type
     // Reset error state and restart polling
     setError(undefined);
     setStartTime(new Date());

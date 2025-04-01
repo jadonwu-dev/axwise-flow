@@ -1,7 +1,8 @@
 import React from 'react'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Toast, ToastProvider, ToastViewport } from '../toast'
+import { ToastProvider, ToastViewport } from '../toast'
+ // Remove unused Toast import
 import { ToastAction } from '../toast'
 import { useToast } from '../use-toast'
 import type { ToastProps } from '../toast'
@@ -165,8 +166,9 @@ describe('Toast Component', () => {
     const button = screen.getByText('Show Toast')
     await userEvent.click(button)
     
-    const toast = screen.getByText('Styled toast')
-    expect(toast.parentElement).toHaveClass('custom-toast-class')
+    // Find the container by role and check its class
+    expect(screen.getByRole('status')).toHaveClass('custom-toast-class'); 
+ 
     expect(screen.getByTestId('toast-viewport')).toHaveClass('custom-viewport-class')
   })
 
@@ -175,7 +177,8 @@ describe('Toast Component', () => {
       <ToastProvider>
         <button
           onClick={() => {
-            const { id, update } = useToast().toast({ 
+            const { update } = useToast().toast({ 
+// Remove unused id
               description: 'Initial message' 
             })
             setTimeout(() => {

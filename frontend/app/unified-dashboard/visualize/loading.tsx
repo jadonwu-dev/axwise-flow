@@ -1,4 +1,4 @@
-export default function Loading() {
+export default function Loading(): JSX.Element { // Add return type
   return (
     <div className="flex flex-col items-center justify-center min-h-[50vh]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>

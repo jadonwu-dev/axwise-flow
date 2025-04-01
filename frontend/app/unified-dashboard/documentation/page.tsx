@@ -5,7 +5,7 @@
  * It eliminates the Zustand store dependency by using server components.
  */
 
-export default function DocumentationPage() {
+export default function DocumentationPage(): JSX.Element { // Add return type
   return (
     <div className="prose prose-sm max-w-none dark:prose-invert">
       <h2>Interview Insight Analyst Documentation</h2>
@@ -53,7 +53,7 @@ export default function DocumentationPage() {
       <ol>
         <li>Upload your interview file using the Upload tab.</li>
         <li>Select your preferred LLM provider (OpenAI or Gemini).</li>
-        <li>Click "Start Analysis" to begin processing.</li>
+        <li>Click &quot;Start Analysis&quot; to begin processing.</li>
         <li>Once complete, view the results in the Visualization tab.</li>
       </ol>
       

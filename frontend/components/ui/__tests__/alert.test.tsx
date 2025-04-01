@@ -139,7 +139,7 @@ describe('Alert Component', () => {
     render(
       <Alert>
         <AlertTitle>Nested Title</AlertTitle>
-        <AlertDescription>
+        <AlertDescription data-testid="alert-description"> {/* Add testid */}
           <p>Paragraph 1</p>
           <p>Paragraph 2</p>
         </AlertDescription>
@@ -148,7 +148,7 @@ describe('Alert Component', () => {
 
     const alert = screen.getByRole('alert')
     const title = screen.getByText('Nested Title')
-    const description = screen.getByText('Paragraph 1').parentElement
+    const description = screen.getByTestId('alert-description') // Use testid
 
     expect(alert).toContainElement(title)
     expect(alert).toContainElement(description)

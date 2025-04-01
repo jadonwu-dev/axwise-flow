@@ -8,14 +8,15 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
-import type { UploadResponse, AnalysisResponse, DetailedAnalysisResult } from '@/types/api';
+import type { DetailedAnalysisResult, UploadResponse, AnalysisResponse } from '@/types/api';
+ // Rem-addd UploadResponse, AnalysisResponse
 import { cookies } from 'next/headers';
 
 /**
  * Upload Action
  * Handles file uploads using server action
  */
-export async function uploadAction(formData: FormData) {
+export async function uploadAction(formData: FormData): Promise<{ success: true; uploadResponse: UploadResponse } | { success: false; error: string }> {
   try {
     const file = formData.get('file') as File;
     const isTextFile = formData.get('isTextFile') === 'true';
@@ -64,7 +65,7 @@ export async function analyzeAction(
   dataId: number,
   isTextFile: boolean,
   llmProvider: 'openai' | 'gemini' = 'gemini'
-) {
+): Promise<{ success: true; analysisResponse: AnalysisResponse } | { success: false; error: string }> {
   try {
     // Get auth token from cookie
     const cookieStore = cookies();
@@ -99,7 +100,7 @@ export async function analyzeAction(
  * Redirect after successful analysis
  * Helper function to generate URL for redirection
  */
-export async function getRedirectUrl(analysisId: string) {
+export async function getRedirectUrl(analysisId: string): Promise<string> {
   return `/unified-dashboard/visualize?analysisId=${analysisId}`;
 }
 

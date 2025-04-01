@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ToastProvider, useToast } from '../toast-provider';
 
 // Test component that uses the toast hook
-const TestComponent = () => {
+const TestComponent = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
   return (
     <button onClick={() => showToast('Test message', { variant: 'success' })}>
@@ -56,7 +56,7 @@ describe('ToastProvider', () => {
   });
 
   it('handles multiple toasts', async () => {
-    const MultipleToastTest = () => {
+    const MultipleToastTest = (): JSX.Element => { // Add return type
       const { showToast } = useToast();
       return (
         <>
@@ -88,7 +88,7 @@ describe('ToastProvider', () => {
   });
 
   it('respects custom positions', async () => {
-    const PositionTest = () => {
+    const PositionTest = (): JSX.Element => { // Add return type
       const { showToast } = useToast();
       return (
         <button
@@ -109,8 +109,8 @@ describe('ToastProvider', () => {
 
     await userEvent.click(screen.getByText('Show Toast'));
     
-    const toast = screen.getByText('Position test');
-    const toastContainer = toast.parentElement;
+    // Find the container by role (status for default/success, alert for error)
+    const toastContainer = screen.getByRole('status'); 
     expect(toastContainer).toHaveClass('bottom-4', 'left-4');
   });
 

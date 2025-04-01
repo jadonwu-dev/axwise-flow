@@ -228,7 +228,7 @@ describe('API Client', () => {
         })
       });
       
-      // @ts-ignore - Testing with invalid provider
+      // @ts-expect-error - Testing with invalid provider
       await expect(apiClient.analyzeData(123, 'invalid_provider')).rejects.toThrow();
     });
   });
@@ -467,21 +467,11 @@ describe('API Client', () => {
       apiClient.setAuthToken('test-token');
       
       // Since we're not directly testing private variables, 
-      // we can verify the token is used in subsequent API calls
-      const fetch = require('node-fetch').default;
-      
-      // Make a request that should use the token
-      apiClient.getAnalysisById('test-id');
-      
-      // Check if Authorization header was included in the call
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-token'
-          })
-        })
-      );
+      // we can verify the token is set on the internal axios client defaults
+      // This requires accessing a private member, which isn't ideal, but necessary for this test structure
+      // @ts-expect-error - Accessing private member for testing
+      expect(apiClient.client.defaults.headers.common['Authorization']).toBe('Bearer test-token'
+);
     });
 
     it('handles authentication errors with 401 status code', async () => {

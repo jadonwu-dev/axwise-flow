@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
+ // Import useMemo
 import { useParams } from 'next/navigation';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { useToast } from '@/components/providers/toast-provider';
@@ -13,10 +14,11 @@ import {
 import ThemeChart from '@/components/visualization/ThemeChart';
 import PatternList from '@/components/visualization/PatternList';
 import SentimentGraph from '@/components/visualization/SentimentGraph';
-import PersonaList from '@/components/visualization/PersonaList';
-import type { DetailedAnalysisResult } from '@/types/api';
+import { PersonaList } from '@/components/visualization/PersonaList';
+ // Use named import
+import type { DetailedAnalysisResult, Theme, AnalyzedTheme } from '@/types/api'; // Import Theme and AnalyzedTheme
 
-export default function AnalysisResultsPage() {
+export default function AnalysisResultsPage(): JSX.Element | null { // Add return type
   const params = useParams();
   const analysisId = params?.id as string;
   const { showToast } = useToast();
@@ -30,7 +32,7 @@ export default function AnalysisResultsPage() {
   } = useAnalysisStore();
 
   useEffect(() => {
-    async function loadAnalysis() {
+    async function loadAnalysis(): Promise<void> { // Add return type
       try {
         const result = await fetchAnalysisById(analysisId);
         if (!result) {
@@ -55,6 +57,7 @@ export default function AnalysisResultsPage() {
 
   if (isLoading) {
     return (
+ // JSX.Element
       <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner size="lg" label="Loading analysis results..." />
       </div>
@@ -63,6 +66,7 @@ export default function AnalysisResultsPage() {
 
   if (error) {
     return (
+ // JSX.Element
       <div className="p-6 max-w-4xl mx-auto">
         <div className="bg-destructive/10 text-destructive p-4 rounded-md">
           <h2 className="text-lg font-semibold mb-2">Error Loading Analysis</h2>
@@ -83,6 +87,7 @@ export default function AnalysisResultsPage() {
 
   if (!analysisData) {
     return (
+ // JSX.Element
       <div className="p-6 max-w-4xl mx-auto">
         <div className="bg-muted p-4 rounded-md">
           <h2 className="text-lg font-semibold mb-2">Analysis Not Found</h2>
@@ -93,6 +98,7 @@ export default function AnalysisResultsPage() {
   }
 
   return (
+    // JSX.Element
     <ErrorBoundary>
       <div className="p-6 max-w-7xl mx-auto">
         <AnalysisHeader data={analysisData} />
@@ -105,7 +111,7 @@ export default function AnalysisResultsPage() {
   );
 }
 
-function AnalysisHeader({ data }: { data: DetailedAnalysisResult }) {
+function AnalysisHeader({ data }: { data: DetailedAnalysisResult }): JSX.Element { // Add return type
   return (
     <div className="bg-card p-6 rounded-lg shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between">
@@ -136,11 +142,12 @@ function AnalysisHeader({ data }: { data: DetailedAnalysisResult }) {
 }
 
 // TabButton component for consistent tab styling
+// Corrected position of return type annotation
 function TabButton({ isActive, onClick, children }: { 
   isActive: boolean; 
   onClick: () => void; 
   children: React.ReactNode 
-}) {
+}): JSX.Element { 
   return (
     <button
       className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -155,7 +162,7 @@ function TabButton({ isActive, onClick, children }: {
   );
 }
 
-function TabOptions() {
+function TabOptions(): JSX.Element { // Add return type
   const { selectedTab, setSelectedTab } = useUIStore();
 
   return (
@@ -180,7 +187,7 @@ function TabOptions() {
       </TabButton>
       <TabButton
         isActive={selectedTab === 'personas'}
-        onClick={() => setSelectedTab('personas' as any)}
+        onClick={() => setSelectedTab('personas' as 'themes' | 'patterns' | 'sentiment' | 'personas')} // Use specific type
       >
         Personas
       </TabButton>
@@ -188,10 +195,18 @@ function TabOptions() {
   );
 }
 
-function AnalysisTabs({ data }: { data: DetailedAnalysisResult }) {
+function AnalysisTabs({ data }: { data: DetailedAnalysisResult }): JSX.Element { // Add return type
   const selectedTab = useSelectedTab();
-  const setSelectedTab = useUIStore(state => state.setSelectedTab);
   
+  // Map Theme[] to AnalyzedTheme[] for ThemeChart compatibility
+  const analyzedThemes: AnalyzedTheme[] = useMemo(() => {
+    return data.themes.map((theme: Theme) => ({
+      ...theme,
+      prevalence: theme.frequency, // Map frequency to prevalence
+      id: String(theme.id) // Ensure id is string as expected by AnalyzedTheme? Check ThemeChart usage if needed. Assuming string for now.
+    }));
+  }, [data.themes]);
+
   useEffect(() => {
     if (selectedTab === 'sentiment') {
       console.log('Sentiment tab selected, data:', {
@@ -219,7 +234,7 @@ function AnalysisTabs({ data }: { data: DetailedAnalysisResult }) {
         <div className="mt-4">
           {selectedTab === 'themes' && (
             <ThemeChart
-              themes={data.themes}
+              themes={analyzedThemes} // Pass the mapped array
             />
           )}
           {selectedTab === 'patterns' && (
@@ -230,7 +245,6 @@ function AnalysisTabs({ data }: { data: DetailedAnalysisResult }) {
           {selectedTab === 'sentiment' && (
             <SentimentGraph
               data={data.sentimentOverview}
-              detailedData={data.sentiment}
               supportingStatements={data.sentimentStatements || {
                 positive: data.sentiment.filter(s => s.score > 0.2).map(s => s.text).slice(0, 5),
                 neutral: data.sentiment.filter(s => s.score > -0.2 && s.score < 0.2).map(s => s.text).slice(0, 5),

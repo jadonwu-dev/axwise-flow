@@ -4,7 +4,8 @@ import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { UserProfile } from '../user-profile';
 import { useClerk, SignedIn } from '@clerk/nextjs';
-import Link from 'next/link';
+// import Link from 'next/link';
+ // Unused import
 import { Button } from '@/components/ui/button';
 
 /**
@@ -15,11 +16,11 @@ export function Header(): JSX.Element {
   const { theme, setTheme } = useTheme();
   const { signOut } = useClerk();
 
-  const toggleTheme = () => {
+  const toggleTheme = (): void => { // Add return type
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = (): void => { // Add return type
     signOut(() => {
       window.location.href = '/sign-in';
     });
@@ -59,8 +60,8 @@ export function Header(): JSX.Element {
             onClick={toggleTheme}
             aria-label="Toggle theme"
           >
-            <Sun className="h-5 w-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
+            <Sun className="h-5 w-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" data-testid="sun-icon" /> {/* Add testid */}
+            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" data-testid="moon-icon" /> {/* Add testid */}
           </button>
         </div>
       </div>

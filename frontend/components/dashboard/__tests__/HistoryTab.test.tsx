@@ -6,6 +6,10 @@ import { apiClient } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import { vi } from 'vitest';
 
+// Import type for router mock
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+
+
 // Create a proper mock type that includes Vitest's mock functions
 type MockApiClient = {
   listAnalyses: ReturnType<typeof vi.fn>;
@@ -25,12 +29,23 @@ vi.mock('@/lib/apiClient', () => {
 const mockedApiClient = apiClient as unknown as MockApiClient;
 
 // Mock Next.js navigation
+const mockPush = vi.fn();
+const mockRefresh = vi.fn();
+const mockReplace = vi.fn(); // Add mock
+const mockBack = vi.fn(); // Add mock
+const mockForward = vi.fn(); // Add mock
+const mockUseRouter = vi.fn((): AppRouterInstance => ({ // Return full AppRouterInstance
+  push: mockPush,
+  refresh: mockRefresh,
+  replace: mockReplace, // Add method
+  back: mockBack,       // Add method
+  forward: mockForward, // Add method
+  prefetch: vi.fn(),    // Add method
+}));
+const mockUseSearchParams = vi.fn(() => new URLSearchParams(''));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    refresh: vi.fn()
-  }),
-  useSearchParams: () => new URLSearchParams('')
+  useRouter: mockUseRouter,
+  useSearchParams: mockUseSearchParams,
 }));
 
 // Mock toast provider
@@ -113,11 +128,7 @@ describe('HistoryTab', () => {
   });
 
   it('navigates to analysis details when an analysis is clicked', async () => {
-    const pushMock = vi.fn();
-    (useRouter as any).mockReturnValue({
-      push: pushMock,
-      refresh: vi.fn()
-    });
+    // No need to mock router here as it's done globally and correctly typed now
     
     render(<HistoryTab />);
     
@@ -127,11 +138,11 @@ describe('HistoryTab', () => {
     });
     
     // Find and click an analysis
-    const analysisCard = screen.getByText('interview1.txt').closest('div[role="button"]');
+    const analysisCard = screen.getByTestId(`analysis-item-${mockAnalyses[0].result_id}`); // Use testid
     fireEvent.click(analysisCard!);
     
     // Should navigate to the analysis
-    expect(pushMock).toHaveBeenCalledWith('?tab=visualization&analysisId=123');
+    expect(mockPush).toHaveBeenCalledWith('?tab=visualization&analysisId=123'); // Use the globally defined mockPush
   });
 
   it('confirms and deletes an analysis', async () => {

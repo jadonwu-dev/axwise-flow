@@ -18,7 +18,7 @@ interface DashboardAuthProviderProps {
   children: ReactNode;
 }
 
-export const DashboardAuthProvider = ({ children }: DashboardAuthProviderProps) => {
+export const DashboardAuthProvider = ({ children }: DashboardAuthProviderProps): JSX.Element => { // Add return type
   const { userId, isLoaded } = useAuth();
   const router = useRouter();
   

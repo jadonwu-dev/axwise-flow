@@ -11,7 +11,7 @@ import { LoadingSpinner } from '@/components/loading-spinner';
 
 export const dynamic = 'force-dynamic';
 
-export default function UploadPage() {
+export default function UploadPage(): JSX.Element { // Add return type
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <EmergencyUploadPanel />

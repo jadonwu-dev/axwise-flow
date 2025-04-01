@@ -13,13 +13,22 @@ import {
   AlertDialogAction,
 } from '../alert-dialog'
 
+// Define props interface for TestDialog
+interface TestDialogProps {
+  onAction?: () => void;
+  onCancel?: () => void;
+  title?: string;
+  description?: string;
+}
+
 describe('AlertDialog Component', () => {
+  // Add return type JSX.Element
   const TestDialog = ({
     onAction = () => {},
     onCancel = () => {},
     title = 'Test Title',
     description = 'Test Description',
-  }) => (
+  }: TestDialogProps): JSX.Element => ( 
     <AlertDialog>
       <AlertDialogTrigger>Open Dialog</AlertDialogTrigger>
       <AlertDialogContent>
@@ -119,14 +128,14 @@ describe('AlertDialog Component', () => {
     render(
       <AlertDialog>
         <AlertDialogTrigger className="custom-trigger">Open</AlertDialogTrigger>
-        <AlertDialogContent className="custom-content">
-          <AlertDialogHeader className="custom-header">
+        <AlertDialogContent className="custom-content" data-testid="alert-dialog-content"> {/* Added testid for consistency */}
+          <AlertDialogHeader className="custom-header" data-testid="alert-dialog-header"> {/* Add testid */}
             <AlertDialogTitle className="custom-title">Title</AlertDialogTitle>
             <AlertDialogDescription className="custom-desc">
               Description
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="custom-footer">
+          <AlertDialogFooter className="custom-footer" data-testid="alert-dialog-footer"> {/* Add testid */}
             <AlertDialogCancel className="custom-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction className="custom-action">Continue</AlertDialogAction>
           </AlertDialogFooter>
@@ -138,10 +147,12 @@ describe('AlertDialog Component', () => {
 
     expect(screen.getByText('Open')).toHaveClass('custom-trigger')
     expect(screen.getByRole('alertdialog')).toHaveClass('custom-content')
-    expect(screen.getByText('Title').parentElement).toHaveClass('custom-header')
+    expect(screen.getByTestId('alert-dialog-header')).toHaveClass('custom-header')
+ // Use testid
     expect(screen.getByText('Title')).toHaveClass('custom-title')
     expect(screen.getByText('Description')).toHaveClass('custom-desc')
-    expect(screen.getByText('Cancel').parentElement).toHaveClass('custom-footer')
+    expect(screen.getByTestId('alert-dialog-footer')).toHaveClass('custom-footer')
+ // Use testid
     expect(screen.getByText('Cancel')).toHaveClass('custom-cancel')
     expect(screen.getByText('Continue')).toHaveClass('custom-action')
   })

@@ -8,7 +8,7 @@ export default function HistoryLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}): JSX.Element { // Moved return type
   return (
     <>
       {children}

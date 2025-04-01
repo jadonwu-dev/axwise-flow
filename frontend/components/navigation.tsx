@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 // Remove Zustand import
 // import { useAnalysisStore } from '@/store/useAnalysisStore';
 
-export default function NavigationTabs() {
+export default function NavigationTabs(): JSX.Element { // Add return type
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -16,7 +16,7 @@ export default function NavigationTabs() {
   const activeTab = searchParams.get('tab') || 'upload';
   
   // Navigate without Zustand
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: string): void => { // Add return type
     // Create new search params - fix the type issue by creating a new URLSearchParams
     const params = new URLSearchParams();
     

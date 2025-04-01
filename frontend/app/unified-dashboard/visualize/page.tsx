@@ -13,7 +13,7 @@ interface VisualizePageProps {
   };
 }
 
-export default async function VisualizePage({ searchParams }: VisualizePageProps) {
+export default async function VisualizePage({ searchParams }: VisualizePageProps): Promise<JSX.Element> { // Add return type
   const analysisId = searchParams.analysisId || '';
   
   // Fetch analysis data server-side

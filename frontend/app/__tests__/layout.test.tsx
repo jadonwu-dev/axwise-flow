@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import RootLayout from '../layout';
+import RootLayout, { metadata } from '../layout';
+ // Import metadata directly
 
 // Mock the providers
 jest.mock('../providers', () => ({
@@ -35,8 +36,8 @@ describe('RootLayout', () => {
       </RootLayout>
     );
 
-    // Find the body element with Inter font class
-    const body = screen.getByText('Content').parentElement;
+    // Access document.body directly
+    const body = document.body; 
     expect(body).toHaveClass('inter');
   });
 
@@ -53,14 +54,14 @@ describe('RootLayout', () => {
   });
 
   it('maintains correct nesting order', () => {
-    const { container } = render(
+    render( // Remove unused container destructuring
       <RootLayout>
         <div data-testid="test-content">Test Content</div>
       </RootLayout>
     );
 
-    const html = container.parentElement;
-    const body = html?.querySelector('body');
+    // const html = document.documentElement; // Unused variable
+    const body = document.body; // Access directly
     const errorBoundary = screen.getByTestId('error-boundary');
     const providers = screen.getByTestId('providers');
     const content = screen.getByTestId('test-content');
@@ -72,9 +73,6 @@ describe('RootLayout', () => {
   });
 
   it('exports correct metadata', () => {
-    // Access the exported metadata
-    const { metadata } = require('../layout');
-
     expect(metadata).toEqual({
       title: 'Interview Analysis',
       description: 'Analyze interview data with AI',

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import Dashboard from '../page';
+import EmergencyUploadPanel from '@/components/upload/EmergencyUploadPanel'; // Import the correct component
+import type { DetailedAnalysisResult } from '@/types/api'; // Import the type
 
 // Define mock functions for API client
 const mockUploadData = vi.fn();
@@ -42,11 +43,13 @@ vi.mock('../../../components/loading-spinner', () => ({
 }));
 
 vi.mock('../../../components/unified-visualization', () => ({
-  default: ({ data }: { data: any }) => (
+  // Use DetailedAnalysisResult (or a relevant subset) instead of any
+  default: ({ data }: { data: DetailedAnalysisResult | null }) =>  (
     <div data-testid="visualization">
       <div data-testid="themes-count">{data?.themes?.length || 0} Themes</div>
       <div data-testid="patterns-count">{data?.patterns?.length || 0} Patterns</div>
-      <div data-testid="sentiment-score">Sentiment: {data?.sentiment?.overview?.positive || 0}</div>
+      <div data-testid="sentiment-score">Sentiment: {data?.sentimentOverview?.positive || 0}</div>
+ {/* Correct path */}
     </div>
   )
 }));
@@ -110,6 +113,7 @@ const mockAnalysisResult = {
       examples: ['The app is too slow', 'It crashes when I try to save']
     }
   ],
+  // eslint-disable-next-line testing-library/no-node-access -- False positive on mock data structure
   patterns: [
     {
       id: 1,
@@ -217,7 +221,7 @@ describe('Unified Dashboard - Integration Tests', () => {
   });
 
   it('renders the initial upload state correctly', async () => {
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Check for file upload component visibility
     expect(screen.getByTestId('file-upload')).toBeInTheDocument();
@@ -226,7 +230,7 @@ describe('Unified Dashboard - Integration Tests', () => {
 
   it('completes the full analysis workflow from upload to visualization', async () => {
     const user = userEvent.setup();
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Step 1: Upload a file
     await user.click(screen.getByTestId('mock-upload-button'));
@@ -253,11 +257,15 @@ describe('Unified Dashboard - Integration Tests', () => {
     
     // Step 5: Once analysis is complete, verify results are displayed
     await waitFor(() => {
+      // Wait for the main visualization container to appear
       expect(screen.getByTestId('visualization')).toBeInTheDocument();
-      expect(screen.getByTestId('themes-count')).toHaveTextContent('2 Themes');
-      expect(screen.getByTestId('patterns-count')).toHaveTextContent('2 Patterns');
-      expect(screen.getByTestId('sentiment-score')).toHaveTextContent('Sentiment: 0.45');
+ 
     });
+    
+    // Now that the container is present, assert the content
+    expect(screen.getByTestId('themes-count')).toHaveTextContent('2 Themes');
+    expect(screen.getByTestId('patterns-count')).toHaveTextContent('2 Patterns');
+    expect(screen.getByTestId('sentiment-score')).toHaveTextContent('Sentiment: 0.45');
   });
 
   it('handles API errors during upload gracefully', async () => {
@@ -265,7 +273,7 @@ describe('Unified Dashboard - Integration Tests', () => {
     mockUploadData.mockRejectedValue(new Error('Upload failed'));
     
     const user = userEvent.setup();
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Trigger upload
     await user.click(screen.getByTestId('mock-upload-button'));
@@ -282,7 +290,7 @@ describe('Unified Dashboard - Integration Tests', () => {
     mockAnalyzeData.mockRejectedValue(new Error('Analysis failed'));
     
     const user = userEvent.setup();
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Step 1: Upload a file
     await user.click(screen.getByTestId('mock-upload-button'));
@@ -311,7 +319,7 @@ describe('Unified Dashboard - Integration Tests', () => {
       .mockResolvedValue(mockCompletedStatus);
     
     const user = userEvent.setup();
-    render(<Dashboard />);
+    render(<EmergencyUploadPanel />); // Render the correct component
     
     // Step 1: Upload a file
     await user.click(screen.getByTestId('mock-upload-button'));

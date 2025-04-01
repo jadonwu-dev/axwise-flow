@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Pattern } from '@/types/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+// Removed unused Accordion imports
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -13,12 +13,6 @@ export interface PatternListProps {
   className?: string;
   onPatternClick?: (pattern: Pattern) => void;
 }
-
-const SENTIMENT_COLORS = {
-  positive: '#22c55e', // green-500
-  neutral: '#64748b', // slate-500
-  negative: '#ef4444', // red-500
-};
 
 // Pattern category descriptions
 const PATTERN_CATEGORIES = {
@@ -30,9 +24,11 @@ const PATTERN_CATEGORIES = {
   'Uncategorized': 'Other behavioral patterns'
 };
 
-export function PatternList({ patterns, className, onPatternClick }: PatternListProps) {
+export function PatternList({ patterns, className }: PatternListProps) {
+ // Removed unused onPatternClick
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null);
+  // const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null);
+ // Unused state
 
   // Filter patterns based on search term
   const filteredPatterns = patterns.filter(pattern => 
@@ -69,14 +65,14 @@ export function PatternList({ patterns, className, onPatternClick }: PatternList
     return { border: 'border-slate-300', bg: 'bg-slate-50' };
   };
 
-  // Call the provided onPatternClick handler if available
-  const handlePatternSelect = (pattern: Pattern) => {
-    if (onPatternClick) {
-      onPatternClick(pattern);
-    } else {
-      setSelectedPattern(pattern === selectedPattern ? null : pattern);
-    }
-  };
+  // const handlePatternSelect = (pattern: Pattern) => {
+ // Removed unused function
+  //   if (onPatternClick) {
+  //     onPatternClick(pattern);
+  //   } else {
+  //     setSelectedPattern(pattern === selectedPattern ? null : pattern);
+  //   }
+ //  };
 
   return (
     <div className={`w-full ${className}`}>
@@ -137,7 +133,8 @@ export function PatternList({ patterns, className, onPatternClick }: PatternList
                       // Generate a unique key that includes category and index, protecting against duplicates
                       const patternKey = `pattern-${category}-${categoryIndex}-${pattern.id || pattern.name}`;
                       return (
-                        <div key={patternKey} id={`pattern-${pattern.id}`} className="border-b pb-6 last:border-0 last:pb-0">
+                        <div key={patternKey} id={`pattern-${pattern.id}`} data-testid={`pattern-card-${pattern.id}`} className="border-b pb-6 last:border-0 last:pb-0">
+ {/* Add testid */}
                           {pattern.description && (
                             <div className="mb-5 p-1.5 relative">
                               <div className={`border ${getPatternColors(pattern.sentiment).border} ${getPatternColors(pattern.sentiment).bg} rounded-lg p-4 relative`}>
@@ -159,7 +156,7 @@ export function PatternList({ patterns, className, onPatternClick }: PatternList
                                       <div className="space-y-1">
                                         <h4 className="font-semibold">Pattern Frequency</h4>
                                         <p className="text-sm text-muted-foreground">
-                                          {pattern.frequency >= 0.7 
+                                          {(pattern.frequency ?? 0) >= 0.7 // Handle undefined frequency
                                             ? "Strong presence in analysis" 
                                             : "Moderate presence in analysis"}
                                         </p>
@@ -176,12 +173,14 @@ export function PatternList({ patterns, className, onPatternClick }: PatternList
                             </div>
                           )}
                           
-                          {pattern.evidence && pattern.evidence.length > 0 && (
+{/* Use pattern.examples instead of pattern.evidence */}
+                          {pattern.examples && pattern.examples.length > 0 && (
+ 
                             <div className="mt-3">
                               <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
                               <div className="pl-3 border-l-2 border-primary/20">
                                 <ul className="space-y-3">
-                                  {pattern.evidence.map((example, i) => (
+                                  {pattern.examples.map((example: string, i: number) => ( // Add types
                                     <li key={`${patternKey}-evidence-${i}-${example.slice(0, 10).replace(/\s+/g, '-')}`} className="relative bg-muted/30 p-3 rounded-md">
                                       <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
                                       <p className="text-muted-foreground text-sm">{example}</p>

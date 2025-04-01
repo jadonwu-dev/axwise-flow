@@ -10,11 +10,11 @@ import Link from 'next/link';
  */
 export default function NotFound(): JSX.Element {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md p-6 text-center space-y-6">
+    <div className="min-h-screen flex items-center justify-center p-4" data-testid="not-found-wrapper"> {/* Add testid */}
+      <div className="w-full max-w-md p-6 text-center space-y-6" data-testid="not-found-content"> {/* Add testid */}
         <div className="flex flex-col items-center gap-4">
           <div className="rounded-full bg-muted p-4">
-            <FileQuestion className="h-12 w-12 text-muted-foreground" />
+            <FileQuestion className="h-12 w-12 text-muted-foreground" data-testid="not-found-icon" /> {/* Add testid */}
           </div>
           <h1 className="text-4xl font-bold">404</h1>
           <h2 className="text-xl font-semibold text-muted-foreground">
@@ -24,10 +24,10 @@ export default function NotFound(): JSX.Element {
 
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            The page you are looking for doesn't exist or has been moved.
+            The page you are looking for doesn&apos;t exist or has been moved.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center" data-testid="not-found-buttons"> {/* Add testid */}
             <Button
               variant="default"
               asChild

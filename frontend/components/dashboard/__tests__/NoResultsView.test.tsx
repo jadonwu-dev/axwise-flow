@@ -1,21 +1,36 @@
 'use client';
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { NoResultsView } from '../NoResultsView';
+import NoResultsView from '../NoResultsView'; // Changed to default import
 import { useRouter } from 'next/navigation';
 import { vi } from 'vitest';
 
+// Import type for router mock
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+
 // Mock Next.js navigation
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn()
+const mockPush = vi.fn();
+const mockReplace = vi.fn(); // Add mock
+const mockRefresh = vi.fn(); // Add mock
+const mockBack = vi.fn(); // Add mock
+const mockForward = vi.fn(); // Add mock
+const mockPrefetch = vi.fn(); // Add mock
+const mockUseRouter = vi.fn((): AppRouterInstance => ({ // Return full AppRouterInstance
+  push: mockPush,
+  replace: mockReplace, // Add method
+  refresh: mockRefresh, // Add method
+  back: mockBack,       // Add method
+  forward: mockForward, // Add method
+  prefetch: mockPrefetch, // Add method
 }));
+vi.mock('next/navigation', () => ({
+ useRouter: mockUseRouter }));
 
 describe('NoResultsView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (useRouter as any).mockReturnValue({
-      push: vi.fn()
-    });
+    // Reset router mock return value( if needed (already done globally)
+    // vi.mocked(useRouter).mockReturnValue({ ... }) ;
   });
 
   it('renders the no results message', () => {
@@ -35,17 +50,14 @@ describe('NoResultsView', () => {
   });
 
   it('navigates to upload tab when button is clicked', () => {
-    const pushMock = vi.fn();
-    (useRouter as any).mockReturnValue({
-      push: pushMock
-    });
-
+    // No need to mock router here as it's done globally and correctly typed now
+    
     render(<NoResultsView />);
     
     // Click the Go to Upload button
     fireEvent.click(screen.getByRole('button', { name: /go to upload/i }));
     
     // Check that the router was called to navigate to upload tab
-    expect(pushMock).toHaveBeenCalledWith('/unified-dashboard?tab=upload');
+    expect(mockPush).toHaveBeenCalledWith('/unified-dashboard?tab=upload'); // Use the globally defined mockPush
   });
 });

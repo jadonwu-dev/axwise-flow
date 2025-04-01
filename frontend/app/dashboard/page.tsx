@@ -13,7 +13,7 @@ import type { DetailedAnalysisResult } from '@/types/api';
  * Dashboard Page
  * Displays a list of previous analyses
  */
-export default function DashboardPage() {
+export default function DashboardPage(): JSX.Element { // Add return type
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
 
   useEffect(() => {
-    async function fetchAnalyses() {
+    async function fetchAnalyses(): Promise<void> { // Add return type
       try {
         setLoading(true);
         
@@ -218,7 +218,7 @@ export default function DashboardPage() {
               <select
                 className="px-2 py-1 border border-border rounded-md bg-background text-sm"
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value as 'all' | 'completed' | 'pending' | 'failed')} // Add specific type
               >
                 <option value="all">All Statuses</option>
                 <option value="completed">Completed</option>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
               <select
                 className="px-2 py-1 border border-border rounded-md bg-background text-sm"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as 'date' | 'name')} // Add specific type
               >
                 <option value="date">Sort by Date</option>
                 <option value="name">Sort by Name</option>
@@ -271,9 +271,9 @@ export default function DashboardPage() {
  * Analysis Card Component
  * Displays a summary of an analysis
  */
-function AnalysisCard({ analysis }: { analysis: DetailedAnalysisResult }) {
+function AnalysisCard({ analysis }: { analysis: DetailedAnalysisResult }): JSX.Element { // Add return type
   // Format file size
-  const formatFileSize = (bytes: number | undefined) => {
+  const formatFileSize = (bytes: number | undefined): string => { // Add return type
     if (!bytes) return 'Unknown size';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -281,7 +281,7 @@ function AnalysisCard({ analysis }: { analysis: DetailedAnalysisResult }) {
   };
 
   // Format date
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => { // Add return type
     const date = new Date(dateString);
     return date.toLocaleString();
   };

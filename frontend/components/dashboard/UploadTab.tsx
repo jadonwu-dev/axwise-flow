@@ -14,7 +14,7 @@ import { UploadResponse, AnalysisResponse } from '@/types/api';
 /**
  * Upload tab component for handling file uploads and analysis triggering
  */
-const UploadTab = () => {
+const UploadTab = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
   
   // Upload and analysis state
@@ -28,14 +28,14 @@ const UploadTab = () => {
   const [llmProvider, setLlmProvider] = useState<'openai' | 'gemini'>('gemini');
   
   // Handle file selection from the FileUpload component
-  const handleFileChange = (selectedFile: File, isText: boolean) => {
+  const handleFileChange = (selectedFile: File, isText: boolean): void => { // Add return type
     setFile(selectedFile);
     setIsTextFile(isText);
     console.log(`Selected file: ${selectedFile.name}, isTextFile: ${isText}`);
   };
 
   // Handle file upload
-  const handleUpload = async () => {
+  const handleUpload = async (): Promise<void> => { // Add return type
     if (!file) {
       showToast('Please select a file to upload', { variant: 'error' });
       return;
@@ -64,7 +64,7 @@ const UploadTab = () => {
   };
 
   // Handle starting analysis
-  const handleStartAnalysis = async () => {
+  const handleStartAnalysis = async (): Promise<void> => { // Add return type
     if (!uploadResponse) {
       showToast('Please upload a file first', { variant: 'error' });
       return;

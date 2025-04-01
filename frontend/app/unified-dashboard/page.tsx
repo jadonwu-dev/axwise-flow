@@ -15,7 +15,7 @@ interface PageProps {
   };
 }
 
-export default function UnifiedDashboard({ searchParams }: PageProps) {
+export default function UnifiedDashboard({ searchParams }: PageProps): void { // Add return type
   // Get the requested tab from URL parameters
   const tab = searchParams?.tab || 'upload';
   const analysisId = searchParams?.analysisId || '';

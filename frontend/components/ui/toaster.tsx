@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/toast"
 import { useToast } from "@/components/ui/use-toast"
 
-export function Toaster() {
+export function Toaster(): JSX.Element { // Add return type
   const { toasts } = useToast()
 
   return (

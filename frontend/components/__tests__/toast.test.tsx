@@ -55,8 +55,10 @@ describe('Toast', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(onDismiss).toHaveBeenCalled();
     });
+    // Assert the callback call after waiting for the element to disappear
+    expect(onDismiss).toHaveBeenCalled();
+ 
   });
 
   it('can be dismissed manually', async () => {
@@ -72,13 +74,16 @@ describe('Toast', () => {
 
   it('displays correct icon based on variant', () => {
     const { rerender } = render(<Toast message="Test" variant="success" />);
-    expect(screen.getByRole('alert').querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByTestId('toast-icon-success')).toBeInTheDocument();
+ // Use testid
 
     rerender(<Toast message="Test" variant="error" />);
-    expect(screen.getByRole('alert').querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByTestId('toast-icon-error')).toBeInTheDocument();
+ // Use testid
 
     rerender(<Toast message="Test" variant="info" />);
-    expect(screen.getByRole('alert').querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByTestId('toast-icon-info')).toBeInTheDocument();
+ // Use testid
   });
 
   it('applies custom className', () => {

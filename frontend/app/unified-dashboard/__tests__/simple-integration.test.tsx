@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Create a simplified dashboard component for testing
-const SimplifiedDashboard = () => {
+const SimplifiedDashboard = (): JSX.Element => { // Add return type
   return (
     <div>
       <h1>Dashboard</h1>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import type { Theme } from '@/types/api'; // Import Theme type
 
 // Define necessary types directly
 interface AnalysisHistory {
@@ -11,7 +12,7 @@ interface AnalysisHistory {
   filename?: string;
   createdAt?: string;
   llmProvider?: string;
-  themes?: any[];
+  themes?: Theme[]; // Use specific type
 }
 
 interface HistoryTabClientProps {
@@ -21,10 +22,11 @@ interface HistoryTabClientProps {
 }
 
 export default function HistoryTabClient({
+ // Add return type
   historyItems,
   totalPages,
   currentPage
-}: HistoryTabClientProps) {
+}: HistoryTabClientProps): JSX.Element { 
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -32,7 +34,7 @@ export default function HistoryTabClient({
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   
   // Handle selecting an analysis for visualization
-  const handleSelectAnalysis = (analysisId: string) => {
+  const handleSelectAnalysis = (analysisId: string): void => { // Add return type
     setSelectedItem(analysisId);
     
     // Create URL with analysis ID and timestamp to prevent caching
@@ -47,7 +49,7 @@ export default function HistoryTabClient({
   };
   
   // Handle pagination
-  const handlePageChange = (page: number) => {
+  const handlePageChange = (page: number): void => { // Add return type
     // Create new search params
     const params = new URLSearchParams();
     

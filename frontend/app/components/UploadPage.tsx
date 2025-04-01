@@ -1,16 +1,14 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react' // Removed unused useState
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { FileUpload } from '@/components/FileUpload'
 import { useRouter } from 'next/navigation'
 
-export default function UploadPage() {
+export default function UploadPage(): JSX.Element { // Add return type
   const router = useRouter();
-  const [uploadCompleted, setUploadCompleted] = useState(false);
 
-  const handleUploadComplete = (dataId: number) => {
-    setUploadCompleted(true);
+  const handleUploadComplete = (dataId: number): void => { // Add return type
     console.log(`Upload completed. Data ID: ${dataId}`);
     
     // After successful upload, redirect to analysis page

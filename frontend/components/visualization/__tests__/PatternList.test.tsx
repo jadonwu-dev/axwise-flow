@@ -8,30 +8,33 @@ import type { Pattern } from '@/types/api';
 // Mock data for testing
 const mockPatterns: Pattern[] = [
   {
-    id: 1,
+    id: '1', // Change to string
     name: 'Frequent data exports',
     description: 'Users regularly export data for offline analysis',
     frequency: 0.75,
     category: 'Workflow',
-    evidence: ['Interview 1: "I export data daily"', 'Survey response: "Exports are crucial"'],
+    examples: ['Interview 1: "I export data daily"', 'Survey response: "Exports are crucial"'],
+ // Rename evidence to examples
     sentiment: 0.3,
   },
   {
-    id: 2,
+    id: '2', // Change to string
     name: 'Manual data verification',
     description: 'Users double-check automated results manually',
     frequency: 0.6,
     category: 'Coping Strategy',
-    evidence: ['Interview 3: "Always verify results"'],
+    examples: ['Interview 3: "Always verify results"'],
+ // Rename evidence to examples
     sentiment: -0.2,
   },
   {
-    id: 3,
+    id: '3', // Change to string
     name: 'Feature workaround',
     description: 'Users create workarounds for missing features',
     frequency: 0.4,
     category: 'Workaround',
-    evidence: ['Observation: Users creating external tools'],
+    examples: ['Observation: Users creating external tools'],
+ // Rename evidence to examples
     sentiment: -0.5,
   },
 ];
@@ -72,7 +75,8 @@ describe('PatternList Component', () => {
     
     const user = userEvent.setup();
     // Find and click on a pattern card
-    const patternCard = screen.getByText('Frequent data exports').closest('.pattern-card');
+    // Select the container using its test ID
+    const patternCard = screen.getByTestId(`pattern-card-${mockPatterns[0].id}`); 
     
     if (patternCard) {
       await user.click(patternCard);
@@ -93,21 +97,21 @@ describe('PatternList Component', () => {
   it('handles null values in pattern objects', () => {
     const patternsWithNulls: Pattern[] = [
       {
-        id: 4,
+        id: '4', // Change to string
         name: null as any, // Testing null name handling
         description: 'This pattern has a null name',
         frequency: 0.3,
         category: 'Habit',
-        evidence: [],
+        examples: [], // Rename evidence to examples
         sentiment: 0,
       },
       {
-        id: 5,
+        id: '5', // Change to string
         name: 'Valid Pattern',
         description: null as any, // Testing null description
         frequency: null as any, // Testing null frequency
         category: null as any, // Testing null category
-        evidence: null as any, // Testing null evidence
+        examples: null as any, // Rename evidence to examples
         sentiment: null as any, // Testing null sentiment
       },
     ];

@@ -8,16 +8,15 @@ import { useRouter } from 'next/navigation';
 import { vi } from 'vitest';
 
 // Mock Clerk's useAuth hook
+const mockUseAuth = vi.fn();
 vi.mock('@clerk/nextjs', () => ({
-  useAuth: vi.fn()
-}));
+ useAuth: mockUseAuth }));
 
 // Mock Next.js navigation
+const mockPush = vi.fn();
+const mockUseRouter = vi.fn(() => ({ push: mockPush }));
 vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(() => ({
-    push: vi.fn()
-  }))
-}));
+ useRouter: mockUseRouter }));
 
 describe('DashboardAuthProvider', () => {
   beforeEach(() => {
@@ -26,7 +25,8 @@ describe('DashboardAuthProvider', () => {
   
   it('should render a loading state when auth is not loaded', () => {
     // Mock auth loading state
-    (useAuth as any).mockReturnValue({
+    vi.mocked(mockUseAuth).mockReturnValue({
+ // Use vi.mocked
       isLoaded: false,
       userId: null
     });
@@ -43,13 +43,14 @@ describe('DashboardAuthProvider', () => {
   it('should render children and provide auth context when authenticated', () => {
     // Mock authenticated state
     const mockUserId = 'user-123';
-    (useAuth as any).mockReturnValue({
+    vi.mocked(mockUseAuth).mockReturnValue({
+ // Use vi.mocked
       isLoaded: true,
       userId: mockUserId
     });
     
     // Create test component that consumes the auth context
-    const TestComponent = () => {
+    const TestComponent = (): JSX.Element => { // Add return type
       const { userId, isAuthenticated } = React.useContext(DashboardAuthContext);
       return (
         <div>
@@ -71,16 +72,16 @@ describe('DashboardAuthProvider', () => {
   
   it('should redirect to sign-in when not authenticated', () => {
     // Mock unauthenticated state
-    (useAuth as any).mockReturnValue({
+    vi.mocked(mockUseAuth).mockReturnValue({
+ // Use vi.mocked
       isLoaded: true,
       userId: null
     });
     
     // Mock router
-    const pushMock = vi.fn();
-    (useRouter as any).mockReturnValue({
-      push: pushMock
-    });
+    // Reset push mock specifically for this test if needed, though beforeEach handles it
+    // vi.mocked(mockUseRouter).mockReturnValue({
+ push: mockPush }); // Already mocked globally
     
     render(
       <DashboardAuthProvider>

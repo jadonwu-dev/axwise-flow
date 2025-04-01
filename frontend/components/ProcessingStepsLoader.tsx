@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react'; // Removed unused useMemo
 import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
 import { 
   CheckCircle2, 
   AlertCircle, 
-  Clock, 
+  // Clock, // Unused import
   FileUp, 
   FileCheck, 
   Database, 

@@ -7,7 +7,10 @@ import {
   FieldPath,
   FieldValues,
   FormProvider,
+  // Removed incorrect FieldState import
   useFormContext,
+  // Removed UseFormStateReturn as it's not directly used for the return type here
+  ControllerFieldState, // Import ControllerFieldState
 } from "react-hook-form"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
@@ -30,7 +33,7 @@ const FormField = <
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
 >({
   ...props
-}: ControllerProps<TFieldValues, TName>) => {
+}: ControllerProps<TFieldValues, TName>): JSX.Element => { 
   return (
     <FormFieldContext.Provider value={{ name: props.name }}>
       <Controller {...props} />
@@ -38,26 +41,44 @@ const FormField = <
   )
 }
 
-const useFormField = () => {
+// Define the return type for the hook based on actual returned values
+type UseFormFieldReturnType<TFieldValues extends FieldValues> = {
+  id: string;
+  name: FieldPath<TFieldValues>;
+  formItemId: string;
+  formDescriptionId: string;
+  formMessageId: string;
+} & ControllerFieldState; // Use ControllerFieldState
+
+const useFormField = <
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+// Update the hook's return type annotation
+>(): UseFormFieldReturnType<TFieldValues> => { 
   const fieldContext = React.useContext(FormFieldContext)
   const itemContext = React.useContext(FormItemContext)
-  const { getFieldState, formState } = useFormContext()
+  // getFieldState is directly available from the context
+  const { getFieldState, formState } = useFormContext<TFieldValues>() 
 
-  const fieldState = getFieldState(fieldContext.name, formState)
+  // Ensure fieldContext.name is treated as TName which extends FieldPath<TFieldValues>
+  const fieldState = getFieldState(fieldContext.name as TName, formState)
 
   if (!fieldContext) {
     throw new Error("useFormField should be used within <FormField>")
+  }
+  if (!itemContext) { // Add check for itemContext
+    throw new Error("useFormField should be used within <FormItem>")
   }
 
   const { id } = itemContext
 
   return {
     id,
-    name: fieldContext.name,
+    name: fieldContext.name as TName, 
     formItemId: `${id}-form-item`,
     formDescriptionId: `${id}-form-item-description`,
     formMessageId: `${id}-form-item-message`,
-    ...fieldState,
+    ...fieldState, // Spread the properties from ControllerFieldState
   }
 }
 

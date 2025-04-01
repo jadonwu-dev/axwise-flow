@@ -138,9 +138,9 @@ class ApiClient {
   public async getAuthToken(): Promise<string | null> {
     try {
       // This assumes Clerk is loaded and available in the global window object
-      // @ts-ignore - Clerk types will be available in window at runtime
+      // Removed unnecessary @ts-expect-error
       if (window.Clerk?.session) {
-        // @ts-ignore
+        // Removed unnecessary @ts-expect-error
         return await window.Clerk.session.getToken();
       }
       return null;
@@ -674,12 +674,12 @@ class ApiClient {
         status: 'completed',
         createdAt: mockDate,
         themes: [
-          { id: "1", name: 'User Feedback', frequency: 0.8, keywords: ['feedback', 'review'] },
-          { id: "2", name: 'Product Features', frequency: 0.5, keywords: ['feature', 'capability'] }
+          { id: 1, name: 'User Feedback', frequency: 0.8, keywords: ['feedback', 'review'] }, // Fix ID type
+          { id: 2, name: 'Product Features', frequency: 0.5, keywords: ['feature', 'capability'] } // Fix ID type
         ],
         patterns: [
-          { id: "1", name: 'Feature Requests', category: 'Enhancement', description: 'Users requesting specific features', frequency: 0.7 },
-          { id: "2", name: 'Pain Points', category: 'Issue', description: 'Common issues users face', frequency: 0.6 }
+          { id: "1", name: 'Feature Requests', category: 'Enhancement', description: 'Users requesting specific features', frequency: 0.7, count: 10 }, // Add count
+          { id: "2", name: 'Pain Points', category: 'Issue', description: 'Common issues users face', frequency: 0.6, count: 8 } // Add count
         ],
         sentiment: [],
         sentimentOverview: {
@@ -693,6 +693,7 @@ class ApiClient {
             name: "Design Lead Alex",
             description: "Alex is an experienced design leader who values user-centered processes and design systems. They struggle with ensuring design quality while meeting business demands and securing resources for proper research.",
             confidence: 0.85,
+            patterns: ['Design System Adoption', 'Research Advocacy'], // Add patterns
             evidence: [
               "Manages UX team of 5-7 designers", 
               "Responsible for design system implementation"
@@ -732,6 +733,7 @@ class ApiClient {
             name: "Product Owner Jordan",
             description: "Jordan is a product owner who bridges business goals with user needs. Focused on defining priorities and managing stakeholder expectations while advocating for design quality.",
             confidence: 0.8,
+            patterns: ['Roadmap Prioritization', 'Metric Tracking'], // Add patterns
             evidence: [
               "Discusses product roadmap planning", 
               "Mentiones stakeholder management"

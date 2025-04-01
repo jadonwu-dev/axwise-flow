@@ -14,7 +14,8 @@ describe('Progress Component', () => {
     render(<Progress value={50} />)
     const progressBar = screen.getByRole('progressbar')
     expect(progressBar).toHaveAttribute('aria-valuenow', '50')
-    expect(progressBar.querySelector('[data-progress]')).toHaveStyle({
+    expect(screen.getByTestId('progress-indicator')).toHaveStyle({
+ // Use testid
       transform: 'translateX(-50%)',
     })
   })
@@ -59,7 +60,8 @@ describe('Progress Component', () => {
     for (let value = 0; value <= 100; value += 25) {
       rerender(<Progress value={value} />)
       expect(progressBar).toHaveAttribute('aria-valuenow', value.toString())
-      expect(progressBar.querySelector('[data-progress]')).toHaveStyle({
+      expect(screen.getByTestId('progress-indicator')).toHaveStyle({
+ // Use testid
         transform: `translateX(-${100 - value}%)`,
       })
     }
@@ -69,7 +71,8 @@ describe('Progress Component', () => {
     render(<Progress value={33.33} />)
     const progressBar = screen.getByRole('progressbar')
     expect(progressBar).toHaveAttribute('aria-valuenow', '33.33')
-    expect(progressBar.querySelector('[data-progress]')).toHaveStyle({
+    expect(screen.getByTestId('progress-indicator')).toHaveStyle({
+ // Use testid
       transform: 'translateX(-66.67%)',
     })
   })
@@ -78,8 +81,7 @@ describe('Progress Component', () => {
     jest.useFakeTimers()
     
     const { rerender } = render(<Progress value={0} />)
-    const progressBar = screen.getByRole('progressbar')
-    const indicator = progressBar.querySelector('[data-progress]')
+    const indicator = screen.getByTestId('progress-indicator') // Use testid
 
     expect(indicator).toHaveClass(
       'h-full',
@@ -108,7 +110,8 @@ describe('Progress Component', () => {
     expect(progressBar).toHaveAttribute('aria-valuemin', '0')
     expect(progressBar).toHaveAttribute('aria-valuemax', '100')
     expect(progressBar).not.toHaveAttribute('aria-valuenow')
-    expect(progressBar.querySelector('[data-progress]')).toHaveClass('animate-indeterminate')
+    expect(screen.getByTestId('progress-indicator')).toHaveClass('animate-indeterminate')
+ // Use testid
   })
 
   it('maintains accessibility during value changes', () => {

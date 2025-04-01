@@ -17,12 +17,20 @@ import {
   DropdownMenuPortal,
 } from '../dropdown-menu'
 
+// Define props interface for TestDropdown
+interface TestDropdownProps {
+  onSelect?: () => void;
+  onCheckedChange?: (checked: boolean) => void;
+  onRadioChange?: (value: string) => void;
+}
+
 describe('DropdownMenu Component', () => {
+  // Add return type JSX.Element
   const TestDropdown = ({
     onSelect = () => {},
     onCheckedChange = () => {},
     onRadioChange = () => {},
-  }) => (
+  }: TestDropdownProps): JSX.Element => ( 
     <DropdownMenu>
       <DropdownMenuTrigger>Open Menu</DropdownMenuTrigger>
       <DropdownMenuContent>

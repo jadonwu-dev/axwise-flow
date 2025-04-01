@@ -74,7 +74,8 @@ export const ChartTooltip: React.FC<ChartTooltipProps> = ({
  * @returns A function that can be used as the content prop for recharts Tooltip
  */
 export const createCustomTooltip = (props?: Omit<ChartTooltipProps, 'active' | 'payload' | 'label'>) => {
-  return (tooltipProps: TooltipProps<ValueType, NameType>) => {
+  const CustomTooltipComponent = (tooltipProps: TooltipProps<ValueType, NameType>) => {
+ // Assign to named const
     return (
       <ChartTooltip
         active={tooltipProps.active}
@@ -84,6 +85,8 @@ export const createCustomTooltip = (props?: Omit<ChartTooltipProps, 'active' | '
       />
     );
   };
+  CustomTooltipComponent.displayName = 'RechartsCustomTooltip'; // Assign display name
+  return CustomTooltipComponent; // Return the named component
 };
 
 export default ChartTooltip;

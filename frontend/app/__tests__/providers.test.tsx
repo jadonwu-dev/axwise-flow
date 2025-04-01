@@ -4,12 +4,12 @@ import { useTheme } from '@/components/providers/theme-provider';
 import { useToast } from '@/components/providers/toast-provider';
 
 // Test components that use our providers
-const ThemeTestComponent = () => {
+const ThemeTestComponent = (): JSX.Element => { // Add return type
   const { theme } = useTheme();
   return <div data-testid="theme-test">Current theme: {theme}</div>;
 };
 
-const ToastTestComponent = () => {
+const ToastTestComponent = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
   return (
     <button onClick={() => showToast('Test toast')}>
@@ -43,7 +43,7 @@ describe('Providers', () => {
   });
 
   it('handles nested components correctly', () => {
-    const NestedComponent = () => (
+    const NestedComponent = (): JSX.Element => ( // Add return type
       <div>
         <ThemeTestComponent />
         <ToastTestComponent />
@@ -61,7 +61,8 @@ describe('Providers', () => {
   });
 
   it('preserves children prop types', () => {
-    const TestChild = () => <div data-testid="test-child">Test Child</div>;
+    const TestChild = (): JSX.Element => <div data-testid="test-child">Test Child</div>;
+ // Add return type
 
     render(
       <Providers>
@@ -87,7 +88,7 @@ describe('Providers', () => {
   it('maintains provider order', () => {
     const orderSpy = jest.fn();
     
-    const OrderTestComponent = () => {
+    const OrderTestComponent = (): null => { // Add return type (returns null)
       const { theme } = useTheme();
       const { showToast } = useToast();
       

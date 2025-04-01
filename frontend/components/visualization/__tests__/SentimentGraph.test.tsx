@@ -111,11 +111,11 @@ describe('SentimentGraph Component', () => {
   });
   
   it('adjusts height based on the height prop', () => {
-    const { container } = render(<SentimentGraph data={mockSentimentData} height={300} />);
+    render(<SentimentGraph data={mockSentimentData} height={300} />);
     
     // Find the chart container and verify its height
-    const chartContainer = container.querySelector('[style*="height: 300px"]');
-    expect(chartContainer).toBeInTheDocument();
+    // Check the style of the mock container
+    expect(screen.getByTestId('mock-responsive-container')).toHaveStyle('height: 300px'); 
   });
   
   it('shows legend when showLegend is true', () => {

@@ -51,8 +51,8 @@ describe('Loading Page', () => {
   });
 
   it('centers content vertically and horizontally', () => {
-    const { container } = render(<Loading />);
-    const wrapper = container.firstChild as HTMLElement;
+    render(<Loading />);
+    const wrapper = screen.getByTestId('loading-page-wrapper'); // Use testid
     
     expect(wrapper).toHaveClass(
       'min-h-screen',
@@ -63,20 +63,22 @@ describe('Loading Page', () => {
   });
 
   it('has proper padding', () => {
-    const { container } = render(<Loading />);
-    const wrapper = container.firstChild as HTMLElement;
+    render(<Loading />);
+    const wrapper = screen.getByTestId('loading-page-wrapper'); // Use testid
     expect(wrapper).toHaveClass('p-4');
   });
 
   it('maintains text alignment', () => {
-    const { container } = render(<Loading />);
-    const contentWrapper = container.querySelector('.text-center');
+    render(<Loading />);
+    const contentWrapper = screen.getByTestId('loading-content-wrapper'); // Use testid
     expect(contentWrapper).toBeInTheDocument();
+    expect(contentWrapper).toHaveClass('text-center'); // Check class directly
   });
 
   it('maintains proper spacing between elements', () => {
-    const { container } = render(<Loading />);
-    const contentWrapper = container.querySelector('.space-y-4');
+    render(<Loading />);
+    const contentWrapper = screen.getByTestId('loading-content-wrapper'); // Use testid
     expect(contentWrapper).toBeInTheDocument();
+    expect(contentWrapper).toHaveClass('space-y-4'); // Check class directly
   });
 });

@@ -350,13 +350,13 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                               {theme.statements && theme.statements.map((statement, i) => (
                                 <li key={`${theme.id || theme.name}-statement-${i}`} className="relative bg-muted/30 p-3 rounded-md">
                                   <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                                  <p className="italic text-muted-foreground text-sm">"{statement}"</p>
+                                  <p className="italic text-muted-foreground text-sm">&quot;{statement}&quot;</p> {/* Escape quotes */}
                                 </li>
                               ))}
                               {!theme.statements && theme.examples && theme.examples.map((example, i) => (
                                 <li key={`${theme.id || theme.name}-example-${i}`} className="relative bg-muted/30 p-3 rounded-md">
                                   <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                                  <p className="italic text-muted-foreground text-sm">"{example}"</p>
+                                  <p className="italic text-muted-foreground text-sm">&quot;{example}&quot;</p> {/* Escape quotes */}
                                 </li>
                               ))}
                             </ul>
@@ -468,7 +468,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     <div className="space-y-1 mt-1 text-sm">
                       {selectedTheme.statements.map((statement: string, i: number) => (
                         <div key={`statement-${i}`} className="p-2 bg-muted/50 rounded text-xs">
-                          "{statement}"
+                          &quot;{statement}&quot; {/* Escape quotes */}
                         </div>
                       ))}
                     </div>
@@ -481,7 +481,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     <div className="space-y-1 mt-1 text-sm">
                       {selectedTheme.examples.map((example: string, i: number) => (
                         <div key={`example-${i}`} className="p-2 bg-muted/50 rounded text-xs">
-                          "{example}"
+                          &quot;{example}&quot; {/* Escape quotes */}
                         </div>
                       ))}
                     </div>

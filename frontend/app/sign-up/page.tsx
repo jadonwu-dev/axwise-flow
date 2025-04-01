@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'Create a new Interview Insight Analyst account',
 };
 
-export default function SignUpPage() {
+export default function SignUpPage(): JSX.Element { // Add return type
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8">

@@ -2,15 +2,16 @@
 
 import React, { useState } from 'react';
 import { ThemeChart, PatternList, SentimentGraph } from '@/components/visualization';
-import { mockThemes, mockPatterns, mockSentimentOverview, mockSentimentData } from '@/lib/mockData';
-import type { AnalyzedTheme, Pattern } from '@/types/api';
+import { mockThemes, mockPatterns, mockSentimentOverview } from '@/lib/mockData';
+ // Removed unused mockSentimentData
+import type { Pattern } from '@/types/api';
+ // Removed unused AnalyzedTheme
 
 /**
  * Demo page for visualization components
  * This page showcases all the visualization components with mock data
  */
-export default function DemoPage() {
-  const [selectedTheme, setSelectedTheme] = useState<AnalyzedTheme | null>(null);
+export default function DemoPage(): JSX.Element { // Add return type
   const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null);
 
   return (
@@ -33,28 +34,6 @@ export default function DemoPage() {
           <ThemeChart 
             themes={mockThemes}
           />
-          
-          {selectedTheme && (
-            <div className="mt-4 p-4 bg-muted/30 rounded-md">
-              <h3 className="font-medium">Selected Theme: {selectedTheme.name}</h3>
-              <p className="text-sm mt-1">
-                Frequency: {Math.round((selectedTheme.frequency || 0) * 100)}% | 
-                Sentiment: {(selectedTheme.sentiment || 0).toFixed(1)}
-              </p>
-              {selectedTheme.keywords && selectedTheme.keywords.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-muted-foreground">Keywords:</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedTheme.keywords.map((keyword, i) => (
-                      <span key={i} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </section>
 
         {/* Pattern List Section */}
@@ -89,8 +68,8 @@ export default function DemoPage() {
           </p>
           
           <SentimentGraph 
-            overview={mockSentimentOverview}
-            detailedData={mockSentimentData}
+            data={mockSentimentOverview}
+            // Removed unused detailedData prop
           />
         </section>
       </div>

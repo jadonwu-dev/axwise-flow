@@ -9,7 +9,7 @@ import { FileText, BarChart3, Clock, BookOpen } from 'lucide-react';
  * Client Component for Dashboard Navigation
  * Handles interactive elements and state changes using URL parameters
  */
-export default function DashboardNav() {
+export default function DashboardNav(): JSX.Element { // Add return type
   const router = useRouter();
   const pathname = usePathname();
   const [isHistory, setIsHistory] = useState(false);
@@ -20,7 +20,7 @@ export default function DashboardNav() {
   }, [pathname]);
   
   // Handle tab navigation with clean URL parameters
-  const handleTabNavigation = (tab: string) => {
+  const handleTabNavigation = (tab: string): void => { // Add return type
     // Add cache busting to ensure clean state
     const cacheBuster = Date.now();
     router.push(`/unified-dashboard?tab=${tab}&_=${cacheBuster}`);
