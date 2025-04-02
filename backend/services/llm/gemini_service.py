@@ -76,21 +76,26 @@ class GeminiService:
             # Prepare system message based on task
             system_message = self._get_system_message(task, data)
             
+            # Prepare generation config (Original, without response_mime_type)
+            generation_config = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+                "top_p": self.top_p,
+                "top_k": self.top_k
+            }
+
             # For insight_generation, the system_message is already the complete prompt
             if task == 'insight_generation':
                 # Use the system message directly since it's the complete prompt
+                logger.debug(f"Generating content for task '{task}' with config: {generation_config}")
                 response = await self.client.generate_content_async(
                     system_message,
-                    generation_config={
-                        "temperature": self.temperature,
-                        "max_output_tokens": self.max_tokens,
-                        "top_p": self.top_p,
-                        "top_k": self.top_k
-                    }
+                    generation_config=generation_config
                 )
                 
                 # For insight generation, return a structured result
                 result_text = response.text
+                logger.debug(f"Raw response for task {task}:\n{result_text}") # Log raw response
                 
                 try:
                     result = json.loads(result_text)
@@ -119,15 +124,11 @@ class GeminiService:
                 
                 return result
             else:
-                # For other tasks, use regular generation
+                # Generate content for other tasks (Original call structure)
+                logger.debug(f"Generating content for task '{task}' with config: {generation_config}")
                 response = await self.client.generate_content_async(
                     [system_message, text],
-                    generation_config={
-                        "temperature": self.temperature,
-                        "max_output_tokens": self.max_tokens,
-                        "top_p": self.top_p,
-                        "top_k": self.top_k
-                    }
+                    generation_config=generation_config 
                 )
                 
                 # Extract and parse response
@@ -138,15 +139,21 @@ class GeminiService:
                 
                 # Extract JSON from response (handle potential markdown formatting)
                 try:
-                    result = json.loads(result_text)
-                except json.JSONDecodeError:
+                    # Try direct parsing first
+                    result = json.loads(result_text) 
+                except json.JSONDecodeError as e1:
                     # If response isn't valid JSON, try to extract JSON from markdown code blocks
                     import re
                     json_match = re.search(r'```(?:json)?\s*({\s*".*}|\[\s*{.*}\s*\])\s*```', result_text, re.DOTALL)
                     if json_match:
-                        result = json.loads(json_match.group(1))
+                        try:
+                            result = json.loads(json_match.group(1))
+                        except json.JSONDecodeError as e2:
+                            logger.error(f"Failed to parse JSON even after extracting from markdown: {e2}")
+                            raise ValueError(f"Invalid JSON response from Gemini after markdown extraction: {e2}")
                     else:
-                        raise ValueError("Invalid JSON response from Gemini")
+                        logger.error(f"Invalid JSON response from Gemini, and no markdown block found: {e1}")
+                        raise ValueError(f"Invalid JSON response from Gemini, no markdown block found: {e1}")
             
             # Post-process results if needed
             if task == 'theme_analysis':
@@ -367,60 +374,13 @@ class GeminiService:
                 result = transformed
             
             elif task == 'persona_formation':
-                # Add support for direct persona prompts if provided
-                if 'prompt' in data and data['prompt']:
-                    return data['prompt']
-                    
-                # Otherwise use our standard persona formation prompt
-                text_sample = data.get('text', '')[:3500]  # Limit sample size
-                return f"""
-                Given the following interview text or pattern descriptions, create a detailed persona profile for the main participant.
-                
-                CONTENT FOR ANALYSIS:
-                {text_sample}
-                
-                Create a detailed persona with the following attributes:
-                1. Name: A descriptive role-based name
-                2. Description: Brief summary of who this persona is
-                3. Role context: Their work context and environment
-                4. Key responsibilities: Their main tasks and responsibilities
-                5. Tools used: Tools, software, or methods they use
-                6. Collaboration style: How they collaborate with others
-                7. Analysis approach: How they approach problems and analysis
-                8. Pain points: Challenges or frustrations they face
-                
-                Format your response as a JSON object with these properties:
-                {{
-                  "name": "Role-based name (e.g., 'Technical Project Manager')",
-                  "description": "Brief description",
-                  "role_context": "Primary work context",
-                  "role_confidence": 0.8, // Confidence score (0.0-1.0) for role identification
-                  "role_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "responsibilities": "Key responsibilities",
-                  "resp_confidence": 0.8, // Confidence score (0.0-1.0) for responsibilities
-                  "resp_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "tools": "Tools, software, or methods used",
-                  "tools_confidence": 0.8, // Confidence score (0.0-1.0) for tools
-                  "tools_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "collaboration": "Collaboration style",
-                  "collab_confidence": 0.8, // Confidence score (0.0-1.0) for collaboration style
-                  "collab_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "analysis": "Analysis approach",
-                  "analysis_confidence": 0.8, // Confidence score (0.0-1.0) for analysis approach
-                  "analysis_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "pain_points": "Pain points and challenges",
-                  "pain_confidence": 0.8, // Confidence score (0.0-1.0) for pain points
-                  "pain_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
-                  "patterns": ["Relevant pattern 1", "Relevant pattern 2"],
-                  "confidence": 0.8, // Overall confidence score (0.0-1.0)
-                  "evidence": ["Overall supporting evidence 1", "Overall supporting evidence 2"]
-                }}
-                
-                IMPORTANT: Make sure your response is ONLY valid JSON with NO MARKDOWN formatting.
-                """
+                # The prompt already asks for JSON. The generation_config sets the mime type.
+                # Parsing happens after the call.
+                pass # No specific post-processing needed here for persona_formation
             
             else:
-                return f"You are an expert analyst. Analyze the provided text for the task: {task}."
+                # Default case for unknown tasks
+                pass
             
             # Success, return result
             logger.info(f"Successfully analyzed data with Gemini for task: {task}")
@@ -428,7 +388,7 @@ class GeminiService:
             return result
             
         except Exception as e:
-            logger.error(f"Error calling Gemini API: {str(e)}")
+            logger.error(f"Error calling Gemini API for task {task}: {str(e)}", exc_info=True) # Log traceback
             return {"error": f"Gemini API error: {str(e)}"}
     
     def _get_system_message(self, task: str, data: Dict[str, Any]) -> str:
@@ -691,6 +651,60 @@ class GeminiService:
                     }}
                 }}
             }}
+            """
+        
+        elif task == 'persona_formation':
+            # Add support for direct persona prompts if provided
+            if 'prompt' in data and data['prompt']:
+                 # Use the prompt provided directly by persona_formation service
+                return data['prompt'] 
+            
+            # Fallback to standard persona formation prompt if no specific prompt provided
+            text_sample = data.get('text', '')[:3500]  # Limit sample size
+            return f"""
+            Given the following interview text or pattern descriptions, create a detailed persona profile for the main participant.
+            
+            CONTENT FOR ANALYSIS:
+            {text_sample}
+            
+            Create a detailed persona with the following attributes:
+            1. Name: A descriptive role-based name
+            2. Description: Brief summary of who this persona is
+            3. Role context: Their work context and environment
+            4. Key responsibilities: Their main tasks and responsibilities
+            5. Tools used: Tools, software, or methods they use
+            6. Collaboration style: How they collaborate with others
+            7. Analysis approach: How they approach problems and analysis
+            8. Pain points: Challenges or frustrations they face
+            
+            Format your response as a JSON object with these properties:
+            {{
+              "name": "Role-based name (e.g., 'Technical Project Manager')",
+              "description": "Brief description",
+              "role_context": "Primary work context",
+              "role_confidence": 0.8, // Confidence score (0.0-1.0) for role identification
+              "role_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "responsibilities": "Key responsibilities",
+              "resp_confidence": 0.8, // Confidence score (0.0-1.0) for responsibilities
+              "resp_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "tools": "Tools, software, or methods used",
+              "tools_confidence": 0.8, // Confidence score (0.0-1.0) for tools
+              "tools_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "collaboration": "Collaboration style",
+              "collab_confidence": 0.8, // Confidence score (0.0-1.0) for collaboration style
+              "collab_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "analysis": "Analysis approach",
+              "analysis_confidence": 0.8, // Confidence score (0.0-1.0) for analysis approach
+              "analysis_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "pain_points": "Pain points and challenges",
+              "pain_confidence": 0.8, // Confidence score (0.0-1.0) for pain points
+              "pain_evidence": ["Supporting evidence 1", "Supporting evidence 2"],
+              "patterns": ["Relevant pattern 1", "Relevant pattern 2"],
+              "confidence": 0.8, // Overall confidence score (0.0-1.0)
+              "evidence": ["Overall supporting evidence 1", "Overall supporting evidence 2"]
+            }}
+            
+            IMPORTANT: Make sure your response is ONLY valid JSON with NO MARKDOWN formatting.
             """
         
         else:

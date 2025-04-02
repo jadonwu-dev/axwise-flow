@@ -109,7 +109,11 @@ export async function getRedirectUrl(analysisId: string): Promise<string> {
  * Fetches analysis data using server component
  */
 export async function getServerSideAnalysis(analysisId: string): Promise<DetailedAnalysisResult | null> {
-  if (!analysisId) return null;
+  if (!analysisId) {
+      console.log("[getServerSideAnalysis] Received null or empty analysisId."); // DEBUG LOG
+      return null;
+  }
+  console.log(`[getServerSideAnalysis] Received analysisId: ${analysisId}`); // DEBUG LOG
   
   try {
     // Get auth token from cookie
@@ -117,7 +121,7 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
     const authToken = cookieStore.get('auth_token')?.value;
     
     if (!authToken) {
-      console.error('No auth token available for server fetch');
+      console.error('[getServerSideAnalysis] No auth token available for server fetch');
       return null;
     }
     
@@ -125,9 +129,12 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
     apiClient.setAuthToken(authToken);
     
     // Fetch analysis data
-    return await apiClient.getAnalysisById(analysisId);
+    console.log(`[getServerSideAnalysis] Calling apiClient.getAnalysisById with ID: ${analysisId}`); // DEBUG LOG
+    const analysisData = await apiClient.getAnalysisById(analysisId);
+    console.log(`[getServerSideAnalysis] Fetched data for ${analysisId}:`, analysisData ? `Status: ${analysisData.status}, Themes: ${analysisData.themes?.length}` : 'null'); // DEBUG LOG
+    return analysisData;
   } catch (error) {
-    console.error('Error fetching analysis data server-side:', error);
+    console.error(`[getServerSideAnalysis] Error fetching analysis data server-side for ID ${analysisId}:`, error); // DEBUG LOG
     return null;
   }
-} 
+}

@@ -232,15 +232,21 @@ class AnalysisService:
         """
         from backend.database import get_db
         
+        async_db = None # Initialize async_db to None
+        logger.info(f"[_process_data_task ENTRY] Starting background task for result_id: {result_id}")
+
         try:
-            logger.info(f"Starting data processing for result_id: {result_id}")
+            logger.info(f"Starting data processing task for result_id: {result_id}")
             
             # Create a new session for the background task to avoid session binding issues
             async_db = next(get_db())
             
             # Get a fresh reference to the analysis result
             task_result = async_db.query(AnalysisResult).get(result_id)
-            
+            if not task_result:
+                 logger.error(f"AnalysisResult record not found for result_id: {result_id}. Aborting task.")
+                 return # Exit if record not found
+
             # Update status to in-progress with 5% completion
             task_result.results = json.dumps({
                 "status": "processing",
@@ -248,6 +254,7 @@ class AnalysisService:
                 "progress": 5
             })
             async_db.commit()
+            logger.info(f"Set status to 'processing' for result_id: {result_id}")
 
             # Process data
             result = await process_data(
@@ -257,33 +264,48 @@ class AnalysisService:
                 config=config
             )
             
-            # Update database record with results
+            # Update database record with results (but not status yet)
+            logger.info(f"Analysis pipeline finished for result_id: {result_id}. Saving results...")
             task_result.results = json.dumps(result)
-            task_result.status = "completed"
             task_result.completed_at = datetime.utcnow()
+            
+            # Commit the results first
             async_db.commit()
-            logger.info(f"Analysis completed for result_id: {task_result.result_id}")
+            logger.info(f"Successfully committed results for result_id: {result_id}")
+
+            # Now update the status to completed and commit again
+            task_result.status = "completed"
+            async_db.commit()
+            logger.info(f"Successfully set status to 'completed' for result_id: {task_result.result_id}")
 
         except Exception as e:
-            logger.error(f"Error during analysis: {str(e)}")
+            logger.error(f"Error during analysis task for result_id {result_id}: {str(e)}", exc_info=True) # Log traceback
             try:
-                # Create a new session if needed
-                if 'async_db' not in locals():
+                # Ensure async_db is available
+                if async_db is None:
                     async_db = next(get_db())
-                    task_result = async_db.query(AnalysisResult).get(result_id)
                 
-                # Update database record with error
-                task_result.results = json.dumps({
-                    "status": "error",
-                    "message": f"Analysis failed: {str(e)}",
-                    "error_details": str(e)
-                })
-                task_result.status = "failed"
-                task_result.completed_at = datetime.utcnow()
-                async_db.commit()
+                # Ensure task_result is fetched if not already available
+                task_result = async_db.query(AnalysisResult).get(result_id)
+                
+                if task_result:
+                    # Update database record with error
+                    task_result.results = json.dumps({
+                        "status": "error",
+                        "message": f"Analysis failed: {str(e)}",
+                        "error_details": str(e)
+                    })
+                    task_result.status = "failed"
+                    task_result.completed_at = datetime.utcnow()
+                    async_db.commit()
+                    logger.info(f"Set status to 'failed' for result_id: {result_id}")
+                else:
+                     logger.error(f"Could not update status to failed, AnalysisResult record not found for result_id: {result_id}")
+
             except Exception as inner_e:
-                logger.error(f"Failed to update error status: {str(inner_e)}")
+                logger.error(f"Failed to update error status for result_id {result_id}: {str(inner_e)}")
         finally:
             # Ensure the session is closed
-            if 'async_db' in locals():
-                async_db.close() 
+            if async_db:
+                async_db.close()
+                logger.info(f"Closed database session for result_id: {result_id}")

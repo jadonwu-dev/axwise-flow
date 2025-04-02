@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react'; // Added useEffect
 import { SentimentOverview, Theme } from '@/types/api'; // Removed unused SentimentData
 import {
   BarChart,
@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   LabelList,
+  LineChart, Line, YAxis, CartesianGrid // Added LineChart components
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
+import type { SentimentData } from '@/types/api'; // Import SentimentData
 /**
  * Props for the SentimentGraph component
  */
@@ -30,6 +32,8 @@ interface SentimentGraphProps {
     negative: string[];
     industry?: string;
   };
+   /** Detailed time-series sentiment data */
+   timeSeriesData?: SentimentData[]; // Added prop for detailed data
   /** The height of the chart (default: 300) */
   height?: number;
   /** Whether to show the legend (default: false) */
@@ -76,6 +80,7 @@ export const SentimentGraph: React.FC<SentimentGraphProps> = ({
   className,
   sentimentData,
   industry,
+   timeSeriesData = [], // Destructure with default value
   themes = [],
 }) => {
   // Use sentimentData prop if provided, otherwise fall back to data prop

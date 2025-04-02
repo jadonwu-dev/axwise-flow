@@ -54,18 +54,20 @@ class Persona(Base):
     persona_id = Column(Integer, primary_key=True, autoincrement=True)
     result_id = Column(Integer, ForeignKey("analysis_results.result_id"))
     name = Column(String)
-    demographics = Column(JSON, nullable=True)
-    goals = Column(JSON)
-    pain_points = Column(JSON)
-    behaviors = Column(JSON)
-    quotes = Column(JSON)
-    confidence_score = Column(Float)
+    description = Column(Text, nullable=True) # Add description field
     
-    # New fields to match schema expectations
-    collaboration_style = Column(JSON, nullable=True)
-    analysis_approach = Column(JSON, nullable=True)
-    patterns = Column(JSON, nullable=True)
-    evidence = Column(JSON, nullable=True)
-    persona_metadata = Column(JSON, nullable=True)
+    # Fields to store PersonaTrait JSON objects
+    role_context = Column(JSON, nullable=True)
+    key_responsibilities = Column(JSON, nullable=True)
+    tools_used = Column(JSON, nullable=True)
+    collaboration_style = Column(JSON, nullable=True) # Ensure this exists and is JSON
+    analysis_approach = Column(JSON, nullable=True) # Ensure this exists and is JSON
+    pain_points = Column(JSON, nullable=True) # Ensure this exists and is JSON
+    
+    # Fields for lists/simple values
+    patterns = Column(JSON, nullable=True) # Stores List[str]
+    confidence = Column(Float, nullable=True) # Renamed from confidence_score
+    evidence = Column(JSON, nullable=True) # Stores List[str] for overall evidence
+    persona_metadata = Column(JSON, nullable=True) # Renamed back from metadata
 
     analysis_result = relationship("AnalysisResult", back_populates="personas")

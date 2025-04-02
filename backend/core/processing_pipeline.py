@@ -4,6 +4,7 @@ Processing pipeline for interview data analysis.
 
 import logging
 import asyncio
+import json # Import json for logging
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
@@ -33,17 +34,35 @@ async def process_data(nlp_processor, llm_service, data: Any, config: Dict[str, 
         
         # Process data through NLP pipeline
         # The NLP processor now handles different data formats internally
+        logger.info("Calling nlp_processor.process_interview_data...")
+
         results = await nlp_processor.process_interview_data(data, llm_service, config)
+        
+        # DEBUG LOG: Inspect results immediately after processing
+        logger.info("Returned from nlp_processor.process_interview_data.")
+
+        logger.debug(f"[process_data] Results after nlp_processor.process_interview_data:")
+        try:
+            # Attempt to log a pretty-printed version, fallback to raw if error
+            logger.debug(json.dumps(results, indent=2, default=str)) 
+        except Exception as log_err:
+            logger.debug(f"(Logging error: {log_err}) Raw results: {results}")
         
         # Validate results
         logger.info("Validating analysis results")
+        logger.info("Calling nlp_processor.validate_results...")
+
         if not await nlp_processor.validate_results(results):
             raise ValueError("Invalid analysis results")
             
         # Extract additional insights
+        logger.info("Calling nlp_processor.extract_insights...")
+
         logger.info("Extracting additional insights")
         insights = await nlp_processor.extract_insights(results, llm_service)
         
+        logger.info("Returned from nlp_processor.extract_insights.")
+
         # Process additional transformations on the results
         # Normalize sentiment values to ensure they're in the -1 to 1 range
         if "themes" in results and isinstance(results["themes"], list):
@@ -83,7 +102,11 @@ async def process_data(nlp_processor, llm_service, data: Any, config: Dict[str, 
                         pattern["sentiment"] = max(-1.0, min(1.0, pattern["sentiment"]))
         
         logger.info("Data processing pipeline completed successfully")
-        return insights
+        logger.info("Starting final result transformations (sentiment normalization)...")
+
+        # Return the main results dictionary which should contain insights after extract_insights call
+        logger.debug(f"[process_data] Final results being returned (keys): {list(results.keys())}") # Log keys before returning
+        return results 
         
     except Exception as e:
         logger.error(f"Error in processing pipeline: {str(e)}")

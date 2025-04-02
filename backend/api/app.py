@@ -25,6 +25,7 @@ from typing import Dict, Any, List, Literal, Optional
 import logging
 import json
 import asyncio
+import time # Import time module
 from sqlalchemy.orm import Session
 from datetime import datetime
 from sqlalchemy.sql import text
@@ -221,6 +222,8 @@ async def upload_data(
     """
     Handles interview data upload (JSON format or free-text format).
     """
+    start_time = time.time()
+    logger.info(f"[UploadData - Start] User: {current_user.user_id}, Filename: {file.filename}, Size: {getattr(file, 'size', 'N/A')}, IsFreeText: {is_free_text}") # Added size logging
     try:
         # Use DataService to handle upload logic
         from backend.services.data_service import DataService
@@ -237,14 +240,19 @@ async def upload_data(
         )
         
     except HTTPException:
+        logger.warning(f"[UploadData - HTTPException] User: {current_user.user_id}, Filename: {file.filename}, Duration: {time.time() - start_time:.4f}s")
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
         logger.error(f"Error uploading data: {str(e)}")
+        logger.error(f"[UploadData - Error] User: {current_user.user_id}, Filename: {file.filename}, Duration: {time.time() - start_time:.4f}s")
         raise HTTPException(
             status_code=500,
             detail=f"Server error: {str(e)}"
         )
+    finally:
+        duration = time.time() - start_time
+        logger.info(f"[UploadData - End] User: {current_user.user_id}, Filename: {file.filename}, Duration: {duration:.4f}s")
 
 @app.post(
     "/api/analyze",
@@ -260,6 +268,8 @@ async def analyze_data(
     current_user: User = Depends(get_current_user)
 ):
     """Triggers analysis of uploaded data."""
+    start_time = time.time()
+    logger.info(f"[AnalyzeData - Start] User: {current_user.user_id}, DataID: {analysis_request.data_id}, Provider: {analysis_request.llm_provider}")
     try:
         # Validate configuration
         try:
@@ -294,14 +304,19 @@ async def analyze_data(
         )
 
     except HTTPException:
+        logger.warning(f"[AnalyzeData - HTTPException] User: {current_user.user_id}, DataID: {analysis_request.data_id}, Duration: {time.time() - start_time:.4f}s")
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
         logger.error(f"Error initiating analysis: {str(e)}")
+        logger.error(f"[AnalyzeData - Error] User: {current_user.user_id}, DataID: {analysis_request.data_id}, Duration: {time.time() - start_time:.4f}s")
         raise HTTPException(
             status_code=500,
             detail=f"Server error: {str(e)}"
         )
+    finally:
+        duration = time.time() - start_time
+        logger.info(f"[AnalyzeData - End] User: {current_user.user_id}, DataID: {analysis_request.data_id}, Duration: {duration:.4f}s")
 
 @app.get(
     "/api/results/{result_id}",

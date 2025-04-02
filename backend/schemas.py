@@ -202,7 +202,7 @@ class Persona(BaseModel):
     patterns: List[str] = Field(default_factory=list)
     confidence: float = Field(..., ge=0, le=1)
     evidence: List[str] = Field(default_factory=list)
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    persona_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, alias="metadata") # Use alias for potential backward compatibility if needed, map to persona_metadata
 
     class Config:
         json_schema_extra = {
@@ -242,7 +242,7 @@ class Persona(BaseModel):
                 "patterns": ["Data-driven decision making", "Cross-functional collaboration"],
                 "confidence": 0.85,
                 "evidence": ["Interview mentions product management activities", "Uses typical PM tools"],
-                "metadata": {
+                "persona_metadata": { # Changed key here
                     "sample_size": 3,
                     "timestamp": "2023-10-26T14:30:00Z"
                 }

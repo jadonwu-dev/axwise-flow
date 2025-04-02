@@ -45,8 +45,8 @@ class ApiClient {
         'Access-Control-Allow-Origin': '*', // Added CORS header
         'X-API-Version': 'merged-976ce06-current' // Version tracking for debugging
       },
-      // Add a timeout to prevent long-hanging requests
-      timeout: 30000, // Increased timeout for longer operations
+      // Increase default timeout for potentially longer operations
+      timeout: 120000, // 120 seconds (increased from 30)
     });
 
     // Add response interceptor for handling auth errors and network issues
@@ -138,9 +138,7 @@ class ApiClient {
   public async getAuthToken(): Promise<string | null> {
     try {
       // This assumes Clerk is loaded and available in the global window object
-      // Removed unnecessary @ts-expect-error
       if (window.Clerk?.session) {
-        // Removed unnecessary @ts-expect-error
         return await window.Clerk.session.getToken();
       }
       return null;
@@ -184,11 +182,10 @@ class ApiClient {
       const response = await this.client.post<UploadResponse>('/api/data', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          // Removing any headers that could interfere with file upload
           'Accept': 'application/json',
         },
-        // Increase timeout for larger files
-        timeout: 60000,
+        // Increase timeout significantly for potentially large files and initial processing
+        timeout: 180000, // 180 seconds (increased from 60)
       });
 
       console.log('Upload response:', response.data);
@@ -253,6 +250,8 @@ class ApiClient {
       llm_provider: llmProvider,
       llm_model: llmModel,
       is_free_text: isTextFile || false
+    }, {
+      timeout: 60000 // 60 seconds timeout for triggering analysis
     });
     return response.data;
   }
@@ -285,7 +284,9 @@ class ApiClient {
    */
   async getAnalysisById(id: string): Promise<DetailedAnalysisResult> {
     try {
-      const response = await this.client.get(`/api/results/${id}`);
+      const response = await this.client.get(`/api/results/${id}`, {
+        timeout: 120000 // 120 seconds timeout for fetching potentially large results
+      });
       console.log('API response data (raw):', JSON.stringify(response.data, null, 2));
       
       if (!response.data.results) {
@@ -1083,50 +1084,49 @@ class ApiClient {
    */
   async checkAnalysisStatus(resultId: string): Promise<{ status: 'pending' | 'completed' | 'failed', analysis?: any }> {
     try {
-      console.log(`Checking status for analysis ID: ${resultId}`);
-      
-      try {
-        // First try the dedicated status endpoint
-        const response = await this.client.get(`/api/analyses/${resultId}/status`);
-        
-        // If we get a 404, the status endpoint doesn't exist, so we'll use getAnalysisById instead
-        if (response.status === 404) {
-          throw new Error('Status endpoint not found');
-        }
-        
-        // Extract status from response
-        const status = response.data?.status || 'pending';
-        
-        // If completed, also return the analysis data
-        if (status === 'completed') {
-          return { 
-            status: 'completed',
-            analysis: response.data
-          };
-        }
-        
-        // Return the status
-        return { status: status === 'failed' ? 'failed' : 'pending' };
-      } catch (error) {
+      console.log(`[checkAnalysisStatus] Checking status for analysis ID: ${resultId}`); // DEBUG LOG
+
+      try { // Keep the outer try...catch for general errors
         // Status endpoint not available, fall back to checking full analysis
-        console.log('Status endpoint not available, falling back to full analysis check');
+        console.log('[checkAnalysisStatus] Status endpoint not available, falling back to full analysis check');
         
         // Try to get the full analysis - if successful, it means the analysis is complete
         const analysis = await this.getAnalysisById(resultId);
+        console.log(`[checkAnalysisStatus] Fallback check - fetched analysis:`, analysis ? `Status: ${analysis.status}, Themes: ${analysis.themes?.length}, Patterns: ${analysis.patterns?.length}, Personas: ${analysis.personas?.length}` : 'null'); // DEBUG LOG
         
-        // Check if the analysis has themes, which indicates completion
-        if (analysis && analysis.themes && analysis.themes.length > 0) {
+        // Check if the analysis has themes, patterns, and personas which indicates completion
+        // Also check the explicit status field if available
+        const isDataPresent = analysis && 
+                              analysis.themes && analysis.themes.length > 0 &&
+                              analysis.patterns && analysis.patterns.length > 0 &&
+                              analysis.personas && analysis.personas.length > 0; // Check for personas too
+                              
+        const determinedStatus = (analysis?.status === 'completed' || isDataPresent) ? 'completed' 
+                               : (analysis?.status === 'failed') ? 'failed' 
+                               : 'pending';
+                               
+        console.log(`[checkAnalysisStatus] Determined status for ${resultId}: ${determinedStatus}`); // DEBUG LOG
+
+        if (determinedStatus === 'completed') {
           return { 
             status: 'completed',
             analysis
           };
+        } else if (determinedStatus === 'failed') {
+             return { status: 'failed' };
         }
         
-        // If we got a response but no themes, it's likely still processing
+        // If we got a response but no themes/completed status, it's likely still processing
         return { status: 'pending' };
+      } catch (error) { // Catch errors from getAnalysisById or other issues
+        // Re-throw the error if needed, or handle specific cases
+        console.error(`[checkAnalysisStatus] Error during fallback analysis check for ID ${resultId}:`, error); // DEBUG LOG
+        // Decide if this should be treated as 'pending' or 'failed' based on the error
+        // For now, assume pending if the fetch itself failed (e.g., network error during fallback)
+        return { status: 'pending' }; 
       }
-    } catch (error) {
-      console.error(`Error checking analysis status for ID ${resultId}:`, error);
+    } catch (error) { // Catch errors from the outer try (less likely now)
+      console.error(`[checkAnalysisStatus] Outer error checking analysis status for ID ${resultId}:`, error); // DEBUG LOG
       
       // If we can't reach the server, assume it's still pending
       return { status: 'pending' };

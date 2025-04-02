@@ -1,7 +1,7 @@
 """Enhanced persona formation service with comprehensive attribute analysis"""
 
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from typing import List, Dict, Any, Optional, Union # Corrected duplicate Union import
+from dataclasses import dataclass, asdict, field
 import asyncio
 import json
 import logging
@@ -100,8 +100,8 @@ logger = logging.getLogger(__name__)
 class PersonaTrait:
     """A trait or attribute of a persona with confidence and supporting evidence"""
     value: str
-    confidence: float
-    evidence: List[str]
+    confidence: float = 0.7 # Default confidence
+    evidence: List[str] = field(default_factory=list) # Default empty list
 
 @dataclass
 class Persona:
@@ -114,10 +114,10 @@ class Persona:
     collaboration_style: PersonaTrait
     analysis_approach: PersonaTrait
     pain_points: PersonaTrait
-    patterns: List[str]
-    confidence: float
-    evidence: List[str]
-    metadata: Optional[Dict[str, Any]] = None
+    patterns: List[str] = field(default_factory=list)
+    confidence: float = 0.7 # Default confidence
+    evidence: List[str] = field(default_factory=list)
+    persona_metadata: Optional[Dict[str, Any]] = None # Changed from metadata
 
 def persona_to_dict(persona: Persona) -> Dict[str, Any]:
     """Convert a Persona object to a dictionary for JSON serialization"""
@@ -148,6 +148,42 @@ class PersonaFormationService:
         self.validation_threshold = self.min_confidence
         logger.info(f"Initialized PersonaFormationService with {llm_service.__class__.__name__}")
 
+    def _clean_evidence_list(self, evidence_list: List[Any]) -> List[str]:
+        """Attempts to parse JSON strings within an evidence list and extract nested evidence."""
+        if not isinstance(evidence_list, list):
+            logger.warning(f"Evidence provided is not a list: {type(evidence_list)}. Returning empty list.")
+            return []
+            
+        cleaned_list = []
+        for item in evidence_list:
+            if isinstance(item, str):
+                # Attempt to parse if it looks like a JSON object string containing 'evidence' key
+                # Check for both '{' and '}' and the evidence key to be more specific
+                if item.strip().startswith('{') and item.strip().endswith('}') and '"evidence":' in item:
+                    try:
+                        # Basic handling for single quotes often used by LLMs
+                        # Replace single quotes only if they are likely delimiters, not apostrophes
+                        # Handle potential escaped quotes within the JSON string itself
+                        temp_str = item.replace("\\'", "'") # Unescape escaped single quotes first
+                        valid_json_string = re.sub(r"(?<!\\)'", '"', temp_str) # Replace remaining single quotes
+                        
+                        parsed_obj = json.loads(valid_json_string)
+                        if isinstance(parsed_obj, dict) and 'evidence' in parsed_obj and isinstance(parsed_obj['evidence'], str):
+                            cleaned_list.append(parsed_obj['evidence'])
+                            continue # Successfully parsed and extracted
+                        else:
+                             logger.warning(f"Parsed JSON object lacks 'evidence' string: {item[:100]}...")
+                    except json.JSONDecodeError:
+                        logger.warning(f"Could not parse evidence item as JSON, keeping original: {item[:100]}...")
+                # If not JSON or parsing failed, add the original string (potentially with prefix removed if desired)
+                # Let's keep the prefix for now if it wasn't parsed JSON
+                cleaned_list.append(item) 
+            # Optionally handle non-string items if necessary, otherwise ignore
+            elif item is not None: # Handle cases where evidence might contain non-strings
+                 cleaned_list.append(str(item))
+
+        return cleaned_list
+
     async def form_personas(self, patterns, context=None):
         """Form personas from identified patterns
         
@@ -177,78 +213,62 @@ class PersonaFormationService:
                 try:
                     # Convert the group to a persona
                     attributes = await self._analyze_patterns_for_persona(group)
+                    logger.debug(f"[form_personas] Attributes received from LLM for group {i}: {attributes}") # DEBUG LOG
                                         
-                    if attributes.get('confidence', 0) >= self.validation_threshold:
+                    if attributes and isinstance(attributes, dict) and attributes.get('confidence', 0) >= self.validation_threshold:
                         try:
-                            # Ensure all required fields are present
-                            for field in ['name', 'description', 'role_context', 'role_confidence', 'role_evidence',
-                                         'responsibilities', 'resp_confidence', 'resp_evidence', 'tools', 
-                                         'tools_confidence', 'tools_evidence', 'collaboration', 'collab_confidence',
-                                         'collab_evidence', 'analysis', 'analysis_confidence', 'analysis_evidence',
-                                         'pain_points', 'pain_confidence', 'pain_evidence', 'confidence', 'evidence']:
-                                if field not in attributes or attributes[field] is None:
-                                    if field.endswith('_evidence') or field == 'evidence' or field == 'patterns':
-                                        attributes[field] = []
-                                    elif field.endswith('_confidence') or field == 'confidence':
-                                        attributes[field] = 0.5  # Default confidence
-                                    else:
-                                        attributes[field] = f"Not enough information to determine {field.replace('_', ' ')}"
-                            
-                            # Ensure patterns field exists
-                            if 'patterns' not in attributes or attributes['patterns'] is None:
-                                attributes['patterns'] = [p.get('description', '') for p in group if p.get('description')]
-                                
+                            # Create Persona object using defaults for missing confidence/evidence
                             persona = Persona(
-                                name=attributes['name'],
-                                description=attributes['description'],
+                                name=attributes.get('name', 'Unknown Persona'),
+                                description=attributes.get('description', 'No description provided.'),
                                 role_context=PersonaTrait(
-                                    value=attributes['role_context'],
-                                    confidence=attributes['role_confidence'],
-                                    evidence=attributes['role_evidence']
+                                    value=attributes.get('role_context', ''),
+                                    confidence=attributes.get('role_confidence', 0.7), # Use default if missing
+                                    evidence=self._clean_evidence_list(attributes.get('role_evidence', []))
                                 ),
                                 key_responsibilities=PersonaTrait(
-                                    value=attributes['responsibilities'],
-                                    confidence=attributes['resp_confidence'], 
-                                    evidence=attributes['resp_evidence']
+                                    value=attributes.get('responsibilities', ''),
+                                    confidence=attributes.get('resp_confidence', 0.7), 
+                                    evidence=self._clean_evidence_list(attributes.get('resp_evidence', []))
                                 ),
                                 tools_used=PersonaTrait(
-                                    value=attributes['tools'],
-                                    confidence=attributes['tools_confidence'],
-                                    evidence=attributes['tools_evidence'] 
+                                    value=attributes.get('tools', ''),
+                                    confidence=attributes.get('tools_confidence', 0.7),
+                                    evidence=self._clean_evidence_list(attributes.get('tools_evidence', [])) 
                                 ),
                                 collaboration_style=PersonaTrait(
-                                    value=attributes['collaboration'],
-                                    confidence=attributes['collab_confidence'],
-                                    evidence=attributes['collab_evidence']
+                                    value=attributes.get('collaboration', ''),
+                                    confidence=attributes.get('collab_confidence', 0.7),
+                                    evidence=self._clean_evidence_list(attributes.get('collab_evidence', []))
                                 ),
                                 analysis_approach=PersonaTrait(
-                                    value=attributes['analysis'],
-                                    confidence=attributes['analysis_confidence'],
-                                    evidence=attributes['analysis_evidence']
+                                    value=attributes.get('analysis', ''),
+                                    confidence=attributes.get('analysis_confidence', 0.7),
+                                    evidence=self._clean_evidence_list(attributes.get('analysis_evidence', []))
                                 ),
                                 pain_points=PersonaTrait(
-                                    value=attributes['pain_points'],
-                                    confidence=attributes['pain_confidence'],
-                                    evidence=attributes['pain_evidence']
+                                    value=attributes.get('pain_points', ''),
+                                    confidence=attributes.get('pain_confidence', 0.7),
+                                    evidence=self._clean_evidence_list(attributes.get('pain_evidence', []))
                                 ),
-                                patterns=attributes['patterns'],
-                                confidence=attributes['confidence'],
-                                evidence=attributes['evidence'],
-                                metadata=self._get_metadata(group)
+                                patterns=attributes.get('patterns', [p.get('description', '') for p in group if p.get('description')]), # Default to group descriptions
+                                confidence=attributes.get('confidence', 0.7), # Use default if missing
+                                evidence=self._clean_evidence_list(attributes.get('evidence', [])), # Clean overall evidence too
+                                persona_metadata=self._get_metadata(group) # Use persona_metadata
                             )
+                            logger.debug(f"[form_personas] Created Persona object for group {i}: {persona}") # DEBUG LOG
                             personas.append(persona)
                             
                             logger.info(f"Created persona: {persona.name} with confidence {persona.confidence}")
-                        except KeyError as key_error:
-                            logger.error(f"Missing key in persona attributes: {str(key_error)}")
-                            logger.debug(f"Available keys: {list(attributes.keys())}")
+                        except Exception as persona_creation_error:
+                             logger.error(f"Error creating Persona object for group {i}: {persona_creation_error}", exc_info=True) # DEBUG LOG with traceback
                     else:
                         logger.warning(
-                            f"Skipping persona creation - confidence {attributes.get('confidence', 0)} "
-                            f"below threshold {self.validation_threshold}"
+                            f"Skipping persona creation for group {i} - confidence {attributes.get('confidence', 0)} "
+                            f"below threshold {self.validation_threshold} or attributes invalid."
                         )
                 except Exception as attr_error:
-                    logger.error(f"Error analyzing persona attributes: {str(attr_error)}")
+                    logger.error(f"Error analyzing persona attributes for group {i}: {str(attr_error)}", exc_info=True)
                     
                 # Emit event for tracking
                 try:
@@ -271,11 +291,12 @@ class PersonaFormationService:
                 logger.warning("No personas created from patterns, creating default persona")
                 personas = await self._create_default_persona(context)
             
+            logger.info(f"[form_personas] Returning {len(personas)} personas.") # DEBUG LOG
             # Convert Persona objects to dictionaries before returning
             return [persona_to_dict(p) for p in personas]
             
         except Exception as e:
-            logger.error(f"Error creating personas: {str(e)}")
+            logger.error(f"Error creating personas: {str(e)}", exc_info=True)
             try:
                 await event_manager.emit_error(e, {'stage': 'persona_formation'})
             except Exception as event_error:
@@ -295,7 +316,10 @@ class PersonaFormationService:
         # Simple grouping by pattern type
         grouped = {}
         for pattern in patterns:
-            pattern_type = pattern.get('type', 'unknown')
+            pattern_type = pattern.get('type', 'unknown') # Use 'type' if available, else 'category'
+            if not pattern_type or pattern_type == 'unknown':
+                 pattern_type = pattern.get('category', 'unknown')
+                 
             if pattern_type not in grouped:
                 grouped[pattern_type] = []
             grouped[pattern_type].append(pattern)
@@ -333,7 +357,8 @@ class PersonaFormationService:
         return {
             'timestamp': datetime.now().isoformat(),
             'sample_size': len(pattern_group),
-            'validation_metrics': validation_metrics
+            'validation_metrics': validation_metrics,
+            'source': 'pattern_group_analysis' # Add source info
         }
 
     def _calculate_pattern_confidence(self, group: List[Dict[str, Any]]) -> float:
@@ -372,149 +397,97 @@ class PersonaFormationService:
         """
         # Prepare prompt with pattern descriptions
         pattern_descriptions = "\n".join(f"- {p.get('description', '')}" for p in patterns if p.get('description'))
+        # Simplified prompt focusing on core attributes
         prompt = f"""
-        Analyze these patterns from interview data to create a detailed user persona:
-        
+        Analyze these behavioral patterns derived from interview data to create a user persona profile.
+
         PATTERNS:
         {pattern_descriptions}
+
+        Based ONLY on the provided patterns, create a persona profile including:
+        1. Name: A descriptive role-based name (e.g., "Agile Product Manager", "Collaborative Designer").
+        2. Description: A brief 1-2 sentence summary synthesizing the core aspects of the persona based on the patterns.
+        3. Role context: Describe their primary job function and work environment mentioned.
+        4. Key responsibilities: List their main tasks and duties as described by the patterns.
+        5. Tools used: List *specific* software, tools, or methodologies explicitly named or strongly implied (e.g., 'Miro', 'Jira', 'Dual track agile').
+        6. Collaboration style: Describe how they work with others based on the patterns.
+        7. Analysis approach: Describe how they approach problems or analysis.
+        8. Pain points: Identify *specific* challenges or frustrations explicitly mentioned or strongly implied by the patterns.
+
+        Return ONLY a valid JSON object with these exact keys: "name", "description", "role_context", "responsibilities", "tools", "collaboration", "analysis", "pain_points", "confidence". Estimate an overall confidence score (0.0-1.0) based on pattern support.
+
+        Example JSON structure:
+        {{
+          "name": "Example Role Name",
+          "description": "Example description.",
+          "role_context": "Example role context.",
+          "responsibilities": "Example responsibilities.",
+          "tools": "Example tools.",
+          "collaboration": "Example collaboration style.",
+          "analysis": "Example analysis approach.",
+          "pain_points": "Example pain points.",
+          "confidence": 0.85
+        }}
         
-        Based on these patterns, create a detailed persona with the following attributes:
-        1. Name: A descriptive role-based name
-        2. Description: Brief summary of who this persona is
-        3. Role context: Their work context and environment
-        4. Key responsibilities: Their main tasks and responsibilities
-        5. Tools used: Tools, software, or methods they use
-        6. Collaboration style: How they collaborate with others
-        7. Analysis approach: How they approach problems and analysis
-        8. Pain points: Challenges or frustrations they face
-        
-        Return a JSON object with these properties:
-        - name: Role-based name (e.g., "Technical Project Manager")
-        - description: Brief description
-        - role_context: Primary work context
-        - role_confidence: Confidence score (0.0-1.0) for role identification
-        - role_evidence: List of supporting evidence for role
-        - responsibilities: Key responsibilities
-        - resp_confidence: Confidence score (0.0-1.0) for responsibilities
-        - resp_evidence: List of supporting evidence for responsibilities
-        - tools: Tools, software, or methods used
-        - tools_confidence: Confidence score (0.0-1.0) for tools
-        - tools_evidence: List of supporting evidence for tools
-        - collaboration: Collaboration style
-        - collab_confidence: Confidence score (0.0-1.0) for collaboration style
-        - collab_evidence: List of supporting evidence for collaboration
-        - analysis: Analysis approach
-        - analysis_confidence: Confidence score (0.0-1.0) for analysis approach
-        - analysis_evidence: List of supporting evidence for analysis
-        - pain_points: Pain points and challenges
-        - pain_confidence: Confidence score (0.0-1.0) for pain points
-        - pain_evidence: List of supporting evidence for pain points
-        - patterns: List of most relevant patterns
-        - confidence: Overall confidence score (0.0-1.0)
-        - evidence: Overall list of supporting evidence
+        IMPORTANT: Ensure the entire response is a single, valid JSON object. Do NOT include markdown formatting (like ```json).
         """
         
         try:
-            # Call LLM to analyze patterns - using the analyze method or _make_request if available
+            logger.debug(f"[_analyze_patterns_for_persona] Sending prompt to LLM:\n{prompt}")
+            # Call LLM to analyze patterns
+            llm_response = None
             if hasattr(self.llm_service, '_make_request'):
-                response = await self.llm_service._make_request(prompt)
+                llm_response = await self.llm_service._make_request(prompt)
             else:
-                # Use analyze method which is standard across all implementations
-                response = await self.llm_service.analyze({
+                llm_response = await self.llm_service.analyze({
                     'task': 'persona_formation',
-                    'text': pattern_descriptions,
+                    'text': pattern_descriptions, # Pass pattern descriptions as text
                     'prompt': prompt
                 })
             
-            # Ensure response is a dictionary
-            if isinstance(response, dict):
-                return response
-            elif isinstance(response, str):
-                # Try to parse JSON
-                try:
-                    return json.loads(response)
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse LLM response as JSON: {response[:100]}...")
-                    # Extract JSON if present in text
-                    json_match = re.search(r'{[\s\S]*}', response)
-                    if json_match:
-                        try:
-                            json_str = json_match.group(0)
-                            return json.loads(json_str)
-                        except json.JSONDecodeError:
-                            logger.error(f"Failed to extract JSON from response: {json_str[:100]}...")
-            
-            # Fallback to minimal response
-            logger.warning("Using fallback for pattern analysis due to invalid response")
-            return {
-                "name": "Interview Participant",
-                "description": "Persona derived from interview patterns",
-                "role_context": "Role derived from interview data",
-                "role_confidence": 0.6,
-                "role_evidence": [],
-                "responsibilities": "Responsibilities derived from patterns",
-                "resp_confidence": 0.6,
-                "resp_evidence": [],
-                "tools": "Tools mentioned in interview",
-                "tools_confidence": 0.6,
-                "tools_evidence": [],
-                "collaboration": "Collaboration style from patterns",
-                "collab_confidence": 0.6,
-                "collab_evidence": [],
-                "analysis": "Analysis approach from patterns",
-                "analysis_confidence": 0.6,
-                "analysis_evidence": [],
-                "pain_points": "Pain points from patterns",
-                "pain_confidence": 0.6,
-                "pain_evidence": [],
-                "patterns": [p.get("description", "") for p in patterns],
-                "confidence": 0.6,
-                "evidence": []
-            }
+            logger.debug(f"[_analyze_patterns_for_persona] Raw LLM response: {llm_response}")
+
+            # Attempt to parse the response
+            attributes = self._parse_llm_json_response(llm_response, "_analyze_patterns_for_persona")
+
+            if attributes and isinstance(attributes, dict):
+                 logger.info(f"Successfully parsed persona attributes from patterns.")
+                 return attributes
+            else:
+                 logger.warning("Failed to parse valid JSON attributes from LLM for pattern analysis.")
+                 return self._create_fallback_persona_attributes(patterns) # Return fallback dict
+
         except Exception as e:
-            logger.error(f"Error analyzing patterns for persona: {str(e)}")
-            # Return minimal data to avoid failures
-            return {
+            logger.error(f"Error analyzing patterns for persona: {str(e)}", exc_info=True)
+            return self._create_fallback_persona_attributes(patterns) # Return fallback dict
+
+    def _create_fallback_persona_attributes(self, patterns=None):
+         """Creates a fallback dictionary for persona attributes."""
+         logger.warning("Creating fallback persona attributes due to error or low confidence.")
+         return {
                 "name": "Default Persona",
-                "description": "Default persona due to analysis error",
+                "description": "Default persona due to analysis error or low confidence",
                 "role_context": "",
-                "role_confidence": 0.5,
-                "role_evidence": [],
                 "responsibilities": "",
-                "resp_confidence": 0.5,
-                "resp_evidence": [],
                 "tools": "",
-                "tools_confidence": 0.5,
-                "tools_evidence": [],
                 "collaboration": "",
-                "collab_confidence": 0.5,
-                "collab_evidence": [],
                 "analysis": "",
-                "analysis_confidence": 0.5,
-                "analysis_evidence": [],
                 "pain_points": "",
-                "pain_confidence": 0.5,
-                "pain_evidence": [],
-                "patterns": [],
+                "patterns": [p.get("description", "") for p in patterns] if patterns else [],
                 "confidence": 0.5,
-                "evidence": []
+                "evidence": ["Fallback due to error"]
             }
 
+
     async def _create_default_persona(self, context: Optional[Dict[str, Any]] = None) -> List[Persona]:
-        """Create a default persona when no patterns are found"""
+        """Create a default persona when no patterns are found or direct text analysis is needed."""
         try:
-            logger.info("Starting _create_default_persona with context")
-            if context is None:
-                logger.error("Context is None - cannot create default persona without context")
-                return []
-                
-            # Get the original text from context if available
+            logger.info("Starting _create_default_persona")
             original_text = ""
             if context and 'original_text' in context:
                 original_text = context['original_text']
                 logger.info(f"Found original_text in context, length: {len(original_text)}")
             elif context:
-                # Try to find text content
                 for key, value in context.items():
                     if isinstance(value, str) and len(value) > 100:
                         original_text = value
@@ -525,164 +498,85 @@ class PersonaFormationService:
                 logger.warning("No original text found in context to create default persona")
                 return []
             
-            # Create a direct prompt for persona extraction
-            prompt = f"""
-            Given the following interview text, create a detailed persona profile for the main participant.
-            
-            Interview text:
-            {original_text[:4000]}
-            
-            Create a detailed persona including:
-            1. Name and role (e.g., "Technical Project Manager")
-            2. Description (a brief summary of who this person is)
-            3. Role context (their primary job or function)
-            4. Key responsibilities (main tasks they handle)
-            5. Tools they use
-            6. Collaboration style (how they work with others)
-            7. Analysis approach (how they process information)
-            8. Pain points (challenges they face)
-            
-            Return this as a structured JSON with all these attributes.
-            """
+            # Use the simplified prompt
+            prompt = self._get_direct_persona_prompt(original_text)
             
             # Call LLM directly for persona creation
-            logger.info("Calling LLM service for persona creation")
+            logger.info("Calling LLM service for default persona creation")
+            llm_response = None # Initialize response
             if hasattr(self.llm_service, '_make_request'):
-                response = await self.llm_service._make_request(prompt)
+                llm_response = await self.llm_service._make_request(prompt)
             else:
-                # Use analyze method which is standard across all implementations
-                response = await self.llm_service.analyze({
+                llm_response = await self.llm_service.analyze({
                     'task': 'persona_formation',
-                    'text': original_text[:4000],
+                    'text': original_text[:4000], # Use limited text for analysis call
                     'prompt': prompt
                 })
             
-            # Try to extract persona data
-            if isinstance(response, dict):
-                logger.info(f"Response keys: {list(response.keys())}")
-                
-                # For Gemini, we might need to extract the actual persona data
-                persona_data = response
-                if 'error' in response:
-                    logger.error(f"LLM service returned error: {response.get('error')}")
-                    return []
-                elif 'raw_response' in response:
-                    # Try to parse the raw response as JSON
-                    try:
-                        raw_text = response.get('raw_response', '')
-                        # Find JSON in raw text
-                        import re
-                        match = re.search(r"{.*}", raw_text, re.DOTALL)
-                        if match:
-                            json_str = match.group(0)
-                            persona_data = json.loads(json_str)
-                            logger.info(f"Extracted persona data from raw response: {list(persona_data.keys())}")
-                        else:
-                            logger.error("Could not find JSON object in raw response")
-                            return []
-                    except Exception as e:
-                        logger.error(f"Error extracting persona data from raw response: {str(e)}")
-                        return []
-                
+            logger.debug(f"[_create_default_persona] Raw LLM response: {llm_response}")
+
+            # Try to extract persona data using the robust parser
+            persona_data = self._parse_llm_json_response(llm_response, "_create_default_persona")
+
+            if persona_data and isinstance(persona_data, dict): # Check if we have valid data
+                logger.debug(f"[_create_default_persona] Parsed/Extracted persona_data: {persona_data}")
                 try:
                     # Create a persona object from the extracted data
                     persona = Persona(
                         name=persona_data.get('name', 'Default Persona'),
                         description=persona_data.get('description', 'Generated from interview data'),
-                        role_context=PersonaTrait(
-                            value=persona_data.get('role_context', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        key_responsibilities=PersonaTrait(
-                            value=persona_data.get('key_responsibilities', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        tools_used=PersonaTrait(
-                            value=persona_data.get('tools_used', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        collaboration_style=PersonaTrait(
-                            value=persona_data.get('collaboration_style', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        analysis_approach=PersonaTrait(
-                            value=persona_data.get('analysis_approach', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        pain_points=PersonaTrait(
-                            value=persona_data.get('pain_points', ''),
-                            confidence=0.7,
-                            evidence=[]
-                        ),
-                        patterns=[],
-                        confidence=0.7,
-                        evidence=[],
-                        metadata={
-                            'source': 'default_persona_generation',
+                        # Create PersonaTrait with defaults if specific fields are missing
+                        role_context=PersonaTrait(value=persona_data.get('role_context', '')),
+                        key_responsibilities=PersonaTrait(value=persona_data.get('responsibilities', '')),
+                        tools_used=PersonaTrait(value=persona_data.get('tools', '')),
+                        collaboration_style=PersonaTrait(value=persona_data.get('collaboration', '')),
+                        analysis_approach=PersonaTrait(value=persona_data.get('analysis', '')),
+                        pain_points=PersonaTrait(value=persona_data.get('pain_points', '')),
+                        patterns=persona_data.get('patterns', []),
+                        confidence=persona_data.get('confidence', 0.7),
+                        evidence=self._clean_evidence_list(persona_data.get('evidence', [])), # Use evidence if provided
+                        persona_metadata={
+                            'source': 'default_persona_generation_from_text',
                             'timestamp': datetime.now().isoformat()
                         }
                     )
                     
                     logger.info(f"Created default persona: {persona.name}")
+                    logger.debug(f"[_create_default_persona] Final Persona object: {persona}")
                     return [persona]
                 except Exception as persona_error:
-                    logger.error(f"Error creating Persona object: {str(persona_error)}")
-                    # Return an even more simplified persona as a last resort
-                    minimal_persona = Persona(
-                        name="Default Participant",
-                        description="Default persona created from interview",
-                        role_context=PersonaTrait(
-                            value="Interview participant",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        key_responsibilities=PersonaTrait(
-                            value="Participating in the interview",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        tools_used=PersonaTrait(
-                            value="Communication tools",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        collaboration_style=PersonaTrait(
-                            value="Direct communication",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        analysis_approach=PersonaTrait(
-                            value="Thoughtful responses",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        pain_points=PersonaTrait(
-                            value="Areas mentioned in interview",
-                            confidence=0.5,
-                            evidence=[]
-                        ),
-                        patterns=[],
-                        confidence=0.5,
-                        evidence=[],
-                        metadata={
-                            'source': 'emergency_fallback_persona',
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    )
-                    logger.info("Created minimal fallback persona")
-                    return [minimal_persona]
+                    logger.error(f"Error creating Persona object from parsed data: {str(persona_error)}", exc_info=True)
+                    # Fallback to minimal persona if object creation fails
+                    return [self._create_minimal_fallback_persona()]
             
-            logger.warning("Failed to create default persona from context")
-            return []
+            logger.warning("Failed to create default persona from context - persona_data was invalid or missing after parsing.")
+            return [self._create_minimal_fallback_persona()] # Return minimal fallback
             
         except Exception as e:
-            logger.error(f"Error creating default persona: {str(e)}")
-            return []
+            logger.error(f"Error creating default persona: {str(e)}", exc_info=True)
+            return [self._create_minimal_fallback_persona()] # Return minimal fallback
+
+    def _create_minimal_fallback_persona(self) -> Persona:
+         """Creates a very basic Persona object as a last resort."""
+         logger.warning("Creating minimal fallback persona.")
+         return Persona(
+                name="Fallback Participant",
+                description="Minimal persona created due to errors.",
+                role_context=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                key_responsibilities=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                tools_used=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                collaboration_style=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                analysis_approach=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                pain_points=PersonaTrait(value="Unknown", confidence=0.1, evidence=[]),
+                patterns=[],
+                confidence=0.1,
+                evidence=["Fallback due to processing error"],
+                persona_metadata={
+                    'source': 'emergency_fallback_persona',
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+
 
     async def save_personas(self, personas: List[Persona], output_path: str):
         """Save personas to JSON file"""
@@ -742,6 +636,117 @@ class PersonaFormationService:
             
         return metadata
         
+    def _get_direct_persona_prompt(self, text: str) -> str:
+        """Helper method to generate the refined prompt for direct text analysis."""
+        # Simplified prompt
+        return f"""
+            Analyze the following interview text excerpt and create a user persona profile.
+
+            INTERVIEW TEXT (excerpt):
+            {text[:4000]}
+
+            Extract the following details to build the persona:
+            1. Name: A descriptive role-based name (e.g., "Agile Product Manager").
+            2. Description: A brief 1-2 sentence summary.
+            3. Role context: Primary job function and work environment.
+            4. Key responsibilities: Main tasks mentioned.
+            5. Tools used: Specific tools or methods named (e.g., 'Miro', 'Jira').
+            6. Collaboration style: How they work with others.
+            7. Analysis approach: How they approach problems/analysis.
+            8. Pain points: Specific challenges mentioned.
+
+            Return ONLY a valid JSON object with these exact keys: "name", "description", "role_context", "responsibilities", "tools", "collaboration", "analysis", "pain_points", "confidence". Estimate an overall confidence score (0.0-1.0) based on how well the text supports the profile.
+
+            Example JSON structure:
+            {{
+              "name": "Example Role Name",
+              "description": "Example description.",
+              "role_context": "Example role context.",
+              "responsibilities": "Example responsibilities.",
+              "tools": "Example tools.",
+              "collaboration": "Example collaboration style.",
+              "analysis": "Example analysis approach.",
+              "pain_points": "Example pain points.",
+              "confidence": 0.85
+            }}
+
+            IMPORTANT: Ensure the entire response is ONLY a single, valid JSON object. Do NOT include markdown formatting (like ```json) or any explanatory text before or after the JSON.
+            """
+
+    def _parse_llm_json_response(self, response: Union[str, Dict, Any], context_msg: str = "") -> Optional[Dict]:
+        """Attempts to parse a JSON response from the LLM, handling various potential issues."""
+        if isinstance(response, dict):
+             # If it's already a dict (e.g., from OpenAI compatibility layer or direct SDK support)
+             logger.debug(f"[{context_msg}] LLM response is already a dict.")
+             # Check if it's an error structure from our service
+             if 'error' in response:
+                 logger.error(f"[{context_msg}] LLM service returned an error: {response['error']}")
+                 return None
+             return response
+
+        if not isinstance(response, str):
+            logger.error(f"[{context_msg}] Unexpected LLM response type: {type(response)}. Expected string or dict.")
+            return None
+
+        response_text = response.strip()
+        logger.debug(f"[{context_msg}] Attempting to parse JSON from raw response text (length {len(response_text)}):\n{response_text[:500]}...")
+
+        # 1. Try direct parsing
+        try:
+            # Attempt to fix common issues like trailing commas
+            cleaned_text = re.sub(r',\s*([}\]])', r'\1', response_text)
+            parsed_json = json.loads(cleaned_text)
+            logger.debug(f"[{context_msg}] Successfully parsed JSON directly.")
+            return parsed_json
+        except json.JSONDecodeError as e1:
+            logger.warning(f"[{context_msg}] Direct JSON parsing failed: {e1}. Trying markdown extraction...")
+
+            # 2. Try extracting from ```json ... ```
+            match = re.search(r'```(?:json)?\s*({[\s\S]*?})\s*```', response_text, re.DOTALL)
+            if not match:
+                 # Also try matching arrays if the expected root is a list
+                 match = re.search(r'```(?:json)?\s*(\[[\s\S]*?\])\s*```', response_text, re.DOTALL)
+
+            if match:
+                json_str = match.group(1)
+                logger.debug(f"[{context_msg}] Found potential JSON in markdown block.")
+                try:
+                    # Clean potential trailing commas within the extracted block
+                    cleaned_json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+                    parsed_json = json.loads(cleaned_json_str)
+                    logger.debug(f"[{context_msg}] Successfully parsed JSON from markdown block.")
+                    return parsed_json
+                except json.JSONDecodeError as e2:
+                    logger.error(f"[{context_msg}] Failed to parse JSON extracted from markdown: {e2}")
+                    # Continue to next method
+            else:
+                 logger.warning(f"[{context_msg}] No JSON markdown block found.")
+
+
+            # 3. Try finding the first '{' and last '}'
+            try:
+                start_index = response_text.find('{')
+                end_index = response_text.rfind('}')
+                if start_index != -1 and end_index != -1 and end_index > start_index:
+                    json_str = response_text[start_index : end_index + 1]
+                    logger.debug(f"[{context_msg}] Found potential JSON between first '{{' and last '}}'.")
+                    # Clean potential trailing commas
+                    cleaned_json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+                    parsed_json = json.loads(cleaned_json_str)
+                    logger.debug(f"[{context_msg}] Successfully parsed JSON using first/last brace method.")
+                    return parsed_json
+                else:
+                     logger.warning(f"[{context_msg}] Could not find matching braces.")
+            except json.JSONDecodeError as e3:
+                logger.error(f"[{context_msg}] Failed to parse JSON using first/last brace method: {e3}")
+            except Exception as e_generic:
+                 logger.error(f"[{context_msg}] Unexpected error during brace parsing: {e_generic}")
+
+
+            logger.error(f"[{context_msg}] All JSON parsing attempts failed.")
+            return None
+
+
     async def generate_persona_from_text(self, text: str, context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Generate persona directly from raw interview text using enhanced LLM schema-based analysis.
         
@@ -764,146 +769,76 @@ class PersonaFormationService:
             except Exception as event_error:
                 logger.warning(f"Could not emit processing status event: {str(event_error)}")
             
-            # Create a direct prompt for persona extraction
-            prompt = f"""
-            Given the following interview text, create a detailed persona profile for the main participant.
-            
-            Interview text:
-            {text[:4000]}
-            
-            Create a detailed persona including:
-            1. Name and role (e.g., "Technical Project Manager")
-            2. Description (a brief summary of who this person is)
-            3. Role context (their primary job or function)
-            4. Key responsibilities (main tasks they handle)
-            5. Tools they use
-            6. Collaboration style (how they work with others)
-            7. Analysis approach (how they process information)
-            8. Pain points (challenges they face)
-            
-            Return a JSON object with these properties:
-            - name: Role-based name (e.g., "Technical Project Manager")
-            - description: Brief description
-            - role_context: Primary work context
-            - role_confidence: Confidence score (0.0-1.0) for role identification
-            - role_evidence: List of supporting evidence for role
-            - responsibilities: Key responsibilities
-            - resp_confidence: Confidence score (0.0-1.0) for responsibilities
-            - resp_evidence: List of supporting evidence for responsibilities
-            - tools: Tools, software, or methods used
-            - tools_confidence: Confidence score (0.0-1.0) for tools
-            - tools_evidence: List of supporting evidence for tools
-            - collaboration: Collaboration style
-            - collab_confidence: Confidence score (0.0-1.0) for collaboration style
-            - collab_evidence: List of supporting evidence for collaboration
-            - analysis: Analysis approach
-            - analysis_confidence: Confidence score (0.0-1.0) for analysis approach
-            - analysis_evidence: List of supporting evidence for analysis
-            - pain_points: Pain points and challenges
-            - pain_confidence: Confidence score (0.0-1.0) for pain points
-            - pain_evidence: List of supporting evidence for pain points
-            - patterns: List of relevant patterns or themes
-            - confidence: Overall confidence score (0.0-1.0)
-            - evidence: Overall list of supporting evidence
-            """
+            # Create the refined prompt
+            prompt = self._get_direct_persona_prompt(text)
             
             # Try different methods to generate persona
             attributes = None
+            llm_response = None # Variable to store raw LLM response
             
-            # Method 1: Use specialized method if available
-            if hasattr(self.llm_service, 'generate_persona_from_text'):
-                try:
-                    attributes = await self.llm_service.generate_persona_from_text(text)
-                    logger.info("Successfully used specialized generate_persona_from_text method")
-                except Exception as e:
-                    logger.warning(f"Error using specialized method: {str(e)}")
+            # Method 1: Use specialized method if available (Currently errors out)
+            # if hasattr(self.llm_service, 'generate_persona_from_text'):
+            #     try:
+            #         llm_response = await self.llm_service.generate_persona_from_text(text, prompt=prompt) 
+            #         attributes = llm_response 
+            #         logger.info("Successfully used specialized generate_persona_from_text method")
+            #     except Exception as e:
+            #         logger.warning(f"Error using specialized method: {str(e)}")
             
             # Method 2: Use _make_request if available
             if attributes is None and hasattr(self.llm_service, '_make_request'):
                 try:
-                    response = await self.llm_service._make_request(prompt)
-                    if isinstance(response, dict):
-                        attributes = response
-                    elif isinstance(response, str):
-                        # Try to parse JSON from string
-                        try:
-                            attributes = json.loads(response)
-                        except json.JSONDecodeError:
-                            # Try to extract JSON from text
-                            json_match = re.search(r'{[\s\S]*}', response)
-                            if json_match:
-                                try:
-                                    json_str = json_match.group(0)
-                                    attributes = json.loads(json_str)
-                                except:
-                                    logger.warning("Failed to extract JSON from response")
-                    logger.info("Successfully used _make_request method")
+                    llm_response = await self.llm_service._make_request(prompt)
+                    attributes = self._parse_llm_json_response(llm_response, "generate_persona_from_text via _make_request")
+                    if attributes:
+                         logger.info("Successfully used _make_request method")
                 except Exception as e:
                     logger.warning(f"Error using _make_request: {str(e)}")
             
             # Method 3: Use standard analyze method
             if attributes is None:
                 try:
-                    response = await self.llm_service.analyze({
+                    llm_response = await self.llm_service.analyze({
                         'task': 'persona_formation',
-                        'text': text[:4000],
+                        'text': text[:4000], # Pass original text snippet for context if needed by analyze
                         'prompt': prompt
                     })
-                    if isinstance(response, dict):
-                        attributes = response
-                    logger.info("Successfully used analyze method")
+                    attributes = self._parse_llm_json_response(llm_response, "generate_persona_from_text via analyze")
+                    if attributes:
+                         logger.info("Successfully used analyze method")
                 except Exception as e:
                     logger.warning(f"Error using analyze method: {str(e)}")
+
+            logger.debug(f"[generate_persona_from_text] Raw LLM response: {llm_response}") # DEBUG LOG
+            logger.debug(f"[generate_persona_from_text] Parsed/Extracted attributes: {attributes}") # DEBUG LOG
             
             # If we have attributes, create a persona
             if attributes and isinstance(attributes, dict):
                 try:
-                    # Ensure all required fields are present
+                    # Create a persona object from the extracted data
                     persona = Persona(
-                        name=attributes.get('name', 'Unknown'),
+                        name=attributes.get('name', 'Unknown Persona'),
                         description=attributes.get('description', 'Generated from interview analysis'),
-                        role_context=PersonaTrait(
-                            value=attributes.get('role_context', ''),
-                            confidence=attributes.get('role_confidence', 0.7),
-                            evidence=attributes.get('role_evidence', [])
-                        ),
-                        key_responsibilities=PersonaTrait(
-                            value=attributes.get('responsibilities', ''),
-                            confidence=attributes.get('resp_confidence', 0.7), 
-                            evidence=attributes.get('resp_evidence', [])
-                        ),
-                        tools_used=PersonaTrait(
-                            value=attributes.get('tools', ''),
-                            confidence=attributes.get('tools_confidence', 0.7),
-                            evidence=attributes.get('tools_evidence', [])
-                        ),
-                        collaboration_style=PersonaTrait(
-                            value=attributes.get('collaboration', ''),
-                            confidence=attributes.get('collab_confidence', 0.7),
-                            evidence=attributes.get('collab_evidence', [])
-                        ),
-                        analysis_approach=PersonaTrait(
-                            value=attributes.get('analysis', ''),
-                            confidence=attributes.get('analysis_confidence', 0.7),
-                            evidence=attributes.get('analysis_evidence', [])
-                        ),
-                        pain_points=PersonaTrait(
-                            value=attributes.get('pain_points', ''),
-                            confidence=attributes.get('pain_confidence', 0.7),
-                            evidence=attributes.get('pain_evidence', [])
-                        ),
-                        patterns=attributes.get('patterns', []),
-                        confidence=attributes.get('confidence', 0.8),
-                        evidence=attributes.get('evidence', ["Generated from direct text analysis"]),
-                        metadata=self._get_text_metadata(text, context)
+                        # Create PersonaTrait with defaults if specific fields are missing
+                        role_context=PersonaTrait(value=attributes.get('role_context', '')),
+                        key_responsibilities=PersonaTrait(value=attributes.get('responsibilities', '')),
+                        tools_used=PersonaTrait(value=attributes.get('tools', '')),
+                        collaboration_style=PersonaTrait(value=attributes.get('collaboration', '')),
+                        analysis_approach=PersonaTrait(value=attributes.get('analysis', '')),
+                        pain_points=PersonaTrait(value=attributes.get('pain_points', '')),
+                        patterns=attributes.get('patterns', []), # Use patterns if LLM provides them
+                        confidence=attributes.get('confidence', 0.7), # Use overall confidence from LLM
+                        evidence=self._clean_evidence_list(attributes.get('evidence', ["Generated from direct text analysis"])), # Use evidence if provided
+                        persona_metadata=self._get_text_metadata(text, context) # Use persona_metadata
                     )
                     
                     # Add source attribution
-                    persona.metadata["source"] = "direct_text_analysis"
-                    persona.metadata["analysis_type"] = "schema_based"
-                    persona.metadata["text_length"] = len(text)
+                    persona.persona_metadata["source"] = "direct_text_analysis" # Use persona_metadata
+                    persona.persona_metadata["analysis_type"] = "schema_based"
+                    persona.persona_metadata["text_length"] = len(text)
                     
                     logger.info(f"Created persona: {persona.name}")
+                    logger.debug(f"[generate_persona_from_text] Final Persona object: {persona}") # DEBUG LOG
                     try:
                         await event_manager.emit(EventType.PROCESSING_STATUS, {"status": "Persona generated successfully", "progress": 0.9})
                     except Exception as event_error:
@@ -913,6 +848,7 @@ class PersonaFormationService:
                     try:
                         # Use the persona_to_dict function to convert the persona to a serializable dictionary
                         persona_dict = persona_to_dict(persona)
+                        logger.debug(f"[generate_persona_from_text] Returning persona dict: {persona_dict}") # DEBUG LOG
                         return [persona_dict]
                     except Exception as dict_error:
                         logger.error(f"Error converting persona to dictionary: {str(dict_error)}")
@@ -953,14 +889,15 @@ class PersonaFormationService:
                             "patterns": persona.patterns,
                             "confidence": float(persona.confidence),
                             "evidence": persona.evidence,
-                            "metadata": persona.metadata
+                            "persona_metadata": persona.persona_metadata # Use persona_metadata
                         }
+                        logger.debug(f"[generate_persona_from_text] Returning fallback persona dict: {persona_dict}") # DEBUG LOG
                         return [persona_dict]
                 except Exception as e:
-                    logger.error(f"Error creating persona from attributes: {str(e)}")
+                    logger.error(f"Error creating persona from attributes: {str(e)}", exc_info=True)
             
-            # Fallback to default persona creation
-            logger.info("Using default persona creation method")
+            # Fallback to default persona creation if attributes are missing or invalid
+            logger.warning("Attributes missing or invalid after LLM call, falling back to default persona creation.")
             context_with_text = context or {}
             context_with_text['original_text'] = text
             personas = await self._create_default_persona(context_with_text)
@@ -969,20 +906,11 @@ class PersonaFormationService:
             return [persona_to_dict(p) for p in personas]
                 
         except Exception as e:
-            logger.error(f"Error generating persona from text: {str(e)}")
+            logger.error(f"Error generating persona from text: {str(e)}", exc_info=True)
             try:
                 await event_manager.emit_error(e, {"context": "generate_persona_from_text"})
             except Exception as event_error:
                 logger.warning(f"Could not emit error event: {str(event_error)}")
                 
             # Return a minimal persona as fallback
-            return [{
-                "name": "Default Persona",
-                "description": "Generated as fallback due to an error in text analysis",
-                "confidence": 0.4,
-                "evidence": ["Generated as fallback"],
-                "metadata": {
-                    "error": str(e),
-                    "timestamp": datetime.now().isoformat()
-                }
-            }] 
+            return [persona_to_dict(self._create_minimal_fallback_persona())]

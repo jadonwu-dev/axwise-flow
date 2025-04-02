@@ -15,13 +15,16 @@ import { ThemeChart } from './ThemeChart';
 import { PatternList } from './PatternList';
 import { SentimentGraph } from './SentimentGraph';
 import { PersonaList } from './PersonaList';
-import { PriorityInsights } from './PriorityInsights';
+import { PriorityInsights } from './PriorityInsights'; // Uncomment original component
+// import { PriorityInsightsDisplay } from './PriorityInsightsDisplay'; // Remove new display component import
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomErrorBoundary from './ErrorBoundary';
-import { apiClient } from '@/lib/apiClient';
-import type { DetailedAnalysisResult } from '@/types/api';
+import { apiClient } from '@/lib/apiClient'; // Keep apiClient if needed elsewhere
+import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
+import type { DetailedAnalysisResult } from '@/types/api'; // Remove PrioritizedInsight import
+// import { useAnalysisStore } from '@/store/useAnalysisStore'; // Remove store import if only used for priority insights
 
 interface VisualizationTabsProps {
   analysisId?: string;
@@ -67,8 +70,8 @@ export default function VisualizationTabsRefactored({
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(activeTabFromUrl || 'themes');
   const [localAnalysis, setLocalAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
-  const [loading, setLoading] = useState<boolean>(!serverAnalysisData);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(!serverAnalysisData); // Initial loading based on server data
+  const [fetchError, setFetchError] = useState<string | null>(null); // Renamed for clarity
   const lastFetchedId = useRef<string | null>(null);
 
   // Extract result_id from URL if analysisId is not provided as prop
@@ -96,11 +99,11 @@ export default function VisualizationTabsRefactored({
     if (lastFetchedId.current === effectiveAnalysisId) {
       return;
     }
-    
+
     const fetchAnalysis = async () => {
       try {
         setLoading(true);
-        setError(null);
+        setFetchError(null);
         
         // Reset analysis data first to avoid mixing with previous data
         if (isMounted) {
@@ -116,8 +119,9 @@ export default function VisualizationTabsRefactored({
         }
       } catch (error) {
         console.error('Error fetching analysis:', error);
+        const errMsg = error instanceof Error ? error.message : 'Failed to load analysis data';
         if (isMounted) {
-          setError('Failed to load analysis data');
+          setFetchError(errMsg);
         }
       } finally {
         if (isMounted) {
@@ -129,7 +133,7 @@ export default function VisualizationTabsRefactored({
     fetchAnalysis();
 
     return () => {
-      isMounted = false;
+      isMounted = false; // Cleanup function
     };
   }, [effectiveAnalysisId, serverAnalysisData]); // Added serverAnalysisData as dependency
 
@@ -207,19 +211,20 @@ export default function VisualizationTabsRefactored({
       <CardContent>
         {loading && (
           <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            {/* Use LoadingSpinner component */}
+            <LoadingSpinner label="Loading analysis data..." /> 
             <p className="mt-4 text-muted-foreground">Loading analysis data...</p>
           </div>
         )}
         
-        {error && (
+        {fetchError && !loading && ( // Show error only if not loading
           <div className="p-4 border border-red-300 bg-red-50 rounded-md">
             <h3 className="text-lg font-semibold text-red-700">Error</h3>
-            <p className="text-red-600">{error}</p>
+            <p className="text-red-600">{fetchError}</p>
           </div>
         )}
         
-        {!loading && !error && (
+        {!loading && !fetchError && analysis && ( // Ensure analysis data exists
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="w-full grid grid-cols-5">
               <TabsTrigger value="themes">Themes</TabsTrigger>
@@ -279,7 +284,7 @@ export default function VisualizationTabsRefactored({
                 {analysis.sentiment && (
                   <SentimentGraph 
                     data={analysis.sentiment.sentimentOverview || analysis.sentimentOverview} 
-                    detailedData={Array.isArray(analysis.sentiment) ? analysis.sentiment : []} 
+                    timeSeriesData={Array.isArray(analysis.sentiment) ? analysis.sentiment : []} // Use timeSeriesData prop
                     supportingStatements={
                       // Always prioritize sentimentStatements as it's more reliable and comprehensive
                       analysis.sentimentStatements && 
@@ -330,7 +335,8 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="priority" className="mt-6">
-                <PriorityInsights analysisId={effectiveAnalysisId || ''} />
+                {/* Revert to using the original PriorityInsights component */}
+                <PriorityInsights analysisId={effectiveAnalysisId || ''} /> 
               </TabsContent>
             </CustomErrorBoundary>
           </Tabs>
@@ -342,7 +348,7 @@ export default function VisualizationTabsRefactored({
             <h3 className="font-medium mb-2">Debug Information</h3>
             <div className="space-y-2">
               <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
-              <p><strong>Error:</strong> {error || 'None'}</p>
+              <p><strong>Error:</strong> {fetchError || 'None'}</p> 
               <p><strong>Analysis ID:</strong> {effectiveAnalysisId || 'None'}</p>
               <p><strong>Active Tab:</strong> {activeTab}</p>
               <p><strong>Theme Count:</strong> {analysis?.themes?.length || 0}</p>

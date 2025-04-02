@@ -540,6 +540,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                       <div>
                         <h3 className="text-sm font-medium mb-2">Supporting Evidence</h3>
                         <ul className="list-disc pl-5 space-y-2">
+                          {/* Parse evidence for the main persona evidence list as well */}
                           {activePersona.evidence.map((item, index) => (
                             <li key={index}>{item}</li>
                           ))}

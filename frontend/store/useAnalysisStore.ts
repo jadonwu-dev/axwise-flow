@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/lib/apiClient';
-import type { DetailedAnalysisResult, ListAnalysesParams, DashboardData } from '@/types/api';
+import type { DetailedAnalysisResult, ListAnalysesParams, DashboardData } from '@/types/api'; // Removed PriorityInsightsResponse, PrioritizedInsight
 
 /**
  * Analysis Store State Interface
@@ -19,12 +19,13 @@ interface AnalysisState {
   analysisHistory: DetailedAnalysisResult[];
   analysisMap: Record<string, DetailedAnalysisResult>;
   
-  // Status
+
+  
+// Status
   isLoadingAnalysis: boolean;
   isLoadingHistory: boolean;
   analysisError: Error | null;
   historyError: Error | null;
-  
   // Filters for history
   historyFilters: {
     sortBy: 'createdAt' | 'fileName';
@@ -204,7 +205,7 @@ export const useAnalysisStore = create<AnalysisState>()(
        * Clear error states
        */
       clearErrors: () => {
-        set({ analysisError: null, historyError: null });
+        set({ analysisError: null, historyError: null }); // Removed fetchPriorityInsightsError
       },
       
       /**
