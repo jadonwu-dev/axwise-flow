@@ -2,7 +2,7 @@
 
 /**
  * Server Actions for Upload and Analysis
- * 
+ *
  * These actions replace Zustand state management by handling
  * form submissions server-side.
  */
@@ -20,30 +20,30 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
   try {
     const file = formData.get('file') as File;
     const isTextFile = formData.get('isTextFile') === 'true';
-    
+
     if (!file) {
       return {
         success: false,
         error: 'No file provided'
       };
     }
-    
+
     // Get auth token from cookie
     const cookieStore = cookies();
     const authToken = cookieStore.get('auth_token')?.value;
-    
+
     if (!authToken) {
       return {
         success: false,
         error: 'Not authenticated'
       };
     }
-    
+
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
-    
+
     const uploadResponse = await apiClient.uploadData(file, isTextFile);
-    
+
     return {
       success: true,
       uploadResponse
@@ -70,19 +70,19 @@ export async function analyzeAction(
     // Get auth token from cookie
     const cookieStore = cookies();
     const authToken = cookieStore.get('auth_token')?.value;
-    
+
     if (!authToken) {
       return {
         success: false,
         error: 'Not authenticated'
       };
     }
-    
+
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
-    
+
     const analysisResponse = await apiClient.analyzeData(dataId, llmProvider, undefined, isTextFile);
-    
+
     return {
       success: true,
       analysisResponse
@@ -101,7 +101,20 @@ export async function analyzeAction(
  * Helper function to generate URL for redirection
  */
 export async function getRedirectUrl(analysisId: string): Promise<string> {
-  return `/unified-dashboard/visualize?analysisId=${analysisId}`;
+  // --- START LOGGING ---
+  console.log(`[Server Action - getRedirectUrl] Called with analysisId: ${analysisId}`);
+  if (!analysisId) {
+    console.error("[Server Action - getRedirectUrl] Received null or empty analysisId!");
+    // Consider throwing an error or returning a default URL
+    throw new Error("Cannot generate redirect URL without a valid analysis ID.");
+  }
+  // --- END LOGGING ---
+
+  // Add timestamp to prevent caching issues
+  const timestamp = Date.now();
+  const url = `/unified-dashboard/visualize?analysisId=${analysisId}&visualizationTab=themes&timestamp=${timestamp}`;
+  console.log(`[Server Action - getRedirectUrl] Generated URL: ${url}`);
+  return url;
 }
 
 /**
@@ -114,20 +127,20 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
       return null;
   }
   console.log(`[getServerSideAnalysis] Received analysisId: ${analysisId}`); // DEBUG LOG
-  
+
   try {
     // Get auth token from cookie
     const cookieStore = cookies();
     const authToken = cookieStore.get('auth_token')?.value;
-    
+
     if (!authToken) {
       console.error('[getServerSideAnalysis] No auth token available for server fetch');
       return null;
     }
-    
+
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
-    
+
     // Fetch analysis data
     console.log(`[getServerSideAnalysis] Calling apiClient.getAnalysisById with ID: ${analysisId}`); // DEBUG LOG
     const analysisData = await apiClient.getAnalysisById(analysisId);

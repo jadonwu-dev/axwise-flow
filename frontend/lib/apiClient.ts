@@ -17,13 +17,13 @@ declare global {
 
 /**
  * API Client for interacting with the backend API
- * 
+ *
  * Implemented as a true singleton to ensure consistent API interaction across the application.
  * Always import the pre-instantiated singleton instance:
  * ```typescript
  * import { apiClient } from '@/lib/apiClient';
  * ```
- * 
+ *
  * DO NOT create new instances with `new ApiClient()` as the constructor is private.
  */
 class ApiClient {
@@ -54,12 +54,12 @@ class ApiClient {
       (response) => response,
       async (error: any) => {
         // Enhanced error detection and handling
-        const isConnectionRefused = 
-          error?.message?.includes('Connection refused') || 
+        const isConnectionRefused =
+          error?.message?.includes('Connection refused') ||
           error?.message?.includes('Network Error') ||
           error?.code === 'ERR_CONNECTION_REFUSED' ||
           error?.code === 'ERR_NETWORK';
-        
+
         // Ensure error is an AxiosError
         if (!error || !error.response) {
           // Check for network errors (likely CORS issues or server down)
@@ -85,17 +85,17 @@ class ApiClient {
         }
 
         const originalRequest = error.config;
-        
+
         if (!originalRequest) {
           return Promise.reject(error);
         }
-        
+
         // Handle token expiration (401 errors)
         if (error.response.status === 401 && !originalRequest._retry) {
           if (!this.tokenRefreshInProgress) {
             this.tokenRefreshInProgress = true;
             originalRequest._retry = true;
-            
+
             try {
               // Try to refresh the token if using Clerk
               const token = await this.getAuthToken();
@@ -115,7 +115,7 @@ class ApiClient {
             }
           }
         }
-        
+
         return Promise.reject(error);
       }
     );
@@ -162,16 +162,16 @@ class ApiClient {
   async uploadData(file: File, isTextFile: boolean = false): Promise<UploadResponse> {
     try {
       // Log the request data for debugging
-      console.log('Uploading file:', { 
-        filename: file.name, 
-        type: file.type, 
-        size: file.size, 
-        isTextFile 
+      console.log('Uploading file:', {
+        filename: file.name,
+        type: file.type,
+        size: file.size,
+        isTextFile
       });
 
       const formData = new FormData();
       formData.append('file', file);
-      
+
       // Convert boolean to string representation expected by the backend
       formData.append('is_free_text', String(isTextFile));
 
@@ -192,25 +192,25 @@ class ApiClient {
       return response.data;
     } catch (error: any) {
       console.error('Error uploading data:', error);
-      
+
       // Enhanced error debugging
       if (error?.response?.data?.detail) {
         console.error('Server error details:', error.response.data.detail);
       }
-      
+
       // Handle different error types safely
       if (error && error.response) {
         // Handle 401 separately as it's typically an auth issue
         if (error.response.status === 401) {
           throw new Error('Authentication required. Please log in.');
         }
-        
+
         // Handle 422 errors specifically for better feedback
         if (error.response.status === 422) {
           const errorDetail = error.response.data?.detail;
           if (Array.isArray(errorDetail) && errorDetail.length > 0) {
             // Handle FastAPI validation error format
-            const validationErrors = errorDetail.map((err: any) => 
+            const validationErrors = errorDetail.map((err: any) =>
               `${err.loc.join('.')}: ${err.msg}`
             ).join(', ');
             throw new Error(`Validation error: ${validationErrors}`);
@@ -220,17 +220,17 @@ class ApiClient {
             throw new Error('The server could not process your request. Please check your file format.');
           }
         }
-        
+
         // Use the server error message if available
         const errorResponse = error.response.data as { detail?: string };
         if (errorResponse?.detail) {
           throw new Error(errorResponse.detail);
         }
       }
-      
+
       // Generic error with a safe message access
-      const errorMessage = error && typeof error.message === 'string' 
-        ? error.message 
+      const errorMessage = error && typeof error.message === 'string'
+        ? error.message
         : 'Unknown error';
       throw new Error(`Upload failed: ${errorMessage}`);
     }
@@ -288,32 +288,32 @@ class ApiClient {
         timeout: 120000 // 120 seconds timeout for fetching potentially large results
       });
       console.log('API response data (raw):', JSON.stringify(response.data, null, 2));
-      
+
       if (!response.data.results) {
         throw new Error('Invalid API response: missing results');
       }
-      
+
       const results = response.data.results;
-      
+
       // Add specific logging for sentimentStatements
-      console.log('SentimentStatements from API (direct):', 
-                 results.sentimentStatements ? 
-                 JSON.stringify(results.sentimentStatements, null, 2) : 
+      console.log('SentimentStatements from API (direct):',
+                 results.sentimentStatements ?
+                 JSON.stringify(results.sentimentStatements, null, 2) :
                  'MISSING');
-      
+
       // Check if results.sentimentStatements exists directly
-      console.log('Raw sentimentStatements from API:', 
-                 results.sentimentStatements ? 
-                 JSON.stringify(results.sentimentStatements, null, 2) : 
+      console.log('Raw sentimentStatements from API:',
+                 results.sentimentStatements ?
+                 JSON.stringify(results.sentimentStatements, null, 2) :
                  'MISSING');
-      
+
       // Make sure sentimentStatements are properly extracted and preserved
       if (results.sentimentStatements) {
         console.log("Found sentiment statements in API response:", JSON.stringify(results.sentimentStatements, null, 2));
       } else {
         console.warn("No sentiment statements found in API response");
       }
-      
+
       // Log sentiment data structure to help with debugging
       if (Array.isArray(results.sentiment)) {
         console.log(`Sentiment array found with ${results.sentiment.length} items`);
@@ -326,25 +326,25 @@ class ApiClient {
         if (results.sentiment && typeof results.sentiment === 'object') {
           // Convert object structure to expected format if needed
           const sentimentData = results.sentiment;
-          
+
           // Initialize sentimentStatements if not present or malformed
-          if (!results.sentimentStatements || 
+          if (!results.sentimentStatements ||
               typeof results.sentimentStatements !== 'object' ||
               !results.sentimentStatements.positive ||
               !results.sentimentStatements.neutral ||
               !results.sentimentStatements.negative) {
-            
+
             results.sentimentStatements = {
               positive: [],
               neutral: [],
               negative: []
             };
-            
+
             // If the sentiment object has statement data in a different format, extract it
             if (sentimentData.statements) {
               // Process statements if available
               const statements = sentimentData.statements || {};
-              
+
               if (Array.isArray(statements.positive)) {
                 results.sentimentStatements.positive = statements.positive;
               }
@@ -358,7 +358,7 @@ class ApiClient {
           }
         }
       }
-      
+
       // Ensure we have the required fields
       if (!Array.isArray(results.sentiment)) {
         // Convert sentiment object to array if necessary
@@ -383,22 +383,22 @@ class ApiClient {
           if (!theme.statements || !Array.isArray(theme.statements)) {
             theme.statements = [];
           }
-          
+
           // Check for supporting_quotes field (API might return this format)
           if (theme.supporting_quotes && Array.isArray(theme.supporting_quotes) && theme.supporting_quotes.length > 0) {
             theme.statements = [...theme.statements, ...theme.supporting_quotes];
           }
-          
+
           // Check for examples field (backward compatibility)
           if (theme.examples && Array.isArray(theme.examples) && theme.examples.length > 0 && theme.statements.length === 0) {
             theme.statements = [...theme.statements, ...theme.examples];
           }
-          
+
           // Check for quotes field (another possible format)
           if (theme.quotes && Array.isArray(theme.quotes) && theme.quotes.length > 0 && theme.statements.length === 0) {
             theme.statements = [...theme.statements, ...theme.quotes];
           }
-          
+
           return theme;
         });
       }
@@ -412,7 +412,7 @@ class ApiClient {
       }
 
       // Validate sentimentOverview
-      if (!results.sentimentOverview || 
+      if (!results.sentimentOverview ||
           typeof results.sentimentOverview.positive !== 'number' ||
           typeof results.sentimentOverview.neutral !== 'number' ||
           typeof results.sentimentOverview.negative !== 'number') {
@@ -422,16 +422,16 @@ class ApiClient {
           negative: 0.33
         };
       }
-      
+
       // IMPORTANT: This is where we need to handle the raw sentiment data vs. sentimentStatements
       // Check if we need to initialize sentimentStatements structure
-      if (!results.sentimentStatements || 
-          !results.sentimentStatements.positive || 
-          !results.sentimentStatements.neutral || 
+      if (!results.sentimentStatements ||
+          !results.sentimentStatements.positive ||
+          !results.sentimentStatements.neutral ||
           !results.sentimentStatements.negative) {
-        
+
         console.log("Initializing sentimentStatements structure");
-        
+
         // Initialize with empty arrays if needed
         if (!results.sentimentStatements) {
         results.sentimentStatements = {
@@ -440,22 +440,22 @@ class ApiClient {
           negative: []
         };
         }
-        
+
         // Ensure all arrays exist
         if (!Array.isArray(results.sentimentStatements.positive)) results.sentimentStatements.positive = [];
         if (!Array.isArray(results.sentimentStatements.neutral)) results.sentimentStatements.neutral = [];
         if (!Array.isArray(results.sentimentStatements.negative)) results.sentimentStatements.negative = [];
       }
-      
+
       // Check for raw sentiment data to combine with sentimentStatements
       // This handles the case where sentiment contains the raw arrays directly
       if (results.sentiment && typeof results.sentiment === 'object') {
         const sentimentObj = results.sentiment;
-        
+
         // Check if sentiment has direct positive/neutral/negative arrays
         if (Array.isArray(sentimentObj.positive)) {
           console.log(`Found ${sentimentObj.positive.length} positive statements in sentiment object`);
-          
+
           // Only merge if there are actually statements
           if (sentimentObj.positive.length > 0) {
             // Merge unique statements from sentiment.positive into sentimentStatements.positive
@@ -466,10 +466,10 @@ class ApiClient {
             });
           }
         }
-        
+
         if (Array.isArray(sentimentObj.neutral)) {
           console.log(`Found ${sentimentObj.neutral.length} neutral statements in sentiment object`);
-          
+
           // Only merge if there are actually statements
           if (sentimentObj.neutral.length > 0) {
             // Merge unique statements from sentiment.neutral into sentimentStatements.neutral
@@ -480,10 +480,10 @@ class ApiClient {
             });
           }
         }
-        
+
         if (Array.isArray(sentimentObj.negative)) {
           console.log(`Found ${sentimentObj.negative.length} negative statements in sentiment object`);
-          
+
           // Only merge if there are actually statements
           if (sentimentObj.negative.length > 0) {
             // Merge unique statements from sentiment.negative into sentimentStatements.negative
@@ -494,11 +494,11 @@ class ApiClient {
             });
           }
         }
-        
+
         // Check for raw supporting_statements
         if (sentimentObj.supporting_statements && typeof sentimentObj.supporting_statements === 'object') {
           const supportingStmts = sentimentObj.supporting_statements;
-          
+
           if (Array.isArray(supportingStmts.positive) && supportingStmts.positive.length > 0) {
             // Merge unique statements from supporting_statements.positive
             supportingStmts.positive.forEach((statement: string) => {
@@ -507,7 +507,7 @@ class ApiClient {
               }
             });
           }
-          
+
           if (Array.isArray(supportingStmts.neutral) && supportingStmts.neutral.length > 0) {
             // Merge unique statements from supporting_statements.neutral
             supportingStmts.neutral.forEach((statement: string) => {
@@ -516,7 +516,7 @@ class ApiClient {
               }
             });
           }
-          
+
           if (Array.isArray(supportingStmts.negative) && supportingStmts.negative.length > 0) {
             // Merge unique statements from supporting_statements.negative
             supportingStmts.negative.forEach((statement: string) => {
@@ -526,7 +526,7 @@ class ApiClient {
             });
           }
         }
-        
+
         // Log combined results
         console.log('Combined sentiment statements:', {
             positive: results.sentimentStatements.positive.length,
@@ -542,9 +542,9 @@ class ApiClient {
           });
         }
       }
-      
+
       // Removed synthetic statement generation to only show actual statements from interviews
-      
+
       // Ensure other required fields
       if (!Array.isArray(results.themes)) results.themes = [];
       if (!Array.isArray(results.patterns)) results.patterns = [];
@@ -558,8 +558,8 @@ class ApiClient {
       const finalResult = {
         ...results,
         // Extract sentimentStatements to top level if available
-        sentimentStatements: results.sentimentStatements || 
-                            (results.sentiment && results.sentiment.sentimentStatements) || 
+        sentimentStatements: results.sentimentStatements ||
+                            (results.sentiment && results.sentiment.sentimentStatements) ||
                             {positive: [], neutral: [], negative: []}
       };
 
@@ -579,7 +579,7 @@ class ApiClient {
     console.log('ApiClient: listAnalyses called with params:', params);
     try {
       // Add timeout and retry options
-      const response = await this.client.get('/api/analyses', { 
+      const response = await this.client.get('/api/analyses', {
         params,
         timeout: 10000, // 10 second timeout
         headers: {
@@ -589,29 +589,29 @@ class ApiClient {
           'X-Client-Origin': window.location.origin  // Use a custom header instead of Origin
         }
       });
-      
+
       console.log('ApiClient: listAnalyses response received', response.status);
-      
+
       // Detailed response logging
       console.log('Response headers:', response.headers);
       console.log('Raw response data type:', typeof response.data);
-      
+
       // Ensure we have an array, even if backend returns an object
       let analysesArray: DetailedAnalysisResult[] = [];
-      
+
       if (Array.isArray(response.data)) {
         console.log(`Processing array response with ${response.data.length} items`);
         analysesArray = response.data;
       } else if (response.data && typeof response.data === 'object') {
         // If response is an object, check if it has numeric keys (like an object representation of an array)
         console.log('Processing object response, checking format');
-        
+
         // If it's a regular object, check if it has an 'error' property
         if (response.data.error) {
           console.error('Server returned error:', response.data.error);
           return this.generateMockAnalyses();
         }
-        
+
         // If it's an array-like object, convert to array
         if (Object.keys(response.data).some(key => !isNaN(Number(key)))) {
           console.log('Converting array-like object to array');
@@ -624,7 +624,7 @@ class ApiClient {
           }
         }
       }
-      
+
       // Handle empty results
       if (analysesArray.length === 0) {
         console.log('No analyses found in response');
@@ -634,13 +634,13 @@ class ApiClient {
       } else {
         console.log(`Returning ${analysesArray.length} analyses`);
       }
-      
+
       return analysesArray;
     } catch (error: any) {
       // Enhanced error logging
       const errorMessage = error?.message || 'Unknown error';
       const statusCode = error?.response?.status;
-      
+
       if (errorMessage.includes('Network Error') || errorMessage.includes('CORS')) {
         console.error('CORS/network issue detected in API client');
         // Show a toast or notification to the user
@@ -655,7 +655,7 @@ class ApiClient {
       } else {
         console.error('Error fetching analyses:', errorMessage, error);
       }
-      
+
       // Always return mock data on error to prevent UI from breaking
       return this.generateMockAnalyses();
     }
@@ -666,7 +666,7 @@ class ApiClient {
    */
   private generateMockAnalyses(): DetailedAnalysisResult[] {
     const mockDate = new Date().toISOString();
-    
+
     return [
       {
         id: 'mock-1',
@@ -696,38 +696,38 @@ class ApiClient {
             confidence: 0.85,
             patterns: ['Design System Adoption', 'Research Advocacy'], // Add patterns
             evidence: [
-              "Manages UX team of 5-7 designers", 
+              "Manages UX team of 5-7 designers",
               "Responsible for design system implementation"
             ],
-            role_context: { 
-              value: "Design team lead at medium-sized technology company", 
-              confidence: 0.9, 
-              evidence: ["Manages UX team of 5-7 designers", "Responsible for design system implementation"] 
+            role_context: {
+              value: "Design team lead at medium-sized technology company",
+              confidence: 0.9,
+              evidence: ["Manages UX team of 5-7 designers", "Responsible for design system implementation"]
             },
-            key_responsibilities: { 
-              value: "Oversees design system implementation. Manages team of designers. Coordinates with product and engineering", 
-              confidence: 0.85, 
-              evidence: ["Mentioned regular design system review meetings", "Discussed designer performance reviews"] 
+            key_responsibilities: {
+              value: "Oversees design system implementation. Manages team of designers. Coordinates with product and engineering",
+              confidence: 0.85,
+              evidence: ["Mentioned regular design system review meetings", "Discussed designer performance reviews"]
             },
-            tools_used: { 
-              value: "Figma, Sketch, Adobe Creative Suite, Jira, Confluence", 
-              confidence: 0.8, 
-              evidence: ["Referenced Figma components", "Mentioned Jira ticketing system"] 
+            tools_used: {
+              value: "Figma, Sketch, Adobe Creative Suite, Jira, Confluence",
+              confidence: 0.8,
+              evidence: ["Referenced Figma components", "Mentioned Jira ticketing system"]
             },
-            collaboration_style: { 
-              value: "Cross-functional collaboration with tight integration between design and development", 
-              confidence: 0.75, 
-              evidence: ["Weekly sync meetings with engineering", "Design hand-off process improvements"] 
+            collaboration_style: {
+              value: "Cross-functional collaboration with tight integration between design and development",
+              confidence: 0.75,
+              evidence: ["Weekly sync meetings with engineering", "Design hand-off process improvements"]
             },
-            analysis_approach: { 
-              value: "Data-informed design decisions with emphasis on usability testing", 
-              confidence: 0.7, 
-              evidence: ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"] 
+            analysis_approach: {
+              value: "Data-informed design decisions with emphasis on usability testing",
+              confidence: 0.7,
+              evidence: ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"]
             },
-            pain_points: { 
-              value: "Limited resources for user research. Engineering-driven decision making. Maintaining design quality with tight deadlines", 
-              confidence: 0.9, 
-              evidence: ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"] 
+            pain_points: {
+              value: "Limited resources for user research. Engineering-driven decision making. Maintaining design quality with tight deadlines",
+              confidence: 0.9,
+              evidence: ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"]
             }
           },
           {
@@ -736,38 +736,38 @@ class ApiClient {
             confidence: 0.8,
             patterns: ['Roadmap Prioritization', 'Metric Tracking'], // Add patterns
             evidence: [
-              "Discusses product roadmap planning", 
+              "Discusses product roadmap planning",
               "Mentiones stakeholder management"
             ],
-            role_context: { 
-              value: "Product Owner with 5+ years experience in SaaS products", 
-              confidence: 0.85, 
-              evidence: ["References to SaaS pricing models", "Discussions about subscription features"] 
+            role_context: {
+              value: "Product Owner with 5+ years experience in SaaS products",
+              confidence: 0.85,
+              evidence: ["References to SaaS pricing models", "Discussions about subscription features"]
             },
-            key_responsibilities: { 
-              value: "Defining product requirements. Prioritizing features. Managing stakeholder expectations", 
-              confidence: 0.9, 
-              evidence: ["Regular references to backlog prioritization", "Stakeholder update meetings"] 
+            key_responsibilities: {
+              value: "Defining product requirements. Prioritizing features. Managing stakeholder expectations",
+              confidence: 0.9,
+              evidence: ["Regular references to backlog prioritization", "Stakeholder update meetings"]
             },
-            tools_used: { 
-              value: "Jira, Confluence, Miro, Amplitude, Google Analytics", 
-              confidence: 0.75, 
-              evidence: ["Mentioned Jira epic creation", "References to Amplitude dashboards"] 
+            tools_used: {
+              value: "Jira, Confluence, Miro, Amplitude, Google Analytics",
+              confidence: 0.75,
+              evidence: ["Mentioned Jira epic creation", "References to Amplitude dashboards"]
             },
-            collaboration_style: { 
-              value: "Collaborative but directive, ensuring team alignment while providing clear direction", 
-              confidence: 0.7, 
-              evidence: ["Team planning sessions", "Decision-making frameworks mentioned"] 
+            collaboration_style: {
+              value: "Collaborative but directive, ensuring team alignment while providing clear direction",
+              confidence: 0.7,
+              evidence: ["Team planning sessions", "Decision-making frameworks mentioned"]
             },
-            analysis_approach: { 
-              value: "Data-driven with strong emphasis on business metrics and user feedback", 
-              confidence: 0.8, 
-              evidence: ["Regular analysis of conversion metrics", "Customer feedback integration process"] 
+            analysis_approach: {
+              value: "Data-driven with strong emphasis on business metrics and user feedback",
+              confidence: 0.8,
+              evidence: ["Regular analysis of conversion metrics", "Customer feedback integration process"]
             },
-            pain_points: { 
-              value: "Balancing technical debt with new features. Managing scope creep. Getting reliable user insights on time", 
-              confidence: 0.85, 
-              evidence: ["Expressed concern about technical debt accumulation", "Frustration with changing requirements"] 
+            pain_points: {
+              value: "Balancing technical debt with new features. Managing scope creep. Getting reliable user insights on time",
+              confidence: 0.85,
+              evidence: ["Expressed concern about technical debt accumulation", "Frustration with changing requirements"]
             }
           }
         ]
@@ -811,7 +811,7 @@ class ApiClient {
       return response.data;
     } catch (error: any) {
       console.error('Error fetching processing status:', error);
-      
+
       // If the error is 404, check if the analysis is completed by trying to fetch its results
       if (error.response && error.response.status === 404) {
         try {
@@ -842,13 +842,13 @@ class ApiClient {
           console.log('Failed to check analysis results, continuing with simulation');
         }
       }
-      
+
       // Return a mock status that simulates progressive analysis
       // Get the current timestamp to ensure progress advances over time
       const timestamp = Date.now();
       const simulatedProgress = Math.min(0.95, (timestamp % 60000) / 60000);
       const analysisProgress = Math.min(0.95, (timestamp % 20000) / 20000);
-      
+
       return {
         current_stage: 'ANALYSIS',
         started_at: new Date(timestamp - 60000).toISOString(),
@@ -917,21 +917,21 @@ class ApiClient {
    * @returns The completed analysis result
    */
   async getAnalysisByIdWithPolling(
-    id: string, 
-    interval: number = 1000, 
+    id: string,
+    interval: number = 1000,
     maxAttempts: number = 30
   ): Promise<DetailedAnalysisResult> {
     let attempts = 0;
-    
+
     while (attempts < maxAttempts) {
       try {
         const result = await this.getAnalysisById(id);
-        
+
         // If analysis is completed, return it
         if (result.status === 'completed') {
           return result;
         }
-        
+
         // Otherwise wait for the specified interval
         await new Promise(resolve => setTimeout(resolve, interval));
         attempts++;
@@ -944,7 +944,7 @@ class ApiClient {
         attempts++;
       }
     }
-    
+
     throw new Error(`Analysis processing timed out after ${maxAttempts} attempts`);
   }
 
@@ -978,9 +978,9 @@ class ApiClient {
   }
 
   // Add a personaGeneration method to handle the API call
-  async generatePersonaFromText(text: string, options?: { 
-    llmProvider?: string; 
-    llmModel?: string; 
+  async generatePersonaFromText(text: string, options?: {
+    llmProvider?: string;
+    llmModel?: string;
   }): Promise<any> {
     try {
       const response = await this.client.post('/api/generate-persona', {
@@ -994,19 +994,19 @@ class ApiClient {
           'X-Client-Origin': window.location.origin
         }
       });
-      
+
       if (response.data && response.data.persona) {
         return response.data.persona;
       }
-      
+
       // Fall back to mock data if response structure is unexpected
       return this.generateMockPersonas()[0];
-      
+
     } catch (error: any) {
       console.error('Error generating persona:', error);
-      
+
       // Show appropriate toast message
-      if (error?.message?.includes('Connection refused') || 
+      if (error?.message?.includes('Connection refused') ||
           error?.code === 'ERR_CONNECTION_REFUSED' ||
           error?.code === 'ERR_NETWORK') {
         if (window.showToast) {
@@ -1017,7 +1017,7 @@ class ApiClient {
           window.showToast('Error generating persona. Using sample persona instead.');
         }
       }
-      
+
       // Return mock data
       return this.generateMockPersonas()[0];
     }
@@ -1026,7 +1026,7 @@ class ApiClient {
   /**
    * Get prioritized insights for a specific analysis
    * This generates actionable insights with priority scores based on sentiment analysis
-   * 
+   *
    * @param analysisId The ID of the analysis to get prioritized insights for
    * @returns A promise that resolves to the prioritized insights
    */
@@ -1046,19 +1046,19 @@ class ApiClient {
         },
         timeout: 20000 // 20 second timeout for potentially complex calculations
       });
-      
+
       console.log(`[${requestId}] Priority insights API response received: ${response.status}, insights: ${response.data.insights?.length || 0}`);
-      
+
       // Validate response data structure
       if (!response.data || !response.data.insights || !Array.isArray(response.data.insights)) {
         console.error(`[${requestId}] Invalid response format:`, response.data);
         throw new Error('Invalid response format from server. Expected insights array.');
       }
-      
+
       // Provide additional metrics logging
       const metrics = response.data.metrics || {};
       console.log(`[${requestId}] Metrics - High: ${metrics.high_urgency_count || 0}, Medium: ${metrics.medium_urgency_count || 0}, Low: ${metrics.low_urgency_count || 0}`);
-      
+
       return response.data;
     } catch (error: any) {
       // Comprehensive error handling with detailed logging and categorization
@@ -1066,12 +1066,12 @@ class ApiClient {
       const statusCode = error?.response?.status;
       const errorDetail = error?.response?.data?.detail || '';
       const isNetworkError = !statusCode && (
-        error?.message?.includes('Network Error') || 
+        error?.message?.includes('Network Error') ||
         error?.code === 'ECONNABORTED' ||
         error?.code === 'ERR_NETWORK'
       );
       const isTimeoutError = error?.code === 'ETIMEDOUT' || error?.message?.includes('timeout');
-      
+
       // Detailed logging with request context
       console.error(`[${requestId}] Error fetching priority insights:`, {
         analysisId,
@@ -1084,7 +1084,7 @@ class ApiClient {
         url: error?.config?.url,
         params: error?.config?.params
       });
-      
+
       // Create descriptive error messages based on error type
       if (isNetworkError) {
         throw new Error('Network error when connecting to the server. Please check your connection and try again.');
@@ -1107,11 +1107,16 @@ class ApiClient {
 
   /**
    * Check if analysis is complete for a given result ID
-   * 
-   * This method polls the backend API to determine if the analysis process 
+   *
+   * This method polls the backend API to determine if the analysis process
    * has been completed for a specific analysis result.
    */
   async checkAnalysisStatus(resultId: string): Promise<{ status: 'pending' | 'completed' | 'failed', analysis?: any, error?: string }> {
+    if (!resultId) {
+      console.error('[checkAnalysisStatus] Called with empty resultId');
+      return { status: 'failed', error: 'Analysis ID is required for status check.' };
+    }
+
     // Define the expected response type from the status endpoint
     type StatusResponse = {
       status: 'processing' | 'completed' | 'failed';
@@ -1121,17 +1126,16 @@ class ApiClient {
     try {
       console.log(`[checkAnalysisStatus] Checking status for analysis ID: ${resultId}`); // DEBUG LOG
 
-      // Call the new status endpoint
+      // Call the status endpoint directly
       const response = await this.client.get<StatusResponse>(`/api/analysis/${resultId}/status`);
       const statusData = response.data;
 
       console.log(`[checkAnalysisStatus] Received status for ${resultId}:`, statusData); // DEBUG LOG
 
-      // Map 'processing' to 'pending' for frontend consistency if needed,
-      // or handle 'processing' directly in the frontend hook.
-      // For now, return the status as received.
+      // Map 'processing' to 'pending' for frontend consistency
       const frontendStatus = statusData.status === 'processing' ? 'pending' : statusData.status;
 
+      // Return a consistent response format
       return {
         status: frontendStatus,
         // Include error message if status is 'failed'
@@ -1139,19 +1143,39 @@ class ApiClient {
       };
 
     } catch (error: any) {
+      // Improved error handling with more detailed logging
       console.error(`[checkAnalysisStatus] Error checking analysis status for ID ${resultId}:`, error);
 
-      // If the status endpoint returns 404, it might mean the analysis ID is invalid
-      // or doesn't belong to the user. Treat as failed for polling purposes.
-      if (error.response && error.response.status === 404) {
-        return { status: 'failed', error: 'Analysis not found or access denied.' };
+      // If we have a response object with status code
+      if (error.response) {
+        console.log(`[checkAnalysisStatus] Response status: ${error.response.status}`);
+        console.log(`[checkAnalysisStatus] Response data:`, error.response.data);
+
+        // If the status endpoint returns 404, it might mean the analysis ID is invalid
+        // or doesn't belong to the user. Treat as failed for polling purposes.
+        if (error.response.status === 404) {
+          return { status: 'failed', error: 'Analysis not found or access denied.' };
+        }
+
+        // For 500 errors, we'll continue polling as the backend might recover
+        if (error.response.status >= 500) {
+          console.log(`[checkAnalysisStatus] Server error, will retry polling`);
+          return { status: 'pending', error: 'Server processing error, retrying...' };
+        }
       }
 
-      // For other errors (network, server error on status endpoint),
-      // it's safer to return 'pending' to allow polling to retry,
-      // unless we want to fail fast. Let's return 'pending' for now.
-      // Consider adding specific error handling if needed (e.g., fail after N consecutive errors).
-      return { status: 'pending' };
+      // For network errors, we'll also continue polling
+      if (error.message && error.message.includes('Network Error')) {
+        console.log(`[checkAnalysisStatus] Network error, will retry polling`);
+        return { status: 'pending', error: 'Network error, retrying...' };
+      }
+
+      // For other errors, return 'pending' to allow polling to retry
+      console.log(`[checkAnalysisStatus] Unhandled error, will retry polling`);
+      return {
+        status: 'pending',
+        error: error.message || 'Unknown error, retrying...'
+      };
     }
   }
 }

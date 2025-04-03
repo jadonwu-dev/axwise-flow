@@ -28,6 +28,7 @@ export function usePolling<T>(options: PollingOptions<T>): PollingControls {
   const [pollingId, setPollingId] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true); // Track mount status
+  const consecutiveErrorsRef = useRef(0); // Track consecutive errors
 
   // Set mount status to false on unmount
   useEffect(() => {
@@ -60,14 +61,20 @@ export function usePolling<T>(options: PollingOptions<T>): PollingControls {
       const data = await fetchFn(id);
       if (!isMountedRef.current) return; // Check again after await
 
+      // Reset consecutive errors counter on successful fetch
+      consecutiveErrorsRef.current = 0;
+
+      // Always call onSuccess with the latest data, regardless of stop condition
+      // This ensures the UI can update with the latest status
+      onSuccess(data);
+      console.log('[usePolling] Called onSuccess with data:', data);
+
+      // Check if we should stop polling
       if (stopCondition(data)) {
-        console.log('[usePolling] Stop condition met.');
-        onSuccess(data);
+        console.log('[usePolling] Stop condition met, stopping polling.');
         stopPolling();
       } else {
-         // Optionally call onSuccess even if not stopped, if needed for progress updates
-         // onSuccess(data); // Uncomment if intermediate updates are desired
-         console.log('[usePolling] Stop condition not met, continuing poll.');
+        console.log('[usePolling] Stop condition not met, continuing poll.');
       }
     } catch (error) {
        if (!isMountedRef.current) return; // Check again after await
@@ -97,7 +104,12 @@ export function usePolling<T>(options: PollingOptions<T>): PollingControls {
     performPoll(id);
 
     // Set up interval
-    intervalRef.current = setInterval(() => performPoll(id), interval);
+    intervalRef.current = setInterval(() => {
+      // Ensure we're using the latest ID in case it was updated
+      const currentId = id;
+      console.log(`[usePolling] Interval poll for ID: ${currentId}`);
+      performPoll(currentId);
+    }, interval);
   }, [interval, performPoll]);
 
 

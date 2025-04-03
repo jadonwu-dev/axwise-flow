@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { AlertCircle, FileUp, FileText, FilePen, X } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { UploadResponse, AnalysisResponse } from '@/types/api'; // Added AnalysisResponse
+import type { UploadResponse } from '@/types/api';
 import { uploadAction, analyzeAction, getRedirectUrl } from '@/app/actions';
 import { usePolling } from '@/hooks/usePolling'; // Import the new hook
 import { apiClient } from '@/lib/apiClient';
@@ -63,35 +63,75 @@ export default function EmergencyUploadPanel() {
   }, []);
 
   // --- Polling Hook Setup (Define before handlers that use it) ---
+  // Create a bound version of the checkAnalysisStatus method to ensure 'this' context is preserved
+  const boundCheckAnalysisStatus = useCallback(
+    (resultId: string) => {
+      console.log(`[boundCheckAnalysisStatus] Checking status for ID: ${resultId}`);
+      return apiClient.checkAnalysisStatus(resultId);
+    },
+    []
+  );
+
+  // Store the current polling ID in a ref to ensure it's always up-to-date
+  const currentPollingIdRef = useRef<string | null>(null);
+
   const { startPolling, stopPolling, isPolling } = usePolling< {
     status: 'pending' | 'completed' | 'failed';
     analysis?: any; // Optional analysis data if needed on completion
     error?: string; // Optional error message
   }>({
-    fetchFn: apiClient.checkAnalysisStatus,
+    fetchFn: boundCheckAnalysisStatus,
     interval: 3000, // Poll every 3 seconds
     stopCondition: (statusResult) =>
       statusResult.status === 'completed' || statusResult.status === 'failed',
     onSuccess: (statusResult) => {
-      console.log(`[Polling Success] Status for ${analysisResultId}:`, statusResult.status);
+      // --- START ENHANCED LOGGING ---
+      console.log(`[Polling Success] Received status update for ID ${analysisResultId}:`, statusResult);
       setAnalysisStatus(statusResult.status); // Update status state
 
       if (statusResult.status === 'completed') {
-        setIsAnalyzing(false); // Analysis/Polling is finished
+        // Get the current polling ID from the ref or from the state
+        const currentId = currentPollingIdRef.current || analysisResultId;
+        console.log(`[Polling Success] Status is 'completed'. Preparing to redirect for ID: ${currentId}`);
+        setIsAnalyzing(false);
         setAnalysisProgress(100);
         toast({
           title: "Analysis completed",
           description: "Redirecting to visualization...",
           variant: "default",
         });
-        // Redirect after a short delay
-        setTimeout(async () => {
-          if (analysisResultId) { // Ensure ID is still valid
-            const redirectUrl = await getRedirectUrl(analysisResultId);
-            router.push(redirectUrl);
-          }
-        }, 800);
+
+        // Log before calling server action
+        console.log(`[Redirect] Calling getRedirectUrl for ID: ${currentId}`);
+        if (!currentId) {
+          console.error("[Redirect] Error: No valid analysis ID available for redirection!");
+          setAnalysisError("Internal error: Missing analysis ID for redirection.");
+          return; // Prevent further execution
+        }
+
+        // Use setTimeout for redirection
+        setTimeout(() => {
+          console.log(`[Redirect] Starting redirect process for ID: ${currentId}`);
+          getRedirectUrl(currentId) // Use the currentId which we've verified is not null
+            .then(url => {
+              console.log(`[Redirect] Received redirect URL: ${url}. Navigating...`);
+              router.push(url);
+            })
+            .catch(redirectError => {
+              console.error('[Redirect] Error getting redirect URL:', redirectError);
+              setAnalysisError(`Failed to prepare redirection: ${redirectError.message}`);
+              toast({ title: "Redirection Error", description: "Could not navigate to results.", variant: "destructive" });
+
+              // Fallback to a default URL if getRedirectUrl fails
+              const timestamp = Date.now();
+              const fallbackUrl = `/unified-dashboard/visualize?analysisId=${currentId}&visualizationTab=themes&timestamp=${timestamp}`;
+              console.log(`[Redirect] Using fallback URL: ${fallbackUrl}`);
+              router.push(fallbackUrl);
+            });
+        }, 800); // Keep delay
+
       } else if (statusResult.status === 'failed') {
+        console.log(`[Polling Success] Status is 'failed'. Error: ${statusResult.error}`);
         setIsAnalyzing(false); // Analysis/Polling is finished
         setAnalysisProgress(0);
         const errorMsg = statusResult.error || 'Analysis failed during processing';
@@ -101,26 +141,39 @@ export default function EmergencyUploadPanel() {
           description: errorMsg,
           variant: "destructive",
         });
+      } else {
+        console.log(`[Polling Success] Status is '${statusResult.status}'. Continuing poll.`);
+        // Optional: Update progress based on intermediate status if backend provides it
       }
-      // Note: Progress bar increment logic needs to be handled separately if desired during polling
+      // --- END ENHANCED LOGGING ---
     },
     onError: (error) => {
       console.error('[Polling Error] Error polling for analysis status:', error);
-      // Set error state and show toast on polling fetch error
+
+      // Don't stop polling on the first error - allow retries
+      // Just log the error and continue polling
       const errorMsg = error instanceof Error ? error.message : 'Polling fetch failed';
-      setAnalysisError(errorMsg);
-      toast({ title: "Polling Error", description: errorMsg, variant: "destructive" });
-      // Stop polling and analysis indication on error
-      stopPolling(); 
-      setIsAnalyzing(false);
-      // Decide if polling should stop on error or continue retrying
-      // For now, let it retry. If stopping is desired:
+      console.warn(`[Polling Warning] ${errorMsg} - will retry`);
+
+      // Only show a toast and update UI after multiple consecutive errors
+      // This prevents UI flickering for transient network issues
+      // For now, we'll continue polling without showing errors to the user
+
+      // If you want to stop polling after errors, uncomment these:
+      // setAnalysisError(errorMsg);
+      // toast({ title: "Polling Error", description: errorMsg, variant: "destructive" });
       // stopPolling();
       // setIsAnalyzing(false);
-      // setAnalysisError('Polling failed: ' + error.message);
-      // toast({ title: "Polling Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Effect to stop polling when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log('[EmergencyUploadPanel] Component unmounting, stopping polling');
+      stopPolling();
+    };
+  }, [stopPolling]);
 
   // --- Callback Handlers ---
 
@@ -146,8 +199,18 @@ export default function EmergencyUploadPanel() {
 
       if (result.success && result.analysisResponse) {
         const analysisId = result.analysisResponse.result_id.toString();
+        console.log(`[Analysis] Successfully started analysis with ID: ${analysisId}`);
+
+        // Store the analysis ID in state and ref to ensure it's available for redirection
         setAnalysisResultId(analysisId);
-        startPolling(analysisId); // Start polling via the hook
+        currentPollingIdRef.current = analysisId;
+
+        // Start polling with a small delay to ensure the backend has time to initialize the analysis
+        setTimeout(() => {
+          console.log(`[Analysis] Starting polling for ID: ${analysisId}`);
+          startPolling(analysisId); // Start polling via the hook
+        }, 500);
+
         setAnalysisProgress(30);
         toast({
           title: "Analysis started",
@@ -299,13 +362,25 @@ export default function EmergencyUploadPanel() {
   // Effect for visual progress increment during polling (optional)
   useEffect(() => {
     let progressIncrementInterval: NodeJS.Timeout | null = null;
+
+    // Only increment progress if we're actively polling and not completed/failed
     if (isPolling && analysisStatus !== 'completed' && analysisStatus !== 'failed') {
+      // Start with more frequent small increments, then slow down as we approach 95%
       progressIncrementInterval = setInterval(() => {
-        setAnalysisProgress(prev => Math.min(prev + 5, 95));
-      }, 3000);
-    } else {
-      if (progressIncrementInterval) clearInterval(progressIncrementInterval);
+        setAnalysisProgress(prev => {
+          // Smaller increments as we get closer to 95%
+          const increment = prev < 50 ? 3 : prev < 80 ? 2 : 1;
+          return Math.min(prev + increment, 95);
+        });
+      }, 1500); // More frequent updates for smoother progress
+    } else if (analysisStatus === 'completed') {
+      // Ensure we reach 100% on completion
+      setAnalysisProgress(100);
+    } else if (analysisStatus === 'failed') {
+      // Reset progress on failure
+      setAnalysisProgress(0);
     }
+
     return () => {
       if (progressIncrementInterval) clearInterval(progressIncrementInterval);
     };
@@ -424,8 +499,19 @@ export default function EmergencyUploadPanel() {
           {isAnalyzing && ( // Show analysis progress if analysis initiation or polling is active
             <div className="mt-4 space-y-2">
               <div className="flex justify-between text-xs">
-                <span>Analyzing...</span>
-                <span>{analysisProgress < 100 ? 'This may take a moment' : 'Redirecting...'}</span>
+                <span>
+                  {analysisStatus === 'completed' ? 'Analysis complete!' :
+                   analysisStatus === 'failed' ? 'Analysis failed' :
+                   analysisProgress < 30 ? 'Starting analysis...' :
+                   analysisProgress < 60 ? 'Processing interview data...' :
+                   analysisProgress < 90 ? 'Generating insights...' :
+                   'Finalizing results...'}
+                </span>
+                <span>
+                  {analysisStatus === 'completed' ? 'Redirecting...' :
+                   analysisStatus === 'failed' ? 'See error below' :
+                   'Please wait'}
+                </span>
               </div>
               <Progress value={analysisProgress} className="h-2" />
               <div className="text-right text-xs text-muted-foreground">
