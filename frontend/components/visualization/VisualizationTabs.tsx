@@ -30,6 +30,7 @@ import type { DetailedAnalysisResult } from '@/types/api'; // Remove Prioritized
 interface VisualizationTabsProps {
   analysisId?: string;
   analysisData?: DetailedAnalysisResult | null;
+  initialTab?: string | null;
 }
 
 // Define a type for the tab values
@@ -64,12 +65,15 @@ const getConsolidatedSupportingStatements = (analysis: any) => {
  */
 export default function VisualizationTabsRefactored({
   analysisId,
-  analysisData: serverAnalysisData
+  analysisData: serverAnalysisData,
+  initialTab
 }: VisualizationTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
-  const [activeTab, setActiveTab] = useState<TabValue>(activeTabFromUrl || 'themes');
+  const [activeTab, setActiveTab] = useState<TabValue>(
+    initialTab as TabValue || activeTabFromUrl || 'themes'
+  );
   const [localAnalysis, setLocalAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
   const [loading, setLoading] = useState<boolean>(!serverAnalysisData); // Initial loading based on server data
   const [fetchError, setFetchError] = useState<string | null>(null); // Renamed for clarity
@@ -138,39 +142,17 @@ export default function VisualizationTabsRefactored({
     };
   }, [effectiveAnalysisId, serverAnalysisData]); // Added serverAnalysisData as dependency
 
-  // Update URL when active tab changes, but only if it's different from current URL
-  // Use a ref to track if this is the initial render to avoid unnecessary URL updates
+  // We're disabling URL updates for tab changes to prevent tab jumping issues
+  // Instead, we'll only read the initial tab from the URL
   const initialRender = useRef(true);
-
-  useEffect(() => {
-    // Skip URL update on initial render
-    if (initialRender.current) {
-      initialRender.current = false;
-      return;
-    }
-
-    // Only update URL if we're running in browser environment
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      const currentTabParam = url.searchParams.get('visualizationTab');
-
-      // Only update if the tab has actually changed
-      if (currentTabParam !== activeTab) {
-        const newParams = new URLSearchParams(searchParams.toString());
-        newParams.set('visualizationTab', activeTab);
-
-        // Use router.replace instead of directly modifying URL to avoid triggering re-renders
-        router.replace(`${window.location.pathname}?${newParams.toString()}`, { scroll: false });
-      }
-    }
-  }, [activeTab, router, searchParams]);
 
   // Set active tab based on URL parameter, but only on first render
   useEffect(() => {
-    if (activeTabFromUrl && activeTab !== activeTabFromUrl) {
+    if (initialRender.current && activeTabFromUrl) {
+      initialRender.current = false;
       setActiveTab(activeTabFromUrl);
     }
-  }, []); // Empty dependency array means it only runs on first render
+  }, []); // Empty dependency array means it only runs once on mount
 
   // Set active tab function
   const setActiveTabSafe = useCallback((tab: TabValue) => {

@@ -153,6 +153,66 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
 }
 
 /**
+ * Get the latest completed analysis for the current user
+ * This is used to display the most recent analysis on the dashboard
+ */
+export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResult | null> {
+  try {
+    // Get auth token from cookie
+    const cookieStore = cookies();
+    const authToken = cookieStore.get('auth_token')?.value;
+
+    if (!authToken) {
+      console.error('[getLatestCompletedAnalysis] No auth token available');
+      return null;
+    }
+
+    // Set the token on the API client
+    apiClient.setAuthToken(authToken);
+
+    try {
+      // First attempt: Try to get from history API
+      // Fetch the first page with only one result, sorted by date descending
+      const response = await apiClient.getAnalysisHistory(0, 1);
+
+      // Check if we have any completed analyses
+      if (response.items && response.items.length > 0 && response.items[0].status === 'completed') {
+        console.log(`[getLatestCompletedAnalysis] Found latest analysis from history: ${response.items[0].id}`);
+        return response.items[0];
+      }
+    } catch (historyError) {
+      console.error('[getLatestCompletedAnalysis] Error fetching analysis history:', historyError);
+      // Continue to fallback method if history API fails
+    }
+
+    // Fallback: If history API fails or returns no results, try to get the analysis ID from URL or localStorage
+    // This is a temporary solution until the history API is fixed
+    try {
+      // Check if we have a recent analysis ID in localStorage
+      if (typeof window !== 'undefined') {
+        const recentAnalysisId = localStorage.getItem('recentAnalysisId');
+        if (recentAnalysisId) {
+          console.log(`[getLatestCompletedAnalysis] Trying to fetch recent analysis from localStorage: ${recentAnalysisId}`);
+          const analysisData = await apiClient.getAnalysisById(recentAnalysisId);
+          if (analysisData && analysisData.status === 'completed') {
+            console.log(`[getLatestCompletedAnalysis] Successfully fetched analysis: ${recentAnalysisId}`);
+            return analysisData;
+          }
+        }
+      }
+    } catch (fallbackError) {
+      console.error('[getLatestCompletedAnalysis] Fallback error:', fallbackError);
+    }
+
+    console.log('[getLatestCompletedAnalysis] No completed analyses found');
+    return null;
+  } catch (error) {
+    console.error('[getLatestCompletedAnalysis] Error:', error);
+    return null;
+  }
+}
+
+/**
  * Fetch analysis history from the database
  */
 export async function fetchAnalysisHistory(page: number = 1, pageSize: number = 10) {

@@ -1,59 +1,77 @@
 /**
  * UnifiedDashboard Layout Component
- * 
+ *
  * ARCHITECTURAL NOTE: This layout component removes Zustand dependencies by using
  * URL parameters for tab navigation instead of client-side state.
+ *
+ * Updated to make the main dashboard the visualization hub that shows the latest analysis.
  */
+
+'use client';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
-import type { ReactNode } from 'react'; // Import ReactNode type
+import type { ReactNode } from 'react';
 
 // Define the props interface
 interface UnifiedDashboardLayoutProps {
   children: ReactNode;
   searchParams: { [key: string]: string | string[] | undefined };
- // Make non-optional
 }
 
 export default function UnifiedDashboardLayout({
   children,
   searchParams,
-}: UnifiedDashboardLayoutProps): JSX.Element { // Add return type
-  // Default to 'upload' if no tab is specified
-  const activeTab = searchParams?.tab || 'upload';
+}: UnifiedDashboardLayoutProps): JSX.Element {
+  // Get the current path to determine active tab
+  const pathname = usePathname();
   const analysisId = searchParams?.analysisId || '';
-  
+
+  // Determine active tab based on pathname
+  let activeTab = 'dashboard';
+  if (pathname?.includes('/upload')) {
+    activeTab = 'upload';
+  } else if (pathname?.includes('/history')) {
+    activeTab = 'history';
+  } else if (pathname?.includes('/documentation')) {
+    activeTab = 'documentation';
+  }
+
   return (
     <div className="w-full">
       <Tabs value={activeTab} className="w-full">
         <TabsList className="w-full grid grid-cols-4">
-          <TabsTrigger value="upload" asChild>
-            <Link href="/unified-dashboard/upload">Upload</Link>
-          </TabsTrigger>
-          
-          <TabsTrigger value="visualize" asChild>
-            <Link 
-              href={`/unified-dashboard/visualize${analysisId ? `?analysisId=${analysisId}` : ''}`}
-            >
-              Visualize
+          <TabsTrigger value="dashboard" asChild>
+            <Link href="/unified-dashboard">
+              Dashboard
             </Link>
           </TabsTrigger>
-          
-          <TabsTrigger value="history" asChild>
-            <Link href="/unified-dashboard/history">History</Link>
+
+          <TabsTrigger value="upload" asChild>
+            <Link href="/unified-dashboard/upload">
+              Upload
+            </Link>
           </TabsTrigger>
-          
+
+          <TabsTrigger value="history" asChild>
+            <Link href="/unified-dashboard/history">
+              History
+            </Link>
+          </TabsTrigger>
+
           <TabsTrigger value="documentation" asChild>
-            <Link href="/unified-dashboard/documentation">Documentation</Link>
+            <Link href="/unified-dashboard/documentation">
+              Documentation
+            </Link>
           </TabsTrigger>
         </TabsList>
-        
+
         <div className="mt-6">
           {children}
         </div>
       </Tabs>
     </div>
   );
-} 
+}

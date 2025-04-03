@@ -10,7 +10,7 @@ import { AlertCircle, FileUp, FileText, FilePen, X } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { UploadResponse } from '@/types/api';
-import { uploadAction, analyzeAction, getRedirectUrl } from '@/app/actions';
+import { uploadAction, analyzeAction } from '@/app/actions';
 import { usePolling } from '@/hooks/usePolling'; // Import the new hook
 import { apiClient } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
@@ -112,22 +112,19 @@ export default function EmergencyUploadPanel() {
         // Use setTimeout for redirection
         setTimeout(() => {
           console.log(`[Redirect] Starting redirect process for ID: ${currentId}`);
-          getRedirectUrl(currentId) // Use the currentId which we've verified is not null
-            .then(url => {
-              console.log(`[Redirect] Received redirect URL: ${url}. Navigating...`);
-              router.push(url);
-            })
-            .catch(redirectError => {
-              console.error('[Redirect] Error getting redirect URL:', redirectError);
-              setAnalysisError(`Failed to prepare redirection: ${redirectError.message}`);
-              toast({ title: "Redirection Error", description: "Could not navigate to results.", variant: "destructive" });
 
-              // Fallback to a default URL if getRedirectUrl fails
-              const timestamp = Date.now();
-              const fallbackUrl = `/unified-dashboard/visualize?analysisId=${currentId}&visualizationTab=themes&timestamp=${timestamp}`;
-              console.log(`[Redirect] Using fallback URL: ${fallbackUrl}`);
-              router.push(fallbackUrl);
-            });
+          // Store the analysis ID in localStorage for fallback retrieval
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('recentAnalysisId', currentId);
+            console.log(`[Redirect] Stored analysis ID in localStorage: ${currentId}`);
+          }
+
+          // Redirect directly to the main dashboard with the analysis ID
+          // This will show the analysis results in the main dashboard
+          const timestamp = Date.now();
+          const dashboardUrl = `/unified-dashboard?analysisId=${currentId}&visualizationTab=themes&timestamp=${timestamp}`;
+          console.log(`[Redirect] Redirecting to dashboard: ${dashboardUrl}`);
+          router.push(dashboardUrl);
         }, 800); // Keep delay
 
       } else if (statusResult.status === 'failed') {
