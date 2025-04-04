@@ -5,12 +5,14 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
+from pydantic import ValidationError
 
 from backend.models import User, InterviewData, AnalysisResult
 from backend.services.llm import LLMServiceFactory
 from backend.services.nlp import get_nlp_processor
 from backend.core.processing_pipeline import process_data
 from infrastructure.config.settings import settings
+from backend.schemas import DetailedAnalysisResult
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -264,6 +266,27 @@ class AnalysisService:
 
             # Update database record with results (but not status yet)
             logger.info(f"Analysis pipeline finished for result_id: {result_id}. Saving results...")
+
+            # Validate result against DetailedAnalysisResult schema
+            try:
+                # Create a minimal result structure for validation
+                validation_data = {
+                    "id": str(result_id),
+                    "status": "completed",
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                    "fileName": "",  # Will be filled from the database
+                    "themes": result.get("themes", []),
+                    "patterns": result.get("patterns", []),
+                    "sentimentOverview": result.get("sentimentOverview", {"positive": 0.33, "neutral": 0.34, "negative": 0.33}),
+                }
+
+                # Validate against schema
+                DetailedAnalysisResult(**validation_data)
+                logger.info(f"Result validation successful for result_id: {result_id}")
+            except ValidationError as ve:
+                logger.warning(f"Result validation warning for result_id: {result_id}: {str(ve)}")
+                # Continue with saving even if validation has warnings
+
             task_result.results = json.dumps(result)
             task_result.completed_at = datetime.now(timezone.utc)
 

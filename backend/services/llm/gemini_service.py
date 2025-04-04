@@ -11,10 +11,12 @@ import google.generativeai as genai
 import random
 from typing import Dict, Any, List, Optional, Union
 from domain.interfaces.llm_service import ILLMService
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 import re
 import time
 from datetime import datetime
+
+from backend.schemas import Theme
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +232,21 @@ class GeminiService:
                             theme["reliability"] = 0.7   # Moderately supported
                         else:
                             theme["reliability"] = 0.5   # Minimally supported
+
+                # Validate themes against Pydantic model
+                validated_themes = []
+                for theme_data in result["themes"]:
+                    try:
+                        # Validate theme data against Pydantic model
+                        validated_theme = Theme(**theme_data).model_dump()
+                        validated_themes.append(validated_theme)
+                    except ValidationError as e:
+                        logger.warning(f"Theme validation error: {str(e)}")
+                        # Keep the theme but log the validation error
+                        validated_themes.append(theme_data)
+
+                # Replace themes with validated themes
+                result["themes"] = validated_themes
 
             elif task == 'pattern_recognition':
                 # If response is a list of patterns directly
