@@ -35,22 +35,14 @@ class AnalysisRequest(BaseModel):
         False,
         description="Whether the data is in free-text format"
     )
-    use_enhanced_theme_analysis: Optional[bool] = Field(
-        False,
-        description="Whether to use the enhanced 8-step thematic analysis process"
-    )
-    use_reliability_check: Optional[bool] = Field(
-        True,
-        description="Whether to include inter-rater reliability check in enhanced theme analysis"
-    )
+    # Enhanced theme analysis is now always enabled by default
 
     class Config:
         json_schema_extra = {
             "example": {
                 "data_id": 1,
                 "llm_provider": "openai",
-                "llm_model": "gpt-4o-2024-08-06",
-                "use_enhanced_theme_analysis": True
+                "llm_model": "gpt-4o-2024-08-06"
             }
         }
 
@@ -275,6 +267,7 @@ class DetailedAnalysisResult(BaseModel):
     fileName: str
     fileSize: Optional[int] = None
     themes: List[Theme]
+    enhanced_themes: Optional[List[Theme]] = None  # Enhanced themes from the enhanced analysis process
     patterns: List[Pattern]
     sentimentOverview: SentimentOverview
     sentiment: Optional[List[Dict[str, Any]]] = None

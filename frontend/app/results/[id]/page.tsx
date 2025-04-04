@@ -7,11 +7,11 @@ import { LoadingSpinner } from '@/components/loading-spinner';
 import { useToast } from '@/components/providers/toast-provider';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { 
-  useUIStore, 
+import {
+  useUIStore,
   useSelectedTab
 } from '@/store/useUIStore';
-import ThemeChart from '@/components/visualization/ThemeChart';
+import { ThemeChart } from '@/components/visualization/ThemeChart.simplified';
 import PatternList from '@/components/visualization/PatternList';
 import SentimentGraph from '@/components/visualization/SentimentGraph';
 import { PersonaList } from '@/components/visualization/PersonaList';
@@ -22,13 +22,13 @@ export default function AnalysisResultsPage(): JSX.Element | null { // Add retur
   const params = useParams();
   const analysisId = params?.id as string;
   const { showToast } = useToast();
-  
-  const { 
-    fetchAnalysisById, 
-    currentAnalysis: analysisData, 
-    isLoadingAnalysis: isLoading, 
-    analysisError: error, 
-    clearErrors 
+
+  const {
+    fetchAnalysisById,
+    currentAnalysis: analysisData,
+    isLoadingAnalysis: isLoading,
+    analysisError: error,
+    clearErrors
   } = useAnalysisStore();
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function AnalysisResultsPage(): JSX.Element | null { // Add retur
         <div className="bg-destructive/10 text-destructive p-4 rounded-md">
           <h2 className="text-lg font-semibold mb-2">Error Loading Analysis</h2>
           <p>{error.message}</p>
-          <button 
+          <button
             className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md"
             onClick={() => {
               clearErrors();
@@ -102,7 +102,7 @@ export default function AnalysisResultsPage(): JSX.Element | null { // Add retur
     <ErrorBoundary>
       <div className="p-6 max-w-7xl mx-auto">
         <AnalysisHeader data={analysisData} />
-        
+
         <div className="mt-8">
           <AnalysisTabs data={analysisData} />
         </div>
@@ -124,10 +124,10 @@ function AnalysisHeader({ data }: { data: DetailedAnalysisResult }): JSX.Element
             Created: {new Date(data.createdAt).toLocaleString()}
           </p>
         </div>
-        
+
         <div className="mt-4 md:mt-0">
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-            data.status === 'completed' 
+            data.status === 'completed'
               ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
               : data.status === 'failed'
               ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
@@ -143,11 +143,11 @@ function AnalysisHeader({ data }: { data: DetailedAnalysisResult }): JSX.Element
 
 // TabButton component for consistent tab styling
 // Corrected position of return type annotation
-function TabButton({ isActive, onClick, children }: { 
-  isActive: boolean; 
-  onClick: () => void; 
-  children: React.ReactNode 
-}): JSX.Element { 
+function TabButton({ isActive, onClick, children }: {
+  isActive: boolean;
+  onClick: () => void;
+  children: React.ReactNode
+}): JSX.Element {
   return (
     <button
       className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -197,7 +197,7 @@ function TabOptions(): JSX.Element { // Add return type
 
 function AnalysisTabs({ data }: { data: DetailedAnalysisResult }): JSX.Element { // Add return type
   const selectedTab = useSelectedTab();
-  
+
   // Map Theme[] to AnalyzedTheme[] for ThemeChart compatibility
   const analyzedThemes: AnalyzedTheme[] = useMemo(() => {
     return data.themes.map((theme: Theme) => ({
@@ -218,7 +218,7 @@ function AnalysisTabs({ data }: { data: DetailedAnalysisResult }): JSX.Element {
   }, [selectedTab, data]);
 
   // Always use unified view (removed toggle)
-  
+
   return (
     <div className="space-y-4">
       <div className="border-b border-border">
@@ -226,9 +226,9 @@ function AnalysisTabs({ data }: { data: DetailedAnalysisResult }): JSX.Element {
           <TabOptions />
         </nav>
       </div>
-      
+
       {/* Removed View Type Toggle */}
-      
+
       <div className="py-6">
         {/* Always use Unified View */}
         <div className="mt-4">

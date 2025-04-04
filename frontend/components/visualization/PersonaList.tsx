@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,14 +18,14 @@ type PersonaListProps = {
 export function PersonaList({ personas, className }: PersonaListProps) {
   // Use the personas prop directly without fallbacks
   const [activePersonaIndex, setActivePersonaIndex] = useState(0);
-  
+
   // Select the first persona if the list changes
   useEffect(() => {
     if (personas && personas.length > 0) {
       setActivePersonaIndex(0);
     }
   }, [personas]);
-  
+
   // Ensure we have valid personas data
   if (!personas || personas.length === 0) {
     return (
@@ -35,10 +34,10 @@ export function PersonaList({ personas, className }: PersonaListProps) {
       </div>
     );
   }
-  
-  // Active persona is the one at the selected index
-  const activePersona = personas[activePersonaIndex];
-  
+
+  // We're using activePersonaIndex directly to access the active persona
+  // No need to store it in a separate variable
+
   // Get initials for avatar
   const getInitials = (name: string) => {
     return name
@@ -103,9 +102,9 @@ export function PersonaList({ personas, className }: PersonaListProps) {
   // Render a trait card with confidence badge and evidence
   const renderTraitCard = (label: string, trait: any) => {
     if (!trait) return null;
-    
+
     const { value, confidence, evidence } = trait;
-    
+
     return (
       <div className="mb-4 border rounded-lg p-4">
         <div className="flex justify-between items-start mb-2">
@@ -123,13 +122,13 @@ export function PersonaList({ personas, className }: PersonaListProps) {
             </Tooltip>
           </TooltipProvider>
         </div>
-        
+
         <div className="mt-2">
           <ul className="list-disc pl-5 space-y-1">
             {renderTraitValue(value)}
           </ul>
         </div>
-        
+
         {evidence && evidence.length > 0 && (
           <Accordion type="single" collapsible className="mt-2">
             <AccordionItem value="evidence">
@@ -138,7 +137,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               </AccordionTrigger>
               <AccordionContent>
                 <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                  {evidence.map((item, i) => (
+                  {evidence.map((item: string, i: number) => (
                     <li key={i}>{item}</li>
                   ))}
                 </ul>
@@ -158,7 +157,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
           {personas.length} persona{personas.length !== 1 ? 's' : ''} identified from the analysis
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent>
         <Tabs defaultValue={personas[0]?.name} className="w-full">
           <TabsList className="mb-4 w-full flex overflow-x-auto">
@@ -176,7 +175,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               </TabsTrigger>
             ))}
           </TabsList>
-          
+
           {personas.map((persona, index) => (
             <TabsContent key={`persona-content-${index}`} value={persona.name} className="space-y-4">
               <div className="flex items-start justify-between">
@@ -197,7 +196,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              
+
               {/* Persona Traits */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {renderTraitCard('Role Context', persona.role_context)}
@@ -207,7 +206,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                 {renderTraitCard('Analysis Approach', persona.analysis_approach)}
                 {renderTraitCard('Pain Points', persona.pain_points)}
               </div>
-              
+
               {/* Patterns */}
               {persona.patterns && persona.patterns.length > 0 && (
                 <div className="mt-6">
@@ -219,7 +218,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   </ul>
                 </div>
               )}
-              
+
               {/* Overall Evidence */}
               {persona.evidence && persona.evidence.length > 0 && (
                 <Accordion type="single" collapsible className="mt-4">
@@ -237,7 +236,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   </AccordionItem>
                 </Accordion>
               )}
-              
+
               {/* Metadata */}
               {persona.metadata && (
                 <div className="mt-4 text-xs text-muted-foreground">

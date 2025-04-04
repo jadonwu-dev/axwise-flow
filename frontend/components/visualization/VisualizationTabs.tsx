@@ -11,16 +11,19 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ThemeChart } from './ThemeChart';
+/**
+ * ARCHITECTURAL NOTE: We're using the canonical ThemeChart component which displays themes
+ * without distinguishing between basic and enhanced analysis. The backend always runs enhanced
+ * theme analysis, and we display all themes regardless of their process type.
+ */
+import { ThemeChart } from './ThemeChart.simplified'; // This is now the canonical ThemeChart component
 import { PatternList } from './PatternList';
-import { SentimentGraph } from './SentimentGraph';
 import { PersonaList } from './PersonaList';
 import { InsightList } from './InsightList';
-import { PriorityInsights } from './PriorityInsights'; // Uncomment original component
-// import { PriorityInsightsDisplay } from './PriorityInsightsDisplay'; // Remove new display component import
+import { PriorityInsights } from './PriorityInsights';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import CustomErrorBoundary from './ErrorBoundary';
 import { apiClient } from '@/lib/apiClient'; // Keep apiClient if needed elsewhere
 import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
@@ -34,29 +37,9 @@ interface VisualizationTabsProps {
 }
 
 // Define a type for the tab values
-export type TabValue = 'themes' | 'patterns' | 'sentiment' | 'personas' | 'insights' | 'priority';
+export type TabValue = 'themes' | 'patterns' | 'personas' | 'insights' | 'priority';
 
-// Add the helper function
-// Helper function to consolidate supporting statements from various sources
-const getConsolidatedSupportingStatements = (analysis: any) => {
-  return {
-    positive: [
-      ...(analysis.sentiment && Array.isArray(analysis.sentiment.positive) ? analysis.sentiment.positive : []),
-      ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.positive) ? analysis.supporting_statements.positive : []),
-      ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.positive) ? analysis.results.sentimentStatements.positive : [])
-    ].filter((v, i, a) => a.indexOf(v) === i), // Remove duplicates
-    neutral: [
-      ...(analysis.sentiment && Array.isArray(analysis.sentiment.neutral) ? analysis.sentiment.neutral : []),
-      ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.neutral) ? analysis.supporting_statements.neutral : []),
-      ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.neutral) ? analysis.results.sentimentStatements.neutral : [])
-    ].filter((v, i, a) => a.indexOf(v) === i), // Remove duplicates
-    negative: [
-      ...(analysis.sentiment && Array.isArray(analysis.sentiment.negative) ? analysis.sentiment.negative : []),
-      ...(analysis.supporting_statements && Array.isArray(analysis.supporting_statements.negative) ? analysis.supporting_statements.negative : []),
-      ...(analysis.results && analysis.results.sentimentStatements && Array.isArray(analysis.results.sentimentStatements.negative) ? analysis.results.sentimentStatements.negative : [])
-    ].filter((v, i, a) => a.indexOf(v) === i) // Remove duplicates
-  };
-};
+// No helper functions needed
 
 /**
  * VisualizationTabs Component (Refactored)
@@ -68,7 +51,7 @@ export default function VisualizationTabsRefactored({
   analysisData: serverAnalysisData,
   initialTab
 }: VisualizationTabsProps) {
-  const router = useRouter();
+  // No router needed
   const searchParams = useSearchParams();
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(
@@ -161,18 +144,16 @@ export default function VisualizationTabsRefactored({
 
   // Prepare data for rendering
   const analyzedThemes = useMemo(() => {
+    // Process themes
     return (analysis?.themes || []).map((theme: any) => ({
       id: theme.id?.toString() || '',
       name: theme.name || '',
-      prevalence: theme.frequency || 0,
       frequency: theme.frequency || 0,
-      sentiment: theme.sentiment,
       keywords: theme.keywords || [],
       statements: theme.statements || [],
       examples: theme.examples || [],
       definition: theme.definition || '',
       reliability: theme.reliability,
-      process: theme.process,
       codes: theme.codes || []
     }));
   }, [analysis?.themes]);
@@ -209,10 +190,9 @@ export default function VisualizationTabsRefactored({
 
         {!loading && !fetchError && analysis && ( // Ensure analysis data exists
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="w-full grid grid-cols-6">
+            <TabsList className="w-full grid grid-cols-5">
               <TabsTrigger value="themes">Themes</TabsTrigger>
               <TabsTrigger value="patterns">Patterns</TabsTrigger>
-              <TabsTrigger value="sentiment">Sentiment</TabsTrigger>
               <TabsTrigger value="personas">Personas</TabsTrigger>
               <TabsTrigger value="insights">Insights</TabsTrigger>
               <TabsTrigger value="priority">Priority</TabsTrigger>
@@ -228,7 +208,9 @@ export default function VisualizationTabsRefactored({
             >
               <TabsContent value="themes" className="mt-6">
                 {analyzedThemes.length ? (
-                  <ThemeChart themes={analyzedThemes} />
+                  <ThemeChart
+                    themes={analyzedThemes}
+                  />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     No themes detected in this interview.
@@ -256,40 +238,7 @@ export default function VisualizationTabsRefactored({
               </TabsContent>
             </CustomErrorBoundary>
 
-            <CustomErrorBoundary
-              fallback={
-                <div className="p-4 border border-red-300 bg-red-50 rounded-md mt-6">
-                  <h3 className="text-lg font-semibold text-red-700">Error in Sentiment Visualization</h3>
-                  <p className="text-red-600">There was an error rendering the sentiment visualization.</p>
-                </div>
-              }
-            >
-              <TabsContent value="sentiment" className="mt-6">
-                {analysis.sentiment && (
-                  <SentimentGraph
-                    data={analysis.sentiment.sentimentOverview || analysis.sentimentOverview}
-                    timeSeriesData={Array.isArray(analysis.sentiment) ? analysis.sentiment : []} // Use timeSeriesData prop
-                    supportingStatements={
-                      // Always prioritize sentimentStatements as it's more reliable and comprehensive
-                      analysis.sentimentStatements &&
-                      typeof analysis.sentimentStatements === 'object' &&
-                      Array.isArray(analysis.sentimentStatements.positive) &&
-                      Array.isArray(analysis.sentimentStatements.neutral) &&
-                      Array.isArray(analysis.sentimentStatements.negative)
-                        ? analysis.sentimentStatements
-                        : getConsolidatedSupportingStatements(analysis)
-                    }
-                    // Pass industry context from multiple possible locations
-                    industry={analysis.industry || (analysis.sentimentStatements && analysis.sentimentStatements.industry) || null}
-                    // Pass themes for topic clustering
-                    themes={analysis.themes || []}
-                    // Simplify visualization by hiding redundant elements
-                    showLegend={false}
-                  />
-                )}
-                {!analysis.sentiment && <div>No sentiment data available</div>}
-              </TabsContent>
-            </CustomErrorBoundary>
+
 
             <CustomErrorBoundary
               fallback={
@@ -338,10 +287,10 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="priority" className="mt-6">
-                {/* Revert to using the original PriorityInsights component */}
                 <PriorityInsights analysisId={effectiveAnalysisId || ''} />
               </TabsContent>
             </CustomErrorBoundary>
+
           </Tabs>
         )}
 

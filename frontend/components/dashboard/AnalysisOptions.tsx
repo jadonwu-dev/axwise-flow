@@ -11,7 +11,7 @@ interface AnalysisOptionsProps {
 /**
  * Component for selecting analysis options (LLM provider)
  */
-const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): JSX.Element => { // Add return type
+const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): JSX.Element => {
   return (
     <div className="space-y-4">
       <div>
@@ -20,9 +20,9 @@ const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): 
           Choose which AI model to use for analysis
         </p>
       </div>
-      
-      <RadioGroup 
-        value={provider} 
+
+      <RadioGroup
+        value={provider}
         onValueChange={(value) => onProviderChange(value as 'openai' | 'gemini')}
         className="grid grid-cols-2 gap-4"
       >
@@ -32,7 +32,7 @@ const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): 
             Google Gemini
           </Label>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <RadioGroupItem value="openai" id="openai" />
           <Label htmlFor="openai" className="font-normal cursor-pointer">
@@ -40,7 +40,7 @@ const AnalysisOptions = ({ provider, onProviderChange }: AnalysisOptionsProps): 
           </Label>
         </div>
       </RadioGroup>
-      
+
       <div className="text-sm text-muted-foreground mt-2">
         {provider === 'gemini' ? (
           <span>Using Gemini 2.0 Flash - Optimized for structured schema-based analysis</span>

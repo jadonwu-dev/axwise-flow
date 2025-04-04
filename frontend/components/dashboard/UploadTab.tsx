@@ -16,7 +16,7 @@ import { UploadResponse, AnalysisResponse } from '@/types/api';
  */
 const UploadTab = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
-  
+
   // Upload and analysis state
   const [file, setFile] = useState<File | null>(null);
   const [isTextFile, setIsTextFile] = useState<boolean>(false);
@@ -26,7 +26,7 @@ const UploadTab = (): JSX.Element => { // Add return type
   const [error, setError] = useState<string | null>(null);
   const [authToken] = useState<string>('testuser123');
   const [llmProvider, setLlmProvider] = useState<'openai' | 'gemini'>('gemini');
-  
+
   // Handle file selection from the FileUpload component
   const handleFileChange = (selectedFile: File, isText: boolean): void => { // Add return type
     setFile(selectedFile);
@@ -44,15 +44,15 @@ const UploadTab = (): JSX.Element => { // Add return type
     try {
       setLoading(true);
       setError(null);
-      
+
       // Set auth token
       apiClient.setAuthToken(authToken);
-      
+
       // Upload the file, passing the isTextFile flag
       const response = await apiClient.uploadData(file, isTextFile);
       setUploadResponse(response);
       showToast('File uploaded successfully', { variant: 'success' });
-      
+
       // Clear previous analysis data
       setAnalysisResponse(null);
     } catch (err) {
@@ -73,12 +73,12 @@ const UploadTab = (): JSX.Element => { // Add return type
     try {
       setLoading(true);
       setError(null);
-      
+
       // Set auth token
       apiClient.setAuthToken(authToken);
-      
+
       // Start analysis with the selected LLM provider
-      const response = await apiClient.analyzeData(uploadResponse.data_id, llmProvider);
+      const response = await apiClient.analyzeData(uploadResponse.data_id, llmProvider, undefined, isTextFile);
       setAnalysisResponse(response);
       showToast('Analysis started', { variant: 'success' });
     } catch (err) {
@@ -99,8 +99,8 @@ const UploadTab = (): JSX.Element => { // Add return type
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <FileUpload 
-            onFileChange={handleFileChange} 
+          <FileUpload
+            onFileChange={handleFileChange}
             file={file}
             showCard={false}
             title="Interview Data File"
@@ -108,12 +108,12 @@ const UploadTab = (): JSX.Element => { // Add return type
             showFileDetails={true}
             autoUpload={false}
           />
-          
-          <AnalysisOptions 
-            provider={llmProvider} 
-            onProviderChange={setLlmProvider} 
+
+          <AnalysisOptions
+            provider={llmProvider}
+            onProviderChange={setLlmProvider}
           />
-          
+
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
             <Button
               onClick={handleUpload}
@@ -132,7 +132,7 @@ const UploadTab = (): JSX.Element => { // Add return type
                 </>
               )}
             </Button>
-            
+
             <Button
               onClick={handleStartAnalysis}
               disabled={!uploadResponse || loading}
@@ -149,11 +149,11 @@ const UploadTab = (): JSX.Element => { // Add return type
               )}
             </Button>
           </div>
-          
+
           {analysisResponse && (
             <AnalysisProgress analysisId={analysisResponse.result_id.toString()} />
           )}
-          
+
           {error && (
             <div className="mt-4 p-4 border border-red-200 bg-red-50 text-red-600 rounded-md">
               {error}

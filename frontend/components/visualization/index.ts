@@ -1,4 +1,4 @@
-export { default as ThemeChart } from './ThemeChart';
+export { ThemeChart } from './ThemeChart.simplified';
 export { default as PatternList } from './PatternList';
 export { default as SentimentGraph } from './SentimentGraph';
 export { default as PersonaList } from './PersonaList';

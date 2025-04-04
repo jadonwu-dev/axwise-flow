@@ -60,6 +60,9 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
 /**
  * Analyze Action
  * Handles starting analysis using server action
+ *
+ * Note: Enhanced theme analysis is always enabled on the backend,
+ * so we've removed the useEnhancedThemeAnalysis parameter.
  */
 export async function analyzeAction(
   dataId: number,

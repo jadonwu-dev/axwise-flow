@@ -26,6 +26,38 @@ export interface AnalyzedTheme {
   reliability?: number; // Inter-rater reliability score (0-1)
   process?: 'basic' | 'enhanced';  // Identifies which analysis process was used
 
+  // Sentiment distribution within the theme
+  sentiment_distribution?: {
+    positive: number;  // Percentage (0-1) of positive statements
+    neutral: number;   // Percentage (0-1) of neutral statements
+    negative: number;  // Percentage (0-1) of negative statements
+  };
+
+  // Enhanced analysis fields
+  hierarchical_codes?: Array<{
+    code: string;
+    definition: string;
+    frequency: number;
+    sub_codes?: Array<{
+      code: string;
+      definition: string;
+      frequency: number;
+    }>;
+  }>;
+
+  reliability_metrics?: {
+    cohen_kappa: number;
+    percent_agreement: number;
+    confidence_interval: [number, number];
+  };
+
+  relationships?: Array<{
+    related_theme: string;
+    relationship_type: string;
+    strength: number;
+    description: string;
+  }>;
+
   // Legacy field - will be removed in future versions
   prevalence?: number;  // Deprecated: Use frequency instead
 }
@@ -73,6 +105,38 @@ export interface Theme {
   codes?: string[];         // Associated codes from the coding process
   reliability?: number;     // Inter-rater reliability score (0-1)
   process?: 'basic' | 'enhanced';  // Identifies which analysis process was used
+
+  // Sentiment distribution within the theme
+  sentiment_distribution?: {
+    positive: number;  // Percentage (0-1) of positive statements
+    neutral: number;   // Percentage (0-1) of neutral statements
+    negative: number;  // Percentage (0-1) of negative statements
+  };
+
+  // Enhanced analysis fields
+  hierarchical_codes?: Array<{
+    code: string;
+    definition: string;
+    frequency: number;
+    sub_codes?: Array<{
+      code: string;
+      definition: string;
+      frequency: number;
+    }>;
+  }>;
+
+  reliability_metrics?: {
+    cohen_kappa: number;
+    percent_agreement: number;
+    confidence_interval: [number, number];
+  };
+
+  relationships?: Array<{
+    related_theme: string;
+    relationship_type: string;
+    strength: number;
+    description: string;
+  }>;
 }
 
 /**
@@ -121,6 +185,7 @@ export interface SentimentStatements {
  */
 export interface AnalysisResult {
   themes: Theme[];
+  enhanced_themes?: Theme[];  // Enhanced themes from the enhanced analysis process
   patterns: Pattern[];
   sentiment: SentimentData[];
   sentimentStatements?: SentimentStatements;  // Supporting statements for sentiment categories

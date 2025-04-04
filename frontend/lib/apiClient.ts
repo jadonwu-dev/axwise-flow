@@ -238,6 +238,9 @@ class ApiClient {
 
   /**
    * Trigger analysis of uploaded data
+   *
+   * Note: Enhanced theme analysis is always enabled on the backend,
+   * so we've removed the useEnhancedThemeAnalysis parameter.
    */
   async analyzeData(
     dataId: number,
@@ -250,6 +253,7 @@ class ApiClient {
       llm_provider: llmProvider,
       llm_model: llmModel,
       is_free_text: isTextFile || false
+      // Enhanced theme analysis is always enabled on the backend
     }, {
       timeout: 60000 // 60 seconds timeout for triggering analysis
     });
@@ -377,6 +381,7 @@ class ApiClient {
           supporting_quotes?: string[];
           examples?: string[];
           quotes?: string[];
+          sentiment_distribution?: { positive: number; neutral: number; negative: number };
           [key: string]: any;
         }) => {
           // Initialize statements array if it doesn't exist
@@ -397,6 +402,20 @@ class ApiClient {
           // Check for quotes field (another possible format)
           if (theme.quotes && Array.isArray(theme.quotes) && theme.quotes.length > 0 && theme.statements.length === 0) {
             theme.statements = [...theme.statements, ...theme.quotes];
+          }
+
+          // Ensure sentiment_distribution exists
+          if (!theme.sentiment_distribution) {
+            // Calculate a default sentiment distribution based on the theme's sentiment score
+            const sentimentScore = theme.sentiment || 0;
+            if (sentimentScore >= 0.3) {
+              theme.sentiment_distribution = { positive: 0.7, neutral: 0.2, negative: 0.1 };
+            } else if (sentimentScore <= -0.3) {
+              theme.sentiment_distribution = { positive: 0.1, neutral: 0.2, negative: 0.7 };
+            } else {
+              theme.sentiment_distribution = { positive: 0.2, neutral: 0.6, negative: 0.2 };
+            }
+            console.log(`Added default sentiment distribution for theme: ${theme.name}`);
           }
 
           return theme;

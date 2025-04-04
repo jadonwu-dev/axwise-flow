@@ -291,9 +291,7 @@ async def analyze_data(
             data_id=analysis_request.data_id,
             llm_provider=analysis_request.llm_provider,
             llm_model=analysis_request.llm_model,
-            is_free_text=analysis_request.is_free_text,
-            use_enhanced_theme_analysis=analysis_request.use_enhanced_theme_analysis,
-            use_reliability_check=analysis_request.use_reliability_check
+            is_free_text=analysis_request.is_free_text
         )
 
         # Return response
