@@ -2,13 +2,13 @@
 
 /**
  * ThemeChart Component
- * 
+ *
  * ARCHITECTURAL NOTE: This component is the canonical source for Theme Analysis visualization.
  * It is responsible for rendering:
  * 1. The Key Insights section at the top (including theme insights & recommendations)
  * 2. The searchable list of identified themes
  * 3. The theme details with supporting statements
- * 
+ *
  * This component should be used directly by VisualizationTabs.tsx and NOT wrapped by UnifiedVisualization.
  * If using UnifiedVisualization in the future, modify this component to accept a `showKeyInsights` prop.
  */
@@ -32,10 +32,10 @@ export function ThemeChart({ themes }: ThemeChartProps) {
 
   // Debug: Log themes data to console
   console.log('ThemeChart received themes:', themes);
-  
+
   // Debug: Inspect for statements or supporting quotes
-  console.log('Checking for statements in first theme:', 
-    themes.length > 0 ? 
+  console.log('Checking for statements in first theme:',
+    themes.length > 0 ?
     {
       name: themes[0].name,
       statements: themes[0].statements,
@@ -45,9 +45,9 @@ export function ThemeChart({ themes }: ThemeChartProps) {
     } : 'No themes available');
 
   // Filter themes based on search term
-  const filteredThemes = themes.filter(theme => 
+  const filteredThemes = themes.filter(theme =>
     theme.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (theme.keywords && theme.keywords.some((keyword: string) => 
+    (theme.keywords && theme.keywords.some((keyword: string) =>
       keyword.toLowerCase().includes(searchTerm.toLowerCase())
     ))
   );
@@ -63,67 +63,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
     return 'Neutral';
   };
 
-  // Generate key insights based on theme analysis
-  const getKeyInsights = useMemo(() => {
-    if (!themes || themes.length === 0) {
-      return ['No themes available for analysis'];
-    }
 
-    const insights: string[] = [];
-    
-    // Prepare theme insights with more depth and context
-    const sortedTopThemes = [...themes].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
-    const topThemes = sortedTopThemes.slice(0, 3);
-    
-    // Add more descriptive top themes insight with percentages
-    insights.push(`Top ${topThemes.length} themes identified: ${topThemes.map(t => 
-      `${t.name} (${Math.round((t.frequency || 0) * 100)}%)`
-    ).join(', ')}.`);
-    
-    // Add thematic coverage insight
-    insights.push(`Total of ${themes.length} themes identified in the interviews.`);
-    
-    // Add density of themes insight if there are many themes
-    if (themes.length >= 10) {
-      insights.push(`High thematic density detected with ${themes.length} themes identified, suggesting complex or diverse responses.`);
-    }
-    
-    // Add sentiment distribution of themes with percentages
-    const totalThemes = themes.length;
-    const posThemes = themes.filter(t => typeof t.sentiment === 'number' && t.sentiment >= 0.1).length;
-    const neuThemes = themes.filter(t => typeof t.sentiment === 'number' && t.sentiment > -0.1 && t.sentiment < 0.1).length;
-    const negThemes = themes.filter(t => typeof t.sentiment === 'number' && t.sentiment <= -0.1).length;
-    
-    if (totalThemes > 0) {
-      const posPercent = Math.round((posThemes / totalThemes) * 100);
-      const neuPercent = Math.round((neuThemes / totalThemes) * 100);
-      const negPercent = Math.round((negThemes / totalThemes) * 100);
-      
-      // Only add if we have sentiment data
-      if (posThemes || neuThemes || negThemes) {
-        insights.push(`Sentiment breakdown of themes: ${posPercent}% positive, ${neuPercent}% neutral, ${negPercent}% negative.`);
-      }
-    }
-    
-    // Add specific insights for top positive and negative themes if they exist
-    const topPosTheme = themes
-      .filter(t => typeof t.sentiment === 'number' && t.sentiment >= 0.1)
-      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))[0];
-      
-    const topNegTheme = themes
-      .filter(t => typeof t.sentiment === 'number' && t.sentiment <= -0.1)
-      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))[0];
-    
-    if (topNegTheme) {
-      insights.push(`The most discussed concern is "${topNegTheme.name}" (mentioned in ${Math.round((topNegTheme.frequency || 0) * 100)}% of responses).`);
-    }
-    
-    if (topPosTheme) {
-      insights.push(`The most positive theme is "${topPosTheme.name}" (mentioned in ${Math.round((topPosTheme.frequency || 0) * 100)}% of responses).`);
-    }
-    
-    return insights;
-  }, [themes]);
 
   const getSentimentDescription = (sentiment: number | undefined) => {
     if (typeof sentiment !== 'number') return 'Neutral sentiment in discussions';
@@ -160,22 +100,22 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     </div>
                     <div className="flex-1 pl-9">
                       <div className={`border rounded-lg p-4 relative ${
-                        (typeof theme.sentiment === 'number' && theme.sentiment >= 0.1) ? 'border-green-300 bg-green-50' : 
+                        (typeof theme.sentiment === 'number' && theme.sentiment >= 0.1) ? 'border-green-300 bg-green-50' :
                         (typeof theme.sentiment === 'number' && theme.sentiment <= -0.1) ? 'border-red-300 bg-red-50' :
                         'border-slate-300 bg-slate-50'
                       } transition-all duration-150`}>
                         <TooltipProvider key={theme.id} delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge 
+                              <Badge
                                 variant="outline"
                                 className="absolute top-3 right-3 cursor-default"
                               >
                                 {Math.round((theme.frequency || 0) * 100)}%
                               </Badge>
                             </TooltipTrigger>
-                            <TooltipContent 
-                              side="left" 
+                            <TooltipContent
+                              side="left"
                               className="bg-white dark:bg-slate-900 border shadow-lg p-3"
                               align="center"
                             >
@@ -206,15 +146,8 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                 ))}
               </div>
             </div>
-            
-            <div>
-              <h3 className="text-sm font-medium mb-2">Theme Insights</h3>
-              <ul className="space-y-2 list-disc pl-5">
-                {getKeyInsights.map((insight, idx) => (
-                  <li key={`theme-insight-${idx}`} className="text-sm">{insight}</li>
-                ))}
-              </ul>
-            </div>
+
+
           </div>
         </CardContent>
       </Card>
@@ -262,15 +195,15 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge 
+                              <Badge
                                 variant={getSentimentVariant(theme.sentiment)}
                                 className="cursor-default"
                               >
                                 {getSentimentLabel(theme.sentiment)}
                               </Badge>
                             </TooltipTrigger>
-                            <TooltipContent 
-                              side="right" 
+                            <TooltipContent
+                              side="right"
                               className="bg-white dark:bg-slate-900 border shadow-lg p-3"
                               align="center"
                             >
@@ -297,7 +230,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                           <p className="text-sm p-2 bg-muted rounded-md">{theme.definition}</p>
                         </div>
                       )}
-                    
+
                       {theme.keywords && theme.keywords.length > 0 && (
                         <div className="space-y-1">
                           <h4 className="text-sm font-medium">Keywords:</h4>
@@ -310,7 +243,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                           </div>
                         </div>
                       )}
-                      
+
                       {theme.codes && theme.codes.length > 0 && (
                         <div className="mt-3">
                           <h4 className="text-sm font-semibold mb-1">Associated Codes</h4>
@@ -323,14 +256,14 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                           </div>
                         </div>
                       )}
-                      
+
                       {theme.reliability !== undefined && (
                         <div className="space-y-1">
                           <h4 className="text-sm font-medium">Reliability Score:</h4>
                           <div className="flex items-center">
                             <span className={`text-sm ${
-                              theme.reliability >= 0.7 ? 'text-green-600' : 
-                              theme.reliability >= 0.5 ? 'text-amber-600' : 
+                              theme.reliability >= 0.7 ? 'text-green-600' :
+                              theme.reliability >= 0.5 ? 'text-amber-600' :
                               'text-red-600'
                             }`}>
                               {(theme.reliability * 100).toFixed(0)}%
@@ -341,7 +274,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                           </div>
                         </div>
                       )}
-                      
+
                       {(theme.statements && theme.statements.length > 0) || (theme.examples && theme.examples.length > 0) ? (
                         <div>
                           <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
@@ -398,44 +331,44 @@ export function ThemeChart({ themes }: ThemeChartProps) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Badge 
-                    variant="percent" 
-                    className={`${(selectedTheme.sentiment || 0) > 0.1 
-                      ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' 
-                      : (selectedTheme.sentiment || 0) < -0.1 
-                        ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                  <Badge
+                    variant="percent"
+                    className={`${(selectedTheme.sentiment || 0) > 0.1
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                      : (selectedTheme.sentiment || 0) < -0.1
+                        ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
                         : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}
                   >
-                    {(selectedTheme.sentiment || 0) > 0.1 
-                      ? 'Positive' 
-                      : (selectedTheme.sentiment || 0) < -0.1 
-                        ? 'Negative' 
+                    {(selectedTheme.sentiment || 0) > 0.1
+                      ? 'Positive'
+                      : (selectedTheme.sentiment || 0) < -0.1
+                        ? 'Negative'
                         : 'Neutral'}
                   </Badge>
                   <Badge variant="percent">
                     Frequency: {Math.round((selectedTheme.frequency || 0) * 100)}%
                   </Badge>
                   {selectedTheme.reliability !== undefined && (
-                    <Badge 
+                    <Badge
                       variant="percent"
-                      className={selectedTheme.reliability >= 0.7 
-                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' 
-                        : selectedTheme.reliability >= 0.5 
-                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' 
+                      className={selectedTheme.reliability >= 0.7
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                        : selectedTheme.reliability >= 0.5
+                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
                           : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}
                     >
                       Reliability: {(selectedTheme.reliability * 100).toFixed(0)}%
                     </Badge>
                   )}
                 </div>
-                
+
                 {selectedTheme.definition && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">Definition</h4>
                     <p className="text-sm p-2 bg-muted rounded-md">{selectedTheme.definition}</p>
                   </div>
                 )}
-                
+
                 {selectedTheme.keywords && selectedTheme.keywords.length > 0 && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">Keywords</h4>
@@ -448,7 +381,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     </div>
                   </div>
                 )}
-                
+
                 {selectedTheme.codes && selectedTheme.codes.length > 0 && (
                   <div className="mt-3">
                     <h4 className="text-sm font-semibold mb-1">Associated Codes</h4>
@@ -461,7 +394,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     </div>
                   </div>
                 )}
-                
+
                 {selectedTheme.statements && selectedTheme.statements.length > 0 && (
                   <div className="mt-3">
                     <h4 className="text-sm font-semibold mb-1">Supporting Statements</h4>
@@ -474,7 +407,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     </div>
                   </div>
                 )}
-                
+
                 {selectedTheme.examples && selectedTheme.examples.length > 0 && (
                   <div className="mt-3">
                     <h4 className="text-sm font-semibold mb-1">Examples</h4>
@@ -487,7 +420,7 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="mt-4 flex justify-end">
                   <Button variant="outline" onClick={() => setSelectedTheme(null)}>
                     Close
