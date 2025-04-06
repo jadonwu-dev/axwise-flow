@@ -17,6 +17,10 @@ import time
 from datetime import datetime
 
 from backend.schemas import Theme, Pattern, Insight
+from backend.utils.json_parser import (
+    parse_llm_json_response,
+    normalize_persona_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -756,9 +760,73 @@ class GeminiService:
                     result = {"insights": []}  # Return empty list if structure is wrong
 
             elif task == "persona_formation":
-                # The prompt already asks for JSON. The generation_config sets the mime type.
-                # Parsing happens after the call.
-                pass  # No specific post-processing needed here for persona_formation
+                # Normalize the response format first
+                result = normalize_persona_response(result)
+
+                # Import Persona schema for validation
+                from backend.schemas import Persona as PersonaSchema, PersonaTrait
+                from pydantic import ValidationError
+
+                # Validate and enhance personas
+                validated_personas_list = []
+                if (
+                    isinstance(result, dict)
+                    and "personas" in result
+                    and isinstance(result["personas"], list)
+                ):
+                    for persona_data in result["personas"]:
+                        try:
+                            # Validate each persona dictionary against the Pydantic model
+                            validated_persona = PersonaSchema(**persona_data)
+                            # Append the validated data (as dict) to the list
+                            validated_personas_list.append(
+                                validated_persona.model_dump()
+                            )
+                            logger.debug(
+                                f"Successfully validated persona: {persona_data.get('name', 'Unnamed')}"
+                            )
+                        except ValidationError as e:
+                            logger.warning(
+                                f"Persona validation failed for persona '{persona_data.get('name', 'Unnamed')}': {e}. Skipping this persona."
+                            )
+                            # Invalid personas are skipped to ensure data integrity downstream
+                        except Exception as general_e:
+                            logger.error(
+                                f"Unexpected error during persona validation for '{persona_data.get('name', 'Unnamed')}': {general_e}",
+                                exc_info=True,
+                            )
+
+                    # Replace the original personas with validated ones
+                    result["personas"] = validated_personas_list
+                    logger.info(
+                        f"Validated {len(validated_personas_list)} personas successfully for task: {task}"
+                    )
+                elif isinstance(result, dict) and "name" in result:
+                    # Single persona object without personas array
+                    try:
+                        # Validate the single persona against the Pydantic model
+                        validated_persona = PersonaSchema(**result)
+                        # Create a personas array with the validated persona
+                        result = {"personas": [validated_persona.model_dump()]}
+                        logger.info(
+                            f"Validated single persona successfully: {validated_persona.name}"
+                        )
+                    except ValidationError as e:
+                        logger.warning(
+                            f"Single persona validation failed: {e}. Using empty personas array."
+                        )
+                        result = {"personas": []}
+                    except Exception as general_e:
+                        logger.error(
+                            f"Unexpected error during single persona validation: {general_e}",
+                            exc_info=True,
+                        )
+                        result = {"personas": []}
+                else:
+                    logger.warning(
+                        f"LLM response for persona_formation was not in expected format (dict with 'personas' list or a single persona object). Raw response: {result}"
+                    )
+                    result = {"personas": []}  # Return empty list if structure is wrong
 
             else:
                 # Default case for unknown tasks

@@ -1102,86 +1102,161 @@ class PersonaFormationService:
             # If we have attributes, create a persona
             if attributes and isinstance(attributes, dict):
                 try:
-                    # Extract nested trait data, providing default dict if key missing
-                    role_context_data = attributes.get("role_context", {})
-                    key_responsibilities_data = attributes.get(
-                        "key_responsibilities", {}
-                    )
-                    tools_used_data = attributes.get("tools_used", {})
-                    collaboration_style_data = attributes.get("collaboration_style", {})
-                    analysis_approach_data = attributes.get("analysis_approach", {})
-                    pain_points_data = attributes.get("pain_points", {})
+                    # Import the Persona schema from backend.schemas
+                    from backend.schemas import Persona as PersonaSchema
+                    from pydantic import ValidationError
 
-                    # Create a persona object from the extracted data
-                    persona = Persona(
-                        name=attributes.get("name", "Unknown Persona"),
-                        description=attributes.get(
-                            "description", "Generated from interview analysis"
-                        ),
-                        # Create PersonaTrait instances from nested data
-                        role_context=PersonaTrait(
-                            value=role_context_data.get("value", ""),
-                            confidence=float(role_context_data.get("confidence", 0.7)),
-                            evidence=self._clean_evidence_list(
-                                role_context_data.get("evidence", [])
+                    # Check if we have a personas array or a single persona object
+                    if (
+                        "personas" in attributes
+                        and isinstance(attributes["personas"], list)
+                        and len(attributes["personas"]) > 0
+                    ):
+                        # Use the first persona from the array
+                        persona_data = attributes["personas"][0]
+                        logger.info(
+                            f"Using first persona from personas array: {persona_data.get('name', 'Unnamed')}"
+                        )
+                    else:
+                        # Use the attributes directly as a single persona object
+                        persona_data = attributes
+                        logger.info(
+                            f"Using attributes directly as persona: {persona_data.get('name', 'Unnamed')}"
+                        )
+
+                    # Directly instantiate the Pydantic model with nested data
+                    # Pydantic handles nested PersonaTrait validation automatically
+                    try:
+                        validated_persona = PersonaSchema(**persona_data)
+                        logger.info(
+                            f"Successfully validated persona schema: {validated_persona.name}"
+                        )
+
+                        # Create our internal Persona object from the validated schema
+                        persona = Persona(
+                            name=validated_persona.name,
+                            description=validated_persona.description
+                            or "Generated from interview analysis",
+                            # Map new fields to legacy fields if needed
+                            role_context=validated_persona.role_context
+                            or validated_persona.demographics
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            key_responsibilities=validated_persona.key_responsibilities
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            tools_used=validated_persona.tools_used
+                            or validated_persona.technology_and_tools
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            collaboration_style=validated_persona.collaboration_style
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            analysis_approach=validated_persona.analysis_approach
+                            or validated_persona.attitude_towards_research
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            pain_points=validated_persona.pain_points
+                            or validated_persona.challenges_and_frustrations
+                            or PersonaTrait(value="", confidence=0.5, evidence=[]),
+                            patterns=validated_persona.patterns,
+                            confidence=validated_persona.overall_confidence,
+                            evidence=validated_persona.supporting_evidence_summary,
+                            persona_metadata=self._get_text_metadata(text, context),
+                        )
+                    except ValidationError as e:
+                        logger.error(
+                            f"Pydantic validation failed for persona attributes: {e}"
+                        )
+                        logger.debug(
+                            f"Attributes causing validation error: {persona_data}"
+                        )
+                        # Fall back to manual creation if validation fails
+                        # Extract nested trait data, providing default dict if key missing
+                        role_context_data = persona_data.get("role_context", {})
+                        key_responsibilities_data = persona_data.get(
+                            "key_responsibilities", {}
+                        )
+                        tools_used_data = persona_data.get("tools_used", {})
+                        collaboration_style_data = persona_data.get(
+                            "collaboration_style", {}
+                        )
+                        analysis_approach_data = persona_data.get(
+                            "analysis_approach", {}
+                        )
+                        pain_points_data = persona_data.get("pain_points", {})
+
+                        # Create a persona object from the extracted data
+                        persona = Persona(
+                            name=persona_data.get("name", "Unknown Persona"),
+                            description=persona_data.get(
+                                "description", "Generated from interview analysis"
                             ),
-                        ),
-                        key_responsibilities=PersonaTrait(
-                            value=key_responsibilities_data.get("value", ""),
+                            # Create PersonaTrait instances from nested data
+                            role_context=PersonaTrait(
+                                value=role_context_data.get("value", ""),
+                                confidence=float(
+                                    role_context_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    role_context_data.get("evidence", [])
+                                ),
+                            ),
+                            key_responsibilities=PersonaTrait(
+                                value=key_responsibilities_data.get("value", ""),
+                                confidence=float(
+                                    key_responsibilities_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    key_responsibilities_data.get("evidence", [])
+                                ),
+                            ),
+                            tools_used=PersonaTrait(
+                                value=tools_used_data.get("value", ""),
+                                confidence=float(
+                                    tools_used_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    tools_used_data.get("evidence", [])
+                                ),
+                            ),
+                            collaboration_style=PersonaTrait(
+                                value=collaboration_style_data.get("value", ""),
+                                confidence=float(
+                                    collaboration_style_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    collaboration_style_data.get("evidence", [])
+                                ),
+                            ),
+                            analysis_approach=PersonaTrait(
+                                value=analysis_approach_data.get("value", ""),
+                                confidence=float(
+                                    analysis_approach_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    analysis_approach_data.get("evidence", [])
+                                ),
+                            ),
+                            pain_points=PersonaTrait(
+                                value=pain_points_data.get("value", ""),
+                                confidence=float(
+                                    pain_points_data.get("confidence", 0.7)
+                                ),
+                                evidence=self._clean_evidence_list(
+                                    pain_points_data.get("evidence", [])
+                                ),
+                            ),
+                            patterns=attributes.get(
+                                "patterns", []
+                            ),  # Use patterns if LLM provides them
                             confidence=float(
-                                key_responsibilities_data.get("confidence", 0.7)
-                            ),
+                                attributes.get("confidence", 0.7)
+                            ),  # Use overall confidence from LLM
                             evidence=self._clean_evidence_list(
-                                key_responsibilities_data.get("evidence", [])
-                            ),
-                        ),
-                        tools_used=PersonaTrait(
-                            value=tools_used_data.get("value", ""),
-                            confidence=float(tools_used_data.get("confidence", 0.7)),
-                            evidence=self._clean_evidence_list(
-                                tools_used_data.get("evidence", [])
-                            ),
-                        ),
-                        collaboration_style=PersonaTrait(
-                            value=collaboration_style_data.get("value", ""),
-                            confidence=float(
-                                collaboration_style_data.get("confidence", 0.7)
-                            ),
-                            evidence=self._clean_evidence_list(
-                                collaboration_style_data.get("evidence", [])
-                            ),
-                        ),
-                        analysis_approach=PersonaTrait(
-                            value=analysis_approach_data.get("value", ""),
-                            confidence=float(
-                                analysis_approach_data.get("confidence", 0.7)
-                            ),
-                            evidence=self._clean_evidence_list(
-                                analysis_approach_data.get("evidence", [])
-                            ),
-                        ),
-                        pain_points=PersonaTrait(
-                            value=pain_points_data.get("value", ""),
-                            confidence=float(pain_points_data.get("confidence", 0.7)),
-                            evidence=self._clean_evidence_list(
-                                pain_points_data.get("evidence", [])
-                            ),
-                        ),
-                        patterns=attributes.get(
-                            "patterns", []
-                        ),  # Use patterns if LLM provides them
-                        confidence=float(
-                            attributes.get("confidence", 0.7)
-                        ),  # Use overall confidence from LLM
-                        evidence=self._clean_evidence_list(
-                            attributes.get(
-                                "evidence", ["Generated from direct text analysis"]
-                            )
-                        ),  # Use evidence if provided
-                        persona_metadata=self._get_text_metadata(
-                            text, context
-                        ),  # Use persona_metadata
-                    )
+                                attributes.get(
+                                    "evidence", ["Generated from direct text analysis"]
+                                )
+                            ),  # Use evidence if provided
+                            persona_metadata=self._get_text_metadata(
+                                text, context
+                            ),  # Use persona_metadata
+                        )
 
                     logger.info(f"Created persona: {persona.name}")
                     logger.debug(

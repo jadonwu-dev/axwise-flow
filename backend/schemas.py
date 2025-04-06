@@ -269,22 +269,103 @@ class PersonaTrait(BaseModel):
 class Persona(BaseModel):
     """
     Model representing a user persona derived from interview analysis.
+
+    This comprehensive model captures detailed information about a user persona,
+    including demographics, goals, skills, challenges, and other key attributes.
+    Each attribute is structured as a PersonaTrait with confidence scoring and supporting evidence.
     """
 
-    name: str
-    description: str = ""
-    role_context: PersonaTrait
-    key_responsibilities: PersonaTrait
-    tools_used: PersonaTrait
-    collaboration_style: PersonaTrait
-    analysis_approach: PersonaTrait
-    pain_points: PersonaTrait
-    patterns: List[str] = Field(default_factory=list)
-    confidence: float = Field(..., ge=0, le=1)
-    evidence: List[str] = Field(default_factory=list)
+    # Basic information
+    name: str = Field(
+        description="A descriptive role-based name for the persona (e.g., 'Data-Driven Product Manager')"
+    )
+    archetype: Optional[str] = Field(
+        None,
+        description="A general category or archetype this persona falls into (e.g., 'Decision Maker', 'Technical Expert')",
+    )
+    description: str = Field(
+        "",
+        description="A brief 1-3 sentence overview of the persona",
+    )
+
+    # Detailed attributes as PersonaTrait objects
+    demographics: Optional[PersonaTrait] = Field(
+        None,
+        description="Age, gender, education, experience level, and other demographic information",
+    )
+    goals_and_motivations: Optional[PersonaTrait] = Field(
+        None, description="Primary objectives, aspirations, and driving factors"
+    )
+    skills_and_expertise: Optional[PersonaTrait] = Field(
+        None,
+        description="Technical and soft skills, knowledge areas, and expertise levels",
+    )
+    workflow_and_environment: Optional[PersonaTrait] = Field(
+        None, description="Work processes, physical/digital environment, and context"
+    )
+    challenges_and_frustrations: Optional[PersonaTrait] = Field(
+        None, description="Pain points, obstacles, and sources of frustration"
+    )
+    needs_and_desires: Optional[PersonaTrait] = Field(
+        None,
+        description="Specific needs, wants, and desires related to the problem domain",
+    )
+    technology_and_tools: Optional[PersonaTrait] = Field(
+        None, description="Software, hardware, and other tools used regularly"
+    )
+    attitude_towards_research: Optional[PersonaTrait] = Field(
+        None, description="Views on research, data, and evidence-based approaches"
+    )
+    attitude_towards_ai: Optional[PersonaTrait] = Field(
+        None, description="Perspective on AI, automation, and technological change"
+    )
+    key_quotes: Optional[PersonaTrait] = Field(
+        None,
+        description="Representative quotes that capture the persona's voice and perspective",
+    )
+
+    # Legacy fields for backward compatibility
+    role_context: Optional[PersonaTrait] = Field(
+        None, description="Primary job function and work environment (legacy field)"
+    )
+    key_responsibilities: Optional[PersonaTrait] = Field(
+        None, description="Main tasks and responsibilities (legacy field)"
+    )
+    tools_used: Optional[PersonaTrait] = Field(
+        None, description="Specific tools or methods used (legacy field)"
+    )
+    collaboration_style: Optional[PersonaTrait] = Field(
+        None, description="How they work with others (legacy field)"
+    )
+    analysis_approach: Optional[PersonaTrait] = Field(
+        None, description="How they approach problems/analysis (legacy field)"
+    )
+    pain_points: Optional[PersonaTrait] = Field(
+        None, description="Specific challenges mentioned (legacy field)"
+    )
+
+    # Overall persona information
+    patterns: List[str] = Field(
+        default_factory=list,
+        description="Behavioral patterns associated with this persona",
+    )
+    overall_confidence: float = Field(
+        0.7,
+        ge=0,
+        le=1,
+        description="Overall confidence score for the entire persona",
+        alias="confidence",  # For backward compatibility
+    )
+    supporting_evidence_summary: List[str] = Field(
+        default_factory=list,
+        description="Key evidence supporting the overall persona characterization",
+        alias="evidence",  # For backward compatibility
+    )
     persona_metadata: Optional[Dict[str, Any]] = Field(
-        default_factory=dict, alias="metadata"
-    )  # Use alias for potential backward compatibility if needed, map to persona_metadata
+        default_factory=dict,
+        description="Additional metadata about the persona creation process",
+        alias="metadata",  # For backward compatibility
+    )
 
     class Config:
         json_schema_extra = {
