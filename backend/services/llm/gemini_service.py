@@ -77,9 +77,11 @@ class GeminiService:
             return {"error": "No text provided"}
 
         if use_answer_only:
-            logger.info(f"Running {task} on answer-only text length: {len(text)}")
+            logger.info(
+                "Running {} on answer-only text length: {}".format(task, len(text))
+            )
         else:
-            logger.info(f"Running {task} on text length: {len(text)}")
+            logger.info("Running {} on text length: {}".format(task, len(text)))
 
         try:
             # Prepare system message based on task
@@ -97,7 +99,9 @@ class GeminiService:
             if task == "insight_generation":
                 # Use the system message directly since it's the complete prompt
                 logger.debug(
-                    f"Generating content for task '{task}' with config: {generation_config}"
+                    "Generating content for task '{}' with config: {}".format(
+                        task, generation_config
+                    )
                 )
                 response = await self.client.generate_content_async(
                     system_message, generation_config=generation_config
@@ -157,7 +161,7 @@ class GeminiService:
                 result_text = response.text
 
                 # Log raw response for debugging
-                logger.debug(f"Raw response for task {task}:\n{result_text}")
+                logger.debug("Raw response for task {}:\n{}".format(task, result_text))
 
                 # Extract JSON from response (handle potential markdown formatting)
                 try:
@@ -177,64 +181,74 @@ class GeminiService:
                             result = json.loads(json_match.group(1))
                         except json.JSONDecodeError as e2:
                             logger.error(
-                                f"Failed to parse JSON even after extracting from markdown: {e2}"
+                                "Failed to parse JSON even after extracting from markdown: {}".format(
+                                    e2
+                                )
                             )
 
                             # Instead of raising an error, provide a task-specific fallback
                             if task == "theme_analysis_enhanced":
                                 logger.warning(
-                                    f"Using fallback for theme_analysis_enhanced task after markdown extraction failure"
+                                    "Using fallback for theme_analysis_enhanced task after markdown extraction failure"
                                 )
                                 # Return empty enhanced themes array to avoid breaking the pipeline
                                 result = {"enhanced_themes": []}
                             elif task == "persona_formation":
                                 logger.warning(
-                                    f"Using fallback for persona_formation task after markdown extraction failure"
+                                    "Using fallback for persona_formation task after markdown extraction failure"
                                 )
                                 # Return empty personas array
                                 result = {"personas": []}
                             elif task == "insight_generation":
                                 logger.warning(
-                                    f"Using fallback for insight_generation task after markdown extraction failure"
+                                    "Using fallback for insight_generation task after markdown extraction failure"
                                 )
                                 # Return empty insights array
                                 result = {"insights": []}
                             else:
                                 # For other tasks, provide a generic error response
                                 logger.warning(
-                                    f"Using generic fallback for task: {task} after markdown extraction failure"
+                                    "Using generic fallback for task: {} after markdown extraction failure".format(
+                                        task
+                                    )
                                 )
                                 result = {
-                                    "error": f"Failed to parse response from Gemini after markdown extraction: {e2}",
+                                    "error": "Failed to parse response from Gemini after markdown extraction: {}".format(
+                                        e2
+                                    ),
                                     "fallback": True,
                                 }
                     else:
                         logger.error(
-                            f"Invalid JSON response from Gemini, and no markdown block found: {e1}"
+                            "Invalid JSON response from Gemini, and no markdown block found: {}".format(
+                                e1
+                            )
                         )
 
                         # Instead of raising an error, provide a task-specific fallback
                         if task == "theme_analysis_enhanced":
                             logger.warning(
-                                f"Using fallback for theme_analysis_enhanced task"
+                                "Using fallback for theme_analysis_enhanced task"
                             )
                             # Return empty enhanced themes array to avoid breaking the pipeline
                             result = {"enhanced_themes": []}
                         elif task == "persona_formation":
-                            logger.warning(f"Using fallback for persona_formation task")
+                            logger.warning("Using fallback for persona_formation task")
                             # Return empty personas array
                             result = {"personas": []}
                         elif task == "insight_generation":
-                            logger.warning(
-                                f"Using fallback for insight_generation task"
-                            )
+                            logger.warning("Using fallback for insight_generation task")
                             # Return empty insights array
                             result = {"insights": []}
                         else:
                             # For other tasks, provide a generic error response
-                            logger.warning(f"Using generic fallback for task: {task}")
+                            logger.warning(
+                                "Using generic fallback for task: {}".format(task)
+                            )
                             result = {
-                                "error": f"Failed to parse response from Gemini: {e1}",
+                                "error": "Failed to parse response from Gemini: {}".format(
+                                    e1
+                                ),
                                 "fallback": True,
                             }
 
@@ -1361,37 +1375,6 @@ class GeminiService:
               "description": "Brief overview of the persona",
               "demographics": {
                 "value": "Age, experience, etc.",
-            Extract the following details to build a rich, detailed persona:
-
-            BASIC INFORMATION:
-            1. name: A descriptive role-based name (e.g., "Data-Driven Product Manager")
-            2. archetype: A general category this persona falls into (e.g., "Decision Maker", "Technical Expert")
-            3. description: A brief 1-3 sentence overview of the persona
-
-            DETAILED ATTRIBUTES (each with value, confidence score 0.0-1.0, and supporting evidence):
-            4. demographics: Age, gender, education, experience level, and other demographic information
-            5. goals_and_motivations: Primary objectives, aspirations, and driving factors
-            6. skills_and_expertise: Technical and soft skills, knowledge areas, and expertise levels
-            7. workflow_and_environment: Work processes, physical/digital environment, and context
-            8. challenges_and_frustrations: Pain points, obstacles, and sources of frustration
-            9. needs_and_desires: Specific needs, wants, and desires related to the problem domain
-            10. technology_and_tools: Software, hardware, and other tools used regularly
-            11. attitude_towards_research: Views on research, data, and evidence-based approaches
-            12. attitude_towards_ai: Perspective on AI, automation, and technological change
-            13. key_quotes: Representative quotes that capture the persona's voice and perspective
-
-            OVERALL PERSONA INFORMATION:
-            14. patterns: List of behavioral patterns associated with this persona
-            15. overall_confidence: Overall confidence score for the entire persona (0.0-1.0)
-            16. supporting_evidence_summary: Key evidence supporting the overall persona characterization
-
-            FORMAT YOUR RESPONSE AS JSON with the following structure:
-            {
-              "name": "Role-Based Name",
-              "archetype": "Persona Category",
-              "description": "Brief overview of the persona",
-              "demographics": {
-                "value": "Age, experience, etc.",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
               },
@@ -1411,81 +1394,6 @@ class GeminiService:
               "skills_and_expertise": {
                 "value": "Technical and soft skills",
                 "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "workflow_and_environment": {
-                "value": "Work processes and context",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "challenges_and_frustrations": {
-                "value": "Pain points and obstacles",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "needs_and_desires": {
-                "value": "Specific needs and wants",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "technology_and_tools": {
-                "value": "Software and hardware used",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "attitude_towards_research": {
-                "value": "Views on research and data",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "attitude_towards_ai": {
-                "value": "Perspective on AI and automation",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "key_quotes": {
-                "value": "Representative quotes",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "role_context": {
-                "value": "Primary job function and environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "key_responsibilities": {
-                "value": "Main tasks mentioned",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "tools_used": {
-                "value": "Specific tools mentioned",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "collaboration_style": {
-                "value": "How they work with others",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "analysis_approach": {
-                "value": "How they approach problems",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "pain_points": {
-                "value": "Specific challenges mentioned",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-              "overall_confidence": 0.75,
-              "supporting_evidence_summary": ["Key evidence 1", "Key evidence 2"]
-            }
-
-            IMPORTANT: Ensure all attributes are included with proper structure, even if confidence is low or evidence is limited.
-
-            DO NOT INCLUDE ANY ADDITIONAL TEXT OR EXPLANATION. RETURN ONLY THE JSON OBJECT.
                 "evidence": ["Quote 1", "Quote 2"]
               },
               "workflow_and_environment": {
@@ -1566,7 +1474,9 @@ class GeminiService:
             """
 
         else:
-            return f"You are an expert analyst. Analyze the provided text for the task: {task}."
+            return "You are an expert analyst. Analyze the provided text for the task: {}.".format(
+                task
+            )
 
     def _get_prompt_template(self, task, use_answer_only=False):
         """Get the prompt template for a specific task."""
@@ -1748,7 +1658,9 @@ class GeminiService:
                     familiarization_data["content"]
                 )
             except Exception as e:
-                self.logger.error(f"Error parsing familiarization data: {str(e)}")
+                self.logger.error(
+                    "Error parsing familiarization data: {}".format(str(e))
+                )
                 familiarization = {
                     "summary": "Error generating summary",
                     "key_topics": [],
@@ -2272,15 +2184,20 @@ class GeminiService:
         """
         try:
             logger.info(
-                f"Generating persona from interview text ({len(interview_text)} chars)"
+                "Generating persona from interview text ({} chars)".format(
+                    len(interview_text)
+                )
             )
 
-            # Create prompt for persona generation with enhanced structure format
-            prompt = f"""
-            Analyze the following interview text excerpt and create a comprehensive user persona profile.
+            # Create a simple prompt for persona generation to avoid f-string issues
+            interview_excerpt = interview_text[:3500]
+            prompt = (
+                """Analyze the following interview text excerpt and create a comprehensive user persona profile.
 
             INTERVIEW TEXT (excerpt):
-            {interview_text[:3500]}
+            """
+                + interview_excerpt
+                + """
 
             Extract the following details to build a rich, detailed persona:
 
@@ -2307,142 +2224,64 @@ class GeminiService:
             16. supporting_evidence_summary: Key evidence supporting the overall persona characterization
 
             FORMAT YOUR RESPONSE AS JSON with the following structure:
-            {
+            {{
               "name": "Role-Based Name",
               "archetype": "Persona Category",
               "description": "Brief overview of the persona",
-              "demographics": {
+              "demographics": {{
                 "value": "Age, experience, etc.",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "goals_and_motivations": {
+              }},
+              "goals_and_motivations": {{
                 "value": "Primary objectives and aspirations",
                 "confidence": 0.7,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "skills_and_expertise": {
+              }},
+              "skills_and_expertise": {{
                 "value": "Technical and soft skills",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "workflow_and_environment": {
-                "value": "Work processes and context",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "challenges_and_frustrations": {
-                "value": "Pain points and obstacles",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "needs_and_desires": {
-                "value": "Specific needs and wants",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "technology_and_tools": {
-                "value": "Software and hardware used",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "attitude_towards_research": {
-                "value": "Views on research and data",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "attitude_towards_ai": {
-                "value": "Perspective on AI and automation",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "key_quotes": {
-                "value": "Representative quotes",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2"]
-              },
-              "role_context": {
+              }},
+              "role_context": {{
                 "value": "Primary job function and environment",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "key_responsibilities": {
+              }},
+              "key_responsibilities": {{
                 "value": "Main tasks mentioned",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "tools_used": {
+              }},
+              "tools_used": {{
                 "value": "Specific tools mentioned",
                 "confidence": 0.7,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "collaboration_style": {
+              }},
+              "collaboration_style": {{
                 "value": "How they work with others",
                 "confidence": 0.7,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "analysis_approach": {
+              }},
+              "analysis_approach": {{
                 "value": "How they approach problems",
                 "confidence": 0.6,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
-              "pain_points": {
+              }},
+              "pain_points": {{
                 "value": "Specific challenges mentioned",
                 "confidence": 0.8,
                 "evidence": ["Quote 1", "Quote 2"]
-              },
+              }},
               "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-              "overall_confidence": 0.75,
-              "supporting_evidence_summary": ["Key evidence 1", "Key evidence 2"]
-            }
-
-            IMPORTANT: Ensure all attributes are included with proper structure, even if confidence is low or evidence is limited.
-
-            For each attribute (role_context, key_responsibilities, tools_used, collaboration_style, analysis_approach, pain_points), provide the value, a confidence score (0.0-1.0), and supporting evidence (list of strings).
-
-            Return ONLY a valid JSON object with the following structure:
-            ```json
-            {{
-              "name": "Example Role Name",
-              "description": "Example description.",
-              "role_context": {{
-                "value": "Example role context.",
-                "confidence": 0.85,
-                "evidence": ["Evidence 1", "Evidence 2"]
-              }},
-              "key_responsibilities": {{
-                "value": "Example responsibilities.",
-                "confidence": 0.8,
-                "evidence": ["Evidence 1"]
-              }},
-              "tools_used": {{
-                "value": "Example tools.",
-                "confidence": 0.75,
-                "evidence": ["Evidence 1", "Evidence 2"]
-              }},
-              "collaboration_style": {{
-                "value": "Example collaboration style.",
-                "confidence": 0.7,
-                "evidence": ["Evidence 1"]
-              }},
-              "analysis_approach": {{
-                "value": "Example analysis approach.",
-                "confidence": 0.8,
-                "evidence": ["Evidence 1", "Evidence 2"]
-              }},
-              "pain_points": {{
-                "value": "Example pain points.",
-                "confidence": 0.65,
-                "evidence": ["Evidence 1"]
-              }},
-              "patterns": ["Relevant pattern 1", "Relevant pattern 2"],
               "confidence": 0.8,
               "evidence": ["Overall supporting evidence 1", "Overall supporting evidence 2"]
             }}
-            ```
 
-            IMPORTANT: Make sure your response is ONLY valid JSON with NO MARKDOWN formatting.
+            IMPORTANT: Ensure all attributes are included with proper structure, even if confidence is low or evidence is limited.
+            Return ONLY a valid JSON object with no markdown formatting.
             """
+            )
 
             # Generate content with the prompt
             response = await self.client.generate_content_async(prompt)
@@ -2451,7 +2290,9 @@ class GeminiService:
             try:
                 # Get the text response
                 text_response = response.text
-                logger.info(f"Received response from Gemini: {text_response[:100]}...")
+                logger.info(
+                    "Received response from Gemini: {}...".format(text_response[:100])
+                )
 
                 # Extract JSON data from the response
                 json_data = self._extract_json(text_response)
@@ -2523,6 +2364,17 @@ class GeminiService:
                             "timestamp": datetime.now().isoformat(),
                         },
                     }
+
+                    # Validate against schema
+                    try:
+                        # Import schema for validation
+                        from backend.schemas import Persona as PersonaSchema
+                        from pydantic import ValidationError
+
+                        # Validate the persona data against the Pydantic model
+                        validated_persona = PersonaSchema(**persona_attributes)
+                        # Convert back to dict with all validated fields
+                        validated_data = validated_persona.model_dump()
 
                         logger.info(
                             f"Successfully validated persona: {validated_data['name']}"
@@ -2687,7 +2539,7 @@ class GeminiService:
                 return result
             except json.JSONDecodeError as e:
                 logger.warning(
-                    f"Failed to parse JSON array from markdown block: {str(e)}"
+                    "Failed to parse JSON array from markdown block: {}".format(str(e))
                 )
 
         # Try to find any JSON-like structure with balanced braces
@@ -2697,12 +2549,16 @@ class GeminiService:
             try:
                 json_str = json_match.group(0).strip()
                 logger.info(
-                    f"Found JSON-like structure with balanced braces, length: {len(json_str)}"
+                    "Found JSON-like structure with balanced braces, length: {}".format(
+                        len(json_str)
+                    )
                 )
                 result = json.loads(json_str)
                 return result
             except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse JSON from balanced braces: {str(e)}")
+                logger.warning(
+                    "Failed to parse JSON from balanced braces: {}".format(str(e))
+                )
 
         # If all extraction methods fail, log the failure and return None
         logger.error("All JSON extraction methods failed")

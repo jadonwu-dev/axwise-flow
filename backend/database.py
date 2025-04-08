@@ -26,22 +26,31 @@ db_host = settings.db_host
 db_port = settings.db_port
 db_name = settings.db_name
 
-# Construct database URL
-if db_REDACTED_PASSWORD:
-    safe_REDACTED_PASSWORD = quote_plus(db_REDACTED_PASSWORD)
-    REDACTED_DATABASE_URL=***REDACTED***
-        f"postgresql://USER:PASS@HOST:PORT/DB
-    )
-else:
-    REDACTED_DATABASE_URL=***REDACTED***
+# Determine database type from environment or platform
+platform_name = os.name  # 'posix' for Mac/Linux, 'nt' for Windows
 
-# Override with full URL if provided in settings
-REDACTED_DATABASE_URL=***REDACTED*** if settings.database_url else REDACTED_DATABASE_URL
+# Get database URL from settings
+REDACTED_DATABASE_URL=***REDACTED***
 
-# If no REDACTED_DATABASE_URL provided, fallback to file-based SQLite database
-if not REDACTED_DATABASE_URL:
-    logger.warning("No REDACTED_DATABASE_URL provided, using SQLite file database")
-    REDACTED_DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+# If REDACTED_DATABASE_URL is not explicitly set or is the default PostgreSQL URL
+if (
+    not REDACTED_DATABASE_URL
+    or REDACTED_DATABASE_URL=***REDACTED*** "postgresql://postgres@localhost:5432/interview_insights"
+):
+    # On Windows, try to use PostgreSQL if credentials are provided
+    if platform_name == "nt" and db_user:
+        if db_REDACTED_PASSWORD:
+            safe_REDACTED_PASSWORD = quote_plus(db_REDACTED_PASSWORD)
+            REDACTED_DATABASE_URL=***REDACTED***
+                f"postgresql://USER:PASS@HOST:PORT/DB
+            )
+        else:
+            REDACTED_DATABASE_URL=***REDACTED***
+        logger.info(f"Using PostgreSQL database on Windows with URL: {REDACTED_DATABASE_URL}")
+    # On Mac/Linux or if no PostgreSQL credentials, use SQLite
+    else:
+        REDACTED_DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+        logger.info(f"Using SQLite database on {platform_name} platform")
 
 ***REMOVED*** engine configuration
 DB_POOL_SIZE = settings.db_pool_size
@@ -62,16 +71,35 @@ try:
         logger.info("Using SQLite database")
     else:
         # Create engine for PostgreSQL with connection pooling
-        engine = create_engine(
-            REDACTED_DATABASE_URL,
-            poolclass=QueuePool,
-            pool_size=DB_POOL_SIZE,
-            max_overflow=DB_MAX_OVERFLOW,
-            pool_timeout=DB_POOL_TIMEOUT,
-            pool_pre_ping=True,  # Verify connections before using them
-            connect_args={"application_name": "DesignAId Backend"},
-        )
-        logger.info("Using PostgreSQL database")
+        try:
+            engine = create_engine(
+                REDACTED_DATABASE_URL,
+                poolclass=QueuePool,
+                pool_size=DB_POOL_SIZE,
+                max_overflow=DB_MAX_OVERFLOW,
+                pool_timeout=DB_POOL_TIMEOUT,
+                pool_pre_ping=True,  # Verify connections before using them
+                connect_args={"application_name": "DesignAId Backend"},
+            )
+            logger.info("Using PostgreSQL database")
+        except Exception as pg_error:
+            # Specific error handling for PostgreSQL connection issues
+            error_msg = str(pg_error).lower()
+            if (
+                "role 'postgres' does not exist" in error_msg
+                or "REDACTED_PASSWORD authentication failed" in error_msg
+            ):
+                logger.warning(f"PostgreSQL authentication error: {error_msg}")
+                logger.warning(
+                    "This may be due to missing PostgreSQL role or incorrect credentials"
+                )
+                logger.warning(
+                    "On Mac/Linux, you may need to create the PostgreSQL role or use SQLite instead"
+                )
+                raise
+            else:
+                # Re-raise the original error for other PostgreSQL issues
+                raise
 
     # Test the connection with proper text() usage
     with engine.connect() as conn:
@@ -85,6 +113,9 @@ except Exception as e:
         REDACTED_DATABASE_URL=***REDACTED***  # File-based instead of in-memory
         engine = create_engine(REDACTED_DATABASE_URL, connect_args={"check_same_thread": False})
         logger.info("Successfully connected to SQLite fallback database")
+
+        # Add database type to environment for other components to access
+        os.environ["REDACTED_DATABASE_URL_TYPE"] = "sqlite"
     except Exception as fallback_error:
         logger.critical(
             f"Critical error: Failed to connect to fallback database: {str(fallback_error)}"
