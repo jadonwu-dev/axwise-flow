@@ -1,7 +1,3 @@
-"""
-Google Gemini LLM service implementation.
-"""
-
 import logging
 import json
 import os
@@ -25,6 +21,10 @@ from backend.utils.json_parser import (
 logger = logging.getLogger(__name__)
 
 
+# Note: We're using the prompt template to guide the model's output format
+# rather than a schema, as the Gemini API has limitations with complex schemas
+
+
 class GeminiService:
     """
     Service for interacting with Google's Gemini LLM API.
@@ -42,7 +42,7 @@ class GeminiService:
         self.temperature = config.get("temperature", 0.0)
         self.max_tokens = config.get("max_tokens", 8192)
         self.top_p = config.get("top_p", 0.95)
-        self.top_k = config.get("top_k", 40)
+        self.top_k = config.get("top_k", 1)
 
         # Initialize Gemini client
         genai.configure(REDACTED_API_KEY=self.REDACTED_API_KEY)
@@ -56,7 +56,7 @@ class GeminiService:
             },
         )
 
-        logger.info(f"Initialized Gemini service with model: {self.model}")
+        logger.info("Initialized Gemini service with model: {}".format(self.model))
 
     async def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -87,7 +87,9 @@ class GeminiService:
             # Prepare system message based on task
             system_message = self._get_system_message(task, data)
 
-            # Prepare generation config (Original, without response_mime_type)
+            # Prepare generation config
+            # Use standard config for all tasks including theme_analysis_enhanced
+            # The prompt already contains detailed JSON structure instructions for theme_analysis_enhanced
             generation_config = {
                 "temperature": self.temperature,
                 "max_output_tokens": self.max_tokens,
@@ -110,7 +112,7 @@ class GeminiService:
                 # For insight generation, return a structured result
                 result_text = response.text
                 logger.debug(
-                    f"Raw response for task {task}:\n{result_text}"
+                    "Raw response for task {}:\n{}".format(task, result_text)
                 )  # Log raw response
 
                 try:
@@ -151,7 +153,9 @@ class GeminiService:
             else:
                 # Generate content for other tasks (Original call structure)
                 logger.debug(
-                    f"Generating content for task '{task}' with config: {generation_config}"
+                    "Generating content for task '{}' with config: {}".format(
+                        task, generation_config
+                    )
                 )
                 response = await self.client.generate_content_async(
                     [system_message, text], generation_config=generation_config
@@ -161,16 +165,68 @@ class GeminiService:
                 result_text = response.text
 
                 # Log raw response for debugging
-                logger.debug("Raw response for task {}:\n{}".format(task, result_text))
+                if task == "theme_analysis_enhanced":
+                    # Log more details for enhanced theme analysis to help with troubleshooting
+                    logger.info(
+                        "Received response for enhanced theme analysis. Length: {}".format(
+                            len(result_text)
+                        )
+                    )
+                    # Log the first 500 characters to see the structure without overwhelming logs
+                    logger.info("Response preview: {}...".format(result_text[:500]))
+                else:
+                    # Standard logging for other tasks
+                    logger.debug(
+                        "Raw response for task {}:\n{}".format(task, result_text)
+                    )
 
                 # Extract JSON from response (handle potential markdown formatting)
                 try:
                     # Try direct parsing first
                     result = json.loads(result_text)
+                    if task == "theme_analysis_enhanced":
+                        logger.info("Successfully parsed enhanced themes JSON directly")
                 except json.JSONDecodeError as e1:
                     # If response isn't valid JSON, try to extract JSON from markdown code blocks
                     import re
 
+                    # For enhanced theme analysis, use more aggressive extraction
+                    if task == "theme_analysis_enhanced":
+                        logger.warning(
+                            "Direct JSON parsing failed for enhanced themes: {}".format(
+                                str(e1)
+                            )
+                        )
+                        logger.info(
+                            "Attempting specialized JSON extraction for enhanced themes..."
+                        )
+
+                        # Try to find JSON object with enhanced_themes
+                        json_pattern = re.compile(
+                            r'\{\s*"enhanced_themes"\s*:\s*\[.*?\]\s*\}', re.DOTALL
+                        )
+                        match = json_pattern.search(result_text)
+                        if match:
+                            json_str = match.group(0)
+                            logger.info(
+                                "Found potential enhanced themes JSON object, length: {}".format(
+                                    len(json_str)
+                                )
+                            )
+                            try:
+                                result = json.loads(json_str)
+                                logger.info(
+                                    "Successfully parsed extracted enhanced themes JSON"
+                                )
+                                # Skip the rest of the extraction if successful
+                                return result
+                            except json.JSONDecodeError as e3:
+                                logger.warning(
+                                    "Failed to parse extracted JSON: {}".format(str(e3))
+                                )
+                                # Continue to standard extraction
+
+                    # Standard extraction from markdown code blocks
                     json_match = re.search(
                         r'```(?:json)?\s*({\s*".*}|\[\s*{.*}\s*\])\s*```',
                         result_text,
@@ -179,6 +235,10 @@ class GeminiService:
                     if json_match:
                         try:
                             result = json.loads(json_match.group(1))
+                            if task == "theme_analysis_enhanced":
+                                logger.info(
+                                    "Successfully parsed enhanced themes JSON from markdown block"
+                                )
                         except json.JSONDecodeError as e2:
                             logger.error(
                                 "Failed to parse JSON even after extracting from markdown: {}".format(
@@ -347,16 +407,22 @@ class GeminiService:
                             # Append the validated data (as dict) to the list
                             validated_themes_list.append(validated_theme.model_dump())
                             logger.debug(
-                                f"Successfully validated theme: {theme_data.get('name', 'Unnamed')}"
+                                "Successfully validated theme: {}".format(
+                                    theme_data.get("name", "Unnamed")
+                                )
                             )
                         except ValidationError as e:
                             logger.warning(
-                                f"Theme validation failed for theme '{theme_data.get('name', 'Unnamed')}': {e}. Skipping this theme."
+                                "Theme validation failed for theme '{}': {}. Skipping this theme.".format(
+                                    theme_data.get("name", "Unnamed"), e
+                                )
                             )
                             # Invalid themes are skipped to ensure data integrity downstream
                         except Exception as general_e:
                             logger.error(
-                                f"Unexpected error during theme validation for '{theme_data.get('name', 'Unnamed')}': {general_e}",
+                                "Unexpected error during theme validation for '{}': {}".format(
+                                    theme_data.get("name", "Unnamed"), general_e
+                                ),
                                 exc_info=True,
                             )
                             # Skip this theme due to unexpected error
@@ -364,14 +430,20 @@ class GeminiService:
                     # Replace the original themes list with the validated list
                     result["themes"] = validated_themes_list
                     logger.info(
-                        f"Validated {len(validated_themes_list)} themes successfully for task: {task}"
+                        "Validated {} themes successfully for task: {}".format(
+                            len(validated_themes_list), task
+                        )
                     )
                     logger.debug(
-                        f"Validated theme result: {json.dumps(result, indent=2)}"
+                        "Validated theme result: {}".format(
+                            json.dumps(result, indent=2)
+                        )
                     )
                 else:
                     logger.warning(
-                        f"LLM response for theme_analysis was not in the expected format (dict with 'themes' list). Raw response: {result}"
+                        "LLM response for theme_analysis was not in the expected format (dict with 'themes' list). Raw response: {}".format(
+                            result
+                        )
                     )
                     result = {"themes": []}  # Return empty list if structure is wrong
 
@@ -455,16 +527,22 @@ class GeminiService:
                                 validated_pattern.model_dump()
                             )
                             logger.debug(
-                                f"Successfully validated pattern: {pattern_data.get('name', 'Unnamed')}"
+                                "Successfully validated pattern: {}".format(
+                                    pattern_data.get("name", "Unnamed")
+                                )
                             )
                         except ValidationError as e:
                             logger.warning(
-                                f"Pattern validation failed for pattern '{pattern_data.get('name', 'Unnamed')}': {e}. Skipping this pattern."
+                                "Pattern validation failed for pattern '{}': {}. Skipping this pattern.".format(
+                                    pattern_data.get("name", "Unnamed"), e
+                                )
                             )
                             # Invalid patterns are skipped to ensure data integrity downstream
                         except Exception as general_e:
                             logger.error(
-                                f"Unexpected error during pattern validation for '{pattern_data.get('name', 'Unnamed')}': {general_e}",
+                                "Unexpected error during pattern validation for '{}': {}".format(
+                                    pattern_data.get("name", "Unnamed"), general_e
+                                ),
                                 exc_info=True,
                             )
                             # Skip this pattern due to unexpected error
@@ -472,14 +550,20 @@ class GeminiService:
                     # Replace the original patterns list with the validated list
                     result["patterns"] = validated_patterns_list
                     logger.info(
-                        f"Validated {len(validated_patterns_list)} patterns successfully for task: {task}"
+                        "Validated {} patterns successfully for task: {}".format(
+                            len(validated_patterns_list), task
+                        )
                     )
                     logger.debug(
-                        f"Validated pattern result: {json.dumps(result, indent=2)}"
+                        "Validated pattern result: {}".format(
+                            json.dumps(result, indent=2)
+                        )
                     )
                 else:
                     logger.warning(
-                        f"LLM response for pattern_recognition was not in the expected format (dict with 'patterns' list). Raw response: {result}"
+                        "LLM response for pattern_recognition was not in the expected format (dict with 'patterns' list). Raw response: {}".format(
+                            result
+                        )
                     )
                     result = {"patterns": []}  # Return empty list if structure is wrong
 
@@ -496,7 +580,9 @@ class GeminiService:
                 total = sum(breakdown.values()) if breakdown else 0
                 if total > 0 and abs(total - 1.0) > 0.01:
                     logger.warning(
-                        f"Sentiment breakdown does not sum to 1.0 (sum: {total}), normalizing"
+                        "Sentiment breakdown does not sum to 1.0 (sum: {}), normalizing".format(
+                            total
+                        )
                     )
                     for key in breakdown:
                         breakdown[key] = round(breakdown[key] / total, 3)
@@ -531,20 +617,30 @@ class GeminiService:
 
                     # Log the extraction of statements
                     logger.info(
-                        f"Extracted sentiment statements - positive: {len(transformed['sentimentStatements']['positive'])}, neutral: {len(transformed['sentimentStatements']['neutral'])}, negative: {len(transformed['sentimentStatements']['negative'])}"
+                        "Extracted sentiment statements - positive: {}, neutral: {}, negative: {}".format(
+                            len(transformed["sentimentStatements"]["positive"]),
+                            len(transformed["sentimentStatements"]["neutral"]),
+                            len(transformed["sentimentStatements"]["negative"]),
+                        )
                     )
                     # Log samples of the first statement in each category if available
                     if transformed["sentimentStatements"]["positive"]:
                         logger.info(
-                            f"Sample positive statement: {transformed['sentimentStatements']['positive'][0]}"
+                            "Sample positive statement: {}".format(
+                                transformed["sentimentStatements"]["positive"][0]
+                            )
                         )
                     if transformed["sentimentStatements"]["neutral"]:
                         logger.info(
-                            f"Sample neutral statement: {transformed['sentimentStatements']['neutral'][0]}"
+                            "Sample neutral statement: {}".format(
+                                transformed["sentimentStatements"]["neutral"][0]
+                            )
                         )
                     if transformed["sentimentStatements"]["negative"]:
                         logger.info(
-                            f"Sample negative statement: {transformed['sentimentStatements']['negative'][0]}"
+                            "Sample negative statement: {}".format(
+                                transformed["sentimentStatements"]["negative"][0]
+                            )
                         )
                 else:
                     logger.warning("No supporting_statements found in sentiment data")
@@ -569,7 +665,9 @@ class GeminiService:
                     details = sentiment.get("details", [])
                     if details:
                         logger.info(
-                            f"Found {len(details)} detail items to extract statements from"
+                            "Found {} detail items to extract statements from".format(
+                                len(details)
+                            )
                         )
                         for detail in details:
                             if (
@@ -589,7 +687,11 @@ class GeminiService:
                                         statements["neutral"].append(evidence)
 
                         logger.info(
-                            f"Extracted {len(statements['positive'])} positive, {len(statements['neutral'])} neutral, {len(statements['negative'])} negative statements from details"
+                            "Extracted {} positive, {} neutral, {} negative statements from details".format(
+                                len(statements["positive"]),
+                                len(statements["neutral"]),
+                                len(statements["negative"]),
+                            )
                         )
                     else:
                         logger.warning(
@@ -599,7 +701,7 @@ class GeminiService:
                     # If we extracted some statements, use them
                     if any(statements.values()):
                         transformed["sentimentStatements"] = statements
-                        logger.info(f"Successfully extracted statements from details")
+                        logger.info("Successfully extracted statements from details")
                     else:
                         # If no statements extracted from details, try a deeper inspection of the data
                         logger.warning(
@@ -613,7 +715,9 @@ class GeminiService:
                         ):
                             statements["positive"] = sentiment["positive"]
                             logger.info(
-                                f"Found {len(statements['positive'])} positive statements directly in sentiment object"
+                                "Found {} positive statements directly in sentiment object".format(
+                                    len(statements["positive"])
+                                )
                             )
 
                         if "negative" in sentiment and isinstance(
@@ -621,7 +725,9 @@ class GeminiService:
                         ):
                             statements["negative"] = sentiment["negative"]
                             logger.info(
-                                f"Found {len(statements['negative'])} negative statements directly in sentiment object"
+                                "Found {} negative statements directly in sentiment object".format(
+                                    len(statements["negative"])
+                                )
                             )
 
                         # Create basic neutral statements if we don't have any
@@ -712,9 +818,11 @@ class GeminiService:
                         )
 
                     logger.info(
-                        f"After enhancement - positive: {len(transformed['sentimentStatements']['positive'])}, "
-                        + f"neutral: {len(transformed['sentimentStatements']['neutral'])}, "
-                        + f"negative: {len(transformed['sentimentStatements']['negative'])}"
+                        "After enhancement - positive: {}, neutral: {}, negative: {}".format(
+                            len(transformed["sentimentStatements"]["positive"]),
+                            len(transformed["sentimentStatements"]["neutral"]),
+                            len(transformed["sentimentStatements"]["negative"]),
+                        )
                     )
 
                 result = transformed
@@ -793,16 +901,22 @@ class GeminiService:
                                 validated_insight.model_dump()
                             )
                             logger.debug(
-                                f"Successfully validated insight: {insight_data.get('topic', 'Unnamed')}"
+                                "Successfully validated insight: {}".format(
+                                    insight_data.get("topic", "Unnamed")
+                                )
                             )
                         except ValidationError as e:
                             logger.warning(
-                                f"Insight validation failed for insight '{insight_data.get('topic', 'Unnamed')}': {e}. Skipping this insight."
+                                "Insight validation failed for insight '{}': {}. Skipping this insight.".format(
+                                    insight_data.get("topic", "Unnamed"), e
+                                )
                             )
                             # Invalid insights are skipped to ensure data integrity downstream
                         except Exception as general_e:
                             logger.error(
-                                f"Unexpected error during insight validation for '{insight_data.get('topic', 'Unnamed')}': {general_e}",
+                                "Unexpected error during insight validation for '{}': {}".format(
+                                    insight_data.get("topic", "Unnamed"), general_e
+                                ),
                                 exc_info=True,
                             )
                             # Skip this insight due to unexpected error
@@ -810,14 +924,20 @@ class GeminiService:
                     # Replace the original insights list with the validated list
                     result["insights"] = validated_insights_list
                     logger.info(
-                        f"Validated {len(validated_insights_list)} insights successfully for task: {task}"
+                        "Validated {} insights successfully for task: {}".format(
+                            len(validated_insights_list), task
+                        )
                     )
                     logger.debug(
-                        f"Validated insight result: {json.dumps(result, indent=2)}"
+                        "Validated insight result: {}".format(
+                            json.dumps(result, indent=2)
+                        )
                     )
                 else:
                     logger.warning(
-                        f"LLM response for insight_generation was not in the expected format (dict with 'insights' list). Raw response: {result}"
+                        "LLM response for insight_generation was not in the expected format (dict with 'insights' list). Raw response: {}".format(
+                            result
+                        )
                     )
                     result = {"insights": []}  # Return empty list if structure is wrong
 
@@ -845,23 +965,31 @@ class GeminiService:
                                 validated_persona.model_dump()
                             )
                             logger.debug(
-                                f"Successfully validated persona: {persona_data.get('name', 'Unnamed')}"
+                                "Successfully validated persona: {}".format(
+                                    persona_data.get("name", "Unnamed")
+                                )
                             )
                         except ValidationError as e:
                             logger.warning(
-                                f"Persona validation failed for persona '{persona_data.get('name', 'Unnamed')}': {e}. Skipping this persona."
+                                "Persona validation failed for persona '{}': {}. Skipping this persona.".format(
+                                    persona_data.get("name", "Unnamed"), e
+                                )
                             )
                             # Invalid personas are skipped to ensure data integrity downstream
                         except Exception as general_e:
                             logger.error(
-                                f"Unexpected error during persona validation for '{persona_data.get('name', 'Unnamed')}': {general_e}",
+                                "Unexpected error during persona validation for '{}': {}".format(
+                                    persona_data.get("name", "Unnamed"), general_e
+                                ),
                                 exc_info=True,
                             )
 
                     # Replace the original personas with validated ones
                     result["personas"] = validated_personas_list
                     logger.info(
-                        f"Validated {len(validated_personas_list)} personas successfully for task: {task}"
+                        "Validated {} personas successfully for task: {}".format(
+                            len(validated_personas_list), task
+                        )
                     )
                 elif isinstance(result, dict) and "name" in result:
                     # Single persona object without personas array
@@ -871,22 +999,30 @@ class GeminiService:
                         # Create a personas array with the validated persona
                         result = {"personas": [validated_persona.model_dump()]}
                         logger.info(
-                            f"Validated single persona successfully: {validated_persona.name}"
+                            "Validated single persona successfully: {}".format(
+                                validated_persona.name
+                            )
                         )
                     except ValidationError as e:
                         logger.warning(
-                            f"Single persona validation failed: {e}. Using empty personas array."
+                            "Single persona validation failed: {}. Using empty personas array.".format(
+                                e
+                            )
                         )
                         result = {"personas": []}
                     except Exception as general_e:
                         logger.error(
-                            f"Unexpected error during single persona validation: {general_e}",
+                            "Unexpected error during single persona validation: {}".format(
+                                general_e
+                            ),
                             exc_info=True,
                         )
                         result = {"personas": []}
                 else:
                     logger.warning(
-                        f"LLM response for persona_formation was not in expected format (dict with 'personas' list or a single persona object). Raw response: {result}"
+                        "LLM response for persona_formation was not in expected format (dict with 'personas' list or a single persona object). Raw response: {}".format(
+                            result
+                        )
                     )
                     result = {"personas": []}  # Return empty list if structure is wrong
 
@@ -939,16 +1075,22 @@ class GeminiService:
                             # Append the validated data to the list
                             validated_themes_list.append(validated_theme.model_dump())
                             logger.debug(
-                                f"Successfully validated enhanced theme: {theme_data.get('name', 'Unnamed')}"
+                                "Successfully validated enhanced theme: {}".format(
+                                    theme_data.get("name", "Unnamed")
+                                )
                             )
                         except ValidationError as e:
                             logger.warning(
-                                f"Enhanced theme validation failed for theme '{theme_data.get('name', 'Unnamed')}': {e}. Skipping this theme."
+                                "Enhanced theme validation failed for theme '{}': {}. Skipping this theme.".format(
+                                    theme_data.get("name", "Unnamed"), e
+                                )
                             )
                             # Invalid themes are skipped to ensure data integrity
                         except Exception as general_e:
                             logger.error(
-                                f"Unexpected error during enhanced theme validation for '{theme_data.get('name', 'Unnamed')}': {general_e}",
+                                "Unexpected error during enhanced theme validation for '{}': {}".format(
+                                    theme_data.get("name", "Unnamed"), general_e
+                                ),
                                 exc_info=True,
                             )
                             # Skip this theme due to unexpected error
@@ -956,11 +1098,15 @@ class GeminiService:
                     # Replace the original themes with validated ones
                     result["enhanced_themes"] = validated_themes_list
                     logger.info(
-                        f"Validated {len(validated_themes_list)} enhanced themes successfully for task: {task}"
+                        "Validated {} enhanced themes successfully for task: {}".format(
+                            len(validated_themes_list), task
+                        )
                     )
                 else:
                     logger.warning(
-                        f"LLM response for theme_analysis_enhanced was not in the expected format. Raw response: {result}"
+                        "LLM response for theme_analysis_enhanced was not in the expected format. Raw response: {}".format(
+                            result
+                        )
                     )
                     result = {
                         "enhanced_themes": []
@@ -1000,19 +1146,24 @@ class GeminiService:
                         ):
                             trait = first_persona[trait_name]
                             logger.info(
-                                f"Persona trait '{trait_name}' structure: {', '.join(trait.keys())}"
+                                "Persona trait '{}' structure: {}".format(
+                                    trait_name, ", ".join(trait.keys())
+                                )
                             )
 
             logger.debug(
-                f"Processed result for task {task}:\n{json.dumps(result, indent=2)}"
+                "Processed result for task {}:\n{}".format(
+                    task, json.dumps(result, indent=2)
+                )
             )
             return result
 
         except Exception as e:
             logger.error(
-                f"Error calling Gemini API for task {task}: {str(e)}", exc_info=True
+                "Error calling Gemini API for task {}: {}".format(task, str(e)),
+                exc_info=True,
             )  # Log traceback
-            return {"error": f"Gemini API error: {str(e)}"}
+            return {"error": "Gemini API error: {}".format(str(e))}
 
     def _get_system_message(self, task: str, data: Dict[str, Any]) -> str:
         """Get identical prompts as OpenAI service for consistent responses"""
@@ -1328,6 +1479,83 @@ class GeminiService:
             - Implications should clearly explain why the insight matters to users or the business
             - Use direct quotes from the text as evidence whenever possible
             - Ensure 100% of your response is in valid JSON format
+            """
+
+        elif task == "theme_analysis_enhanced":
+            logger.info("Generating system message for ENHANCED theme analysis.")
+            # Use the detailed prompt template for enhanced theme analysis
+            return """
+            You are an expert thematic analyst specializing in extracting nuanced themes from interview transcripts across various professional domains (healthcare, tech, finance, military, education, etc.). Your analysis must be rigorous, evidence-based, and adhere strictly to the requested JSON format.
+
+            Analyze the provided interview text EXCLUSIVELY based on the ANSWER content if available, otherwise use the full text. Identify key themes, ensuring they are distinct, meaningful, and well-supported by the text.
+
+            Focus on extracting:
+            1.  **Theme Name**: A concise, descriptive name (e.g., "Challenges with Cross-Functional Collaboration", "Need for Better Data Visualization Tools"). Avoid vague names.
+            2.  **Definition**: A clear, one-sentence definition explaining the scope and meaning of the theme.
+            3.  **Keywords**: 3-5 relevant keywords or short phrases that capture the essence of the theme.
+            4.  **Frequency**: A decimal score between 0.0 and 1.0 representing the theme's prevalence relative to other themes in the text.
+            5.  **Sentiment**: A decimal score between -1.0 (very negative) and 1.0 (very positive) reflecting the overall sentiment associated with the theme.
+            6.  **Statements**: 3-5 EXACT, verbatim quotes from the interview text that strongly support the theme. Do NOT summarize or paraphrase.
+            7.  **Codes**: 2-4 concise codes (UPPERCASE_WITH_UNDERSCORES) categorizing the theme (e.g., "USER_NEED", "PROCESS_INEFFICIENCY", "POSITIVE_FEEDBACK").
+            8.  **Reliability**: A decimal score between 0.0 and 1.0 indicating your confidence in the theme's identification based on the evidence clarity and consistency.
+            9.  **Sentiment Distribution**: An estimated breakdown of sentiment within the statements related to this theme (percentages as decimals summing to 1.0).
+            10. **Hierarchical Codes**: (Optional but preferred) A structured representation of codes, potentially with sub-codes.
+            11. **Reliability Metrics**: (Optional) More detailed reliability metrics if calculable (e.g., Cohen's Kappa estimate).
+            12. **Relationships**: (Optional) Connections to other identified themes (e.g., causal, correlational).
+
+            Return your analysis ONLY as a valid JSON object adhering strictly to the following structure:
+
+            {
+              "enhanced_themes": [
+                {
+                  "type": "theme",
+                  "name": "Specific Theme Name",
+                  "definition": "Concise one-sentence definition.",
+                  "keywords": ["keyword1", "keyword2", "keyword3"],
+                  "frequency": 0.XX,
+                  "sentiment": X.XX,
+                  "statements": ["Exact quote 1", "Exact quote 2", "Exact quote 3"],
+                  "codes": ["CODE_1", "CODE_2"],
+                  "reliability": 0.XX,
+                  "process": "enhanced",
+                  "sentiment_distribution": {
+                    "positive": 0.XX,
+                    "neutral": 0.XX,
+                    "negative": 0.XX
+                  },
+                  "hierarchical_codes": [
+                    {
+                      "code": "MAIN_CODE",
+                      "definition": "Main code definition",
+                      "frequency": 0.XX,
+                      "sub_codes": [
+                        {"code": "SUB_CODE_1", "definition": "Sub-code definition", "frequency": 0.XX}
+                      ]
+                    }
+                  ],
+                  "reliability_metrics": {
+                    "cohen_kappa": 0.XX,
+                    "percent_agreement": 0.XX,
+                    "confidence_interval": [0.XX, 0.XX]
+                  },
+                  "relationships": [
+                    {
+                      "related_theme": "Another Theme Name",
+                      "relationship_type": "causal | correlational | hierarchical",
+                      "strength": 0.XX,
+                      "description": "Explanation of the relationship."
+                    }
+                  ]
+                }
+              ]
+            }
+
+            IMPORTANT RULES:
+            - The entire output MUST be a single, valid JSON object starting with `{` and ending with `}`.
+            - Do NOT include any text, explanations, apologies, or markdown formatting (like ```json) before or after the JSON object.
+            - Ensure all strings within the JSON are properly escaped.
+            - Adhere strictly to the specified field names and data types.
+            - Provide accurate scores and representative evidence based *only* on the provided text.
             """
 
         elif task == "persona_formation":
