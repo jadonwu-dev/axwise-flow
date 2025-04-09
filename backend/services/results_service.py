@@ -593,59 +593,102 @@ class ResultsService:
         # Create new persona record with all available fields
         # Make sure we only use fields that actually exist in the SQLAlchemy model
         try:
-            new_persona = Persona(
-                result_id=result_id,
-                name=name,
-                description=description,
-                archetype=archetype,
-                # Store both new and legacy fields
-                demographics=json.dumps(demographics),
-                goals_and_motivations=json.dumps(goals),
-                skills_and_expertise=json.dumps(skills),
-                workflow_and_environment=json.dumps(workflow),
-                challenges_and_frustrations=json.dumps(pain_points_value),
-                needs_and_desires=json.dumps(needs),
-                technology_and_tools=json.dumps(tools),
-                attitude_towards_research=json.dumps(analysis_approach_value),
-                attitude_towards_ai=json.dumps(ai_attitude),
-                key_quotes=json.dumps(quotes),
-                # Legacy fields
-                role_context=json.dumps(demographics),
-                key_responsibilities=json.dumps(goals),
-                tools_used=json.dumps(tools),
-                collaboration_style=json.dumps(collab_style_value),
-                analysis_approach=json.dumps(analysis_approach_value),
-                pain_points=json.dumps(pain_points_value),
-                # Overall information
-                patterns=json.dumps(patterns),
-                confidence=confidence,  # Use the float directly
-                overall_confidence=confidence,  # Store in both fields
-                evidence=json.dumps(evidence),
-                supporting_evidence_summary=json.dumps(evidence),
-                persona_metadata=json.dumps(metadata),
-            )
+            # Create a dictionary of fields to initialize the Persona object
+            # This allows us to dynamically include or exclude fields based on what's available
+            persona_fields = {
+                "result_id": result_id,
+                "name": name,
+                "description": description,
+                # Legacy fields that we know exist in all versions
+                "role_context": json.dumps(demographics),
+                "key_responsibilities": json.dumps(goals),
+                "tools_used": json.dumps(tools),
+                "collaboration_style": json.dumps(collab_style_value),
+                "analysis_approach": json.dumps(analysis_approach_value),
+                "pain_points": json.dumps(pain_points_value),
+                "patterns": json.dumps(patterns),
+                "confidence": confidence,  # Use the float directly
+                "evidence": json.dumps(evidence),
+                "persona_metadata": json.dumps(metadata),
+            }
+
+            # Try to add newer fields if they exist in the model
+            # We'll use a try/except approach for each field to handle missing columns
+            try:
+                # Check if a test persona with this field can be created
+                test_persona = Persona(archetype="test")
+                # If no exception, add the field to our dictionary
+                persona_fields["archetype"] = archetype
+            except Exception:
+                logger.info("'archetype' column not found in Persona model, skipping")
+
+            # Try adding other new fields using the same approach
+            field_mappings = {
+                "demographics": demographics,
+                "goals_and_motivations": goals,
+                "skills_and_expertise": skills,
+                "workflow_and_environment": workflow,
+                "challenges_and_frustrations": pain_points_value,
+                "needs_and_desires": needs,
+                "technology_and_tools": tools,
+                "attitude_towards_research": analysis_approach_value,
+                "attitude_towards_ai": ai_attitude,
+                "key_quotes": quotes,
+                "overall_confidence": confidence,
+                "supporting_evidence_summary": evidence,
+            }
+
+            # Try each field and add it if it exists
+            for field_name, field_value in field_mappings.items():
+                try:
+                    # Create a test persona with just this field
+                    test_kwargs = {
+                        field_name: (
+                            field_value
+                            if isinstance(field_value, (int, float))
+                            else json.dumps(field_value)
+                        )
+                    }
+                    test_persona = Persona(**test_kwargs)
+                    # If no exception, add the field to our dictionary
+                    persona_fields[field_name] = (
+                        field_value
+                        if isinstance(field_value, (int, float))
+                        else json.dumps(field_value)
+                    )
+                except Exception:
+                    logger.info(
+                        f"'{field_name}' column not found in Persona model, skipping"
+                    )
+
+            # Create the Persona object with the fields we've determined exist
+            new_persona = Persona(**persona_fields)
         except TypeError as e:
             # If we get a TypeError, it's likely because we're trying to use a field that doesn't exist
             # Log the error and try a more conservative approach
             logger.error(f"Error creating Persona with all fields: {str(e)}")
 
             # Try with only the fields we know exist in all versions of the model
-            new_persona = Persona(
-                result_id=result_id,
-                name=name,
-                description=description,
+            # Create a dictionary of fields to initialize the Persona object
+            persona_fields = {
+                "result_id": result_id,
+                "name": name,
+                "description": description,
                 # Store only essential fields that we know exist
-                role_context=json.dumps(demographics),
-                key_responsibilities=json.dumps(goals),
-                tools_used=json.dumps(tools),
-                collaboration_style=json.dumps(collab_style_value),
-                analysis_approach=json.dumps(analysis_approach_value),
-                pain_points=json.dumps(pain_points_value),
-                patterns=json.dumps(patterns),
-                confidence=confidence,  # Use the float directly
-                evidence=json.dumps(evidence),
-                persona_metadata=json.dumps(metadata),
-            )
+                "role_context": json.dumps(demographics),
+                "key_responsibilities": json.dumps(goals),
+                "tools_used": json.dumps(tools),
+                "collaboration_style": json.dumps(collab_style_value),
+                "analysis_approach": json.dumps(analysis_approach_value),
+                "pain_points": json.dumps(pain_points_value),
+                "patterns": json.dumps(patterns),
+                "confidence": confidence,  # Use the float directly
+                "evidence": json.dumps(evidence),
+                "persona_metadata": json.dumps(metadata),
+            }
+
+            # Create the Persona object with the fields we know exist
+            new_persona = Persona(**persona_fields)
 
         # Add to database
         try:
