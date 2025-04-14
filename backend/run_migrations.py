@@ -19,10 +19,13 @@ if env_file.exists():
 else:
     print(f"Warning: .env file not found at {env_file}")
 
-# Set the REDACTED_DATABASE_URL environment variable explicitly to PostgreSQL
-DATABASE_URL=***REDACTED***
-print(f"Using database URL: {database_url}")
-os.environ["REDACTED_DATABASE_URL"] = database_url
+# Import the REDACTED_DATABASE_URL from the same source as the application
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from database import REDACTED_DATABASE_URL
+
+# Use the same REDACTED_DATABASE_URL as the application
+print(f"Using database URL: {REDACTED_DATABASE_URL}")
+os.environ["REDACTED_DATABASE_URL"] = REDACTED_DATABASE_URL
 
 
 # Run Alembic command

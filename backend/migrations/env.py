@@ -18,31 +18,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-# Import database models
-from database import Base
-
-# Import load_env to load environment variables
-try:
-    from load_env import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# Import database models and database URL from the same source as the application
+from database import Base, REDACTED_DATABASE_URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override sqlalchemy.url with environment variable if available
-DATABASE_URL=***REDACTED***
-
-# Check if we should use SQLite
-use_sqlite = os.getenv("ALEMBIC_USE_SQLITE", "false").lower() == "true"
-if use_sqlite:
-    DATABASE_URL=***REDACTED*** + str(project_root / "app.db")
-
-# Set the sqlalchemy.url in the config
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+# Override sqlalchemy.url with the same REDACTED_DATABASE_URL used by the application
+config.set_main_option("sqlalchemy.url", REDACTED_DATABASE_URL)
+print(f"Configured migrations for {REDACTED_DATABASE_URL.split('://', 1)[0]} database")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -60,6 +45,7 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -88,6 +74,7 @@ def run_migrations_offline() -> None:
         logger.error(f"Error during offline migrations: {str(e)}")
         raise
 
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -101,7 +88,7 @@ def run_migrations_online() -> None:
         logger.info(f"Using database URL: {database_url}")
 
         # Check if using SQLite
-        is_sqlite = database_url.startswith('sqlite:')
+        is_sqlite = database_url.startswith("sqlite:")
 
         if is_sqlite:
             # Special handling for SQLite
@@ -124,7 +111,7 @@ def run_migrations_online() -> None:
                 target_metadata=target_metadata,
                 # These options help with SQLite foreign key support
                 render_as_batch=is_sqlite,
-                compare_type=True
+                compare_type=True,
             )
 
             with context.begin_transaction():
@@ -133,6 +120,7 @@ def run_migrations_online() -> None:
     except Exception as e:
         logger.error(f"Error during online migrations: {str(e)}")
         raise
+
 
 if context.is_offline_mode():
     run_migrations_offline()
