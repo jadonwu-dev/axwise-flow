@@ -1,6 +1,6 @@
 /**
  * Server Utilities for Data Transformation
- * 
+ *
  * These utilities help optimize data transformation on the server
  * before sending to client components.
  */
@@ -15,7 +15,7 @@ export function preprocessThemeData(analysisData: DetailedAnalysisResult | null)
   if (!analysisData || !analysisData.themes) {
     return [];
   }
-  
+
   return analysisData.themes.map((theme: any) => ({
     id: theme.id?.toString() || '',
     name: theme.name || '',
@@ -24,7 +24,7 @@ export function preprocessThemeData(analysisData: DetailedAnalysisResult | null)
     sentiment: theme.sentiment,
     keywords: theme.keywords || [],
     statements: theme.statements || [],
-    examples: theme.examples || [],
+    // examples field removed
     definition: theme.definition || '',
     reliability: theme.reliability,
     process: theme.process,
@@ -50,7 +50,7 @@ export function prepareVisualizationData(analysisData: DetailedAnalysisResult | 
       }
     };
   }
-  
+
   return {
     themes: preprocessThemeData(analysisData),
     patterns: analysisData.patterns || [],
@@ -74,11 +74,11 @@ export async function fetchAnalysisWithOptimizedData(analysisId: string) {
   if (typeof window !== 'undefined') {
     throw new Error('This function should only be called on the server');
   }
-  
+
   // In the future, this will directly access the API server-side
   // For now, we're using a placeholder to document the pattern
   const apiClient = await import('@/lib/apiClient').then(mod => mod.apiClient);
   const analysisData = await apiClient.getAnalysisById(analysisId);
-  
+
   return prepareVisualizationData(analysisData);
-} 
+}

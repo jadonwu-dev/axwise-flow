@@ -211,12 +211,6 @@ export function ThemeChart({ themes }: ThemeChartProps) {
                                   <p className="italic text-muted-foreground text-sm">&quot;{statement}&quot;</p>
                                 </li>
                               ))}
-                              {!theme.statements && theme.examples && theme.examples.map((example, i) => (
-                                <li key={`${theme.id || theme.name}-example-${i}`} className="relative bg-muted/30 p-3 rounded-md">
-                                  <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                                  <p className="italic text-muted-foreground text-sm">&quot;{example}&quot;</p>
-                                </li>
-                              ))}
                             </ul>
                           ) : (
                             <div className="p-2 bg-muted/50 rounded-md">

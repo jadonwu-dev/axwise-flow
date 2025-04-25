@@ -794,12 +794,12 @@ class ResultsService:
 
         # Process patterns to supplement the statements
         for pattern in patterns:
-            # Skip patterns without examples or sentiment
-            if not pattern.get("examples") and not pattern.get("evidence"):
+            # Skip patterns without evidence
+            if not pattern.get("evidence"):
                 continue
 
             sentiment_score = pattern.get("sentiment", 0)
-            statements = pattern.get("examples", []) or pattern.get("evidence", [])
+            statements = pattern.get("evidence", [])
 
             # Use all statements from each pattern, not just 1
             for statement in statements:

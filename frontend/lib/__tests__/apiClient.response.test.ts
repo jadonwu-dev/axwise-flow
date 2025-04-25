@@ -35,10 +35,10 @@ vi.mock('axios', () => {
 
 describe('API Client - Response Format Handling', () => {
   let mockAxiosClient: any; // Declare at the describe level
-  
+
   beforeEach(() => {
     vi.resetAllMocks();
-    
+
     // Setup default mock axios client
     mockAxiosClient = {
       interceptors: {
@@ -55,14 +55,14 @@ describe('API Client - Response Format Handling', () => {
         }
       }
     };
-    
+
     (axios.create as jest.Mock).mockReturnValue(mockAxiosClient);
   });
-  
+
   afterEach(() => {
     vi.clearAllMocks();
   });
-  
+
   describe('Theme Structure Handling', () => {
     it('handles standard theme format', async () => {
       // Setup standard theme format with proper Theme type
@@ -74,17 +74,17 @@ describe('API Client - Response Format Handling', () => {
             createdAt: "2023-04-20T12:00:00Z",
             fileName: "interview.txt",
             themes: [
-              { 
-                id: 1, 
-                name: "Customer Service", 
-                frequency: 5, 
+              {
+                id: 1,
+                name: "Customer Service",
+                frequency: 5,
                 keywords: ["service", "helpful"],
                 statements: ["Great customer service experience"]
               },
-              { 
-                id: 2, 
-                name: "Product Quality", 
-                frequency: 3, 
+              {
+                id: 2,
+                name: "Product Quality",
+                frequency: 3,
                 keywords: ["quality", "durable"],
                 statements: ["Product feels durable"]
               }
@@ -92,18 +92,18 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(standardThemeResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.themes).toHaveLength(2);
       expect(result.themes[0].name).toBe("Customer Service");
       expect(result.themes[0].frequency).toBe(5);
       expect(result.themes[0].statements).toContain("Great customer service experience");
     });
-    
+
     it('handles alternative theme format with different properties', async () => {
       // Setup alternative theme format (from older API version)
       const alternativeThemeResponse = {
@@ -114,14 +114,14 @@ describe('API Client - Response Format Handling', () => {
             createdAt: "2023-04-20T12:00:00Z",
             fileName: "interview.txt",
             themes: [
-              { 
+              {
                 id: 1,
                 theme: "Customer Service", // Non-standard property
                 frequency: 5,
                 keywords: ["support"],
                 examples: ["Great customer service experience"] // Using examples instead of statements
               },
-              { 
+              {
                 id: 2,
                 theme: "Product Quality", // Non-standard property
                 frequency: 3,
@@ -132,19 +132,19 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(alternativeThemeResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.themes).toHaveLength(2);
       // Should normalize alternative format to standard format
       expect(result.themes[0].name).toBeDefined();
       expect(result.themes[0].frequency).toBeDefined();
-      expect(result.themes[0].examples).toBeDefined(); // Examples is valid from API type
+      expect(result.themes[0].statements).toBeDefined(); // Statements should be defined
     });
-    
+
     it('handles missing theme properties gracefully', async () => {
       // Setup response with missing theme properties
       const incompleteThemeResponse = {
@@ -155,12 +155,12 @@ describe('API Client - Response Format Handling', () => {
             createdAt: "2023-04-20T12:00:00Z",
             fileName: "interview.txt",
             themes: [
-              { 
+              {
                 id: 1,
                 name: "Customer Service"
                 // Missing frequency and keywords
               },
-              { 
+              {
                 id: 2
                 // Missing name and other properties
               }
@@ -168,23 +168,23 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(incompleteThemeResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.themes).toHaveLength(2);
       expect(result.themes[0].name).toBe("Customer Service");
       expect(result.themes[0].frequency).toBeDefined(); // Should default to a value
       expect(result.themes[0].keywords).toBeDefined(); // Should default to empty array
-      
+
       // Even empty theme should be handled
       expect(result.themes[1]).toBeDefined();
       expect(result.themes[1].name).toBeDefined(); // Should default to placeholder
     });
   });
-  
+
   describe('Sentiment Data Format Handling', () => {
     it('handles standard sentiment format', async () => {
       // Setup standard sentiment format with proper SentimentData type
@@ -214,11 +214,11 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(standardSentimentResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.sentiment).toHaveLength(4);
       expect(result.sentiment[0].score).toBe(0.5);
@@ -228,7 +228,7 @@ describe('API Client - Response Format Handling', () => {
       expect(result.sentimentOverview).toBeDefined();
       expect(result.sentimentOverview.positive).toBeGreaterThan(0);
     });
-    
+
     it('handles alternative sentiment format', async () => {
       // Setup alternative sentiment format (from older API version)
       const alternativeSentimentResponse = {
@@ -255,18 +255,18 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(alternativeSentimentResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Should normalize alternative format to standard format
       expect(result.sentiment).toBeDefined();
       expect(result.sentimentStatements).toBeDefined();
       expect(result.sentimentOverview).toBeDefined();
     });
-    
+
     it('handles missing sentiment data gracefully', async () => {
       // Setup response with missing sentiment data
       const missingSentimentResponse = {
@@ -280,11 +280,11 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(missingSentimentResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.sentiment).toBeDefined(); // Should default to empty array
       expect(result.sentimentStatements).toBeDefined(); // Should default to empty object
@@ -294,11 +294,11 @@ describe('API Client - Response Format Handling', () => {
       expect(result.sentimentOverview.negative).toBeDefined();
     });
   });
-  
+
   describe('Pattern Structure Handling', () => {
     it('handles standard pattern format', async () => {
       // Setup standard pattern format
-      // (using 'examples' as per type) // Fix comment syntax
+      // (using 'evidence' for supporting statements)
       const standardPatternResponse = {
         data: {
           results: {
@@ -307,9 +307,9 @@ describe('API Client - Response Format Handling', () => {
             createdAt: "2023-04-20T12:00:00Z",
             fileName: "interview.txt",
             patterns: [
-              { 
+              {
                 id: 1,
-                name: "Recurring Issue", 
+                name: "Recurring Issue",
                 frequency: 3,
                 category: "Problem",
                 description: "Customer mentioned the same problem multiple times",
@@ -319,18 +319,18 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(standardPatternResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.patterns).toHaveLength(1);
       expect(result.patterns[0].name).toBe("Recurring Issue");
       expect(result.patterns[0].frequency).toBe(3);
       // Removed assertion for 'examples'
     });
-    
+
     it('handles alternative pattern format', async () => {
       // Setup alternative pattern format
       const alternativePatternResponse = {
@@ -341,9 +341,9 @@ describe('API Client - Response Format Handling', () => {
             createdAt: "2023-04-20T12:00:00Z",
             fileName: "interview.txt",
             repeatingPatterns: [
-              { 
+              {
                 id: 1,
-                patternName: "Recurring Issue", 
+                patternName: "Recurring Issue",
                 occurrences: 3,
                 type: "Problem",
                 patternDescription: "Customer mentioned the same problem multiple times",
@@ -353,18 +353,18 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(alternativePatternResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Should normalize alternative format to standard format
       expect(result.patterns).toBeDefined();
       expect(result.patterns.length).toBeGreaterThan(0);
     });
   });
-  
+
   describe('Nested Data Structure Parsing', () => {
     it('handles deeply nested response structures', async () => {
       // Setup deeply nested response structure
@@ -378,18 +378,18 @@ describe('API Client - Response Format Handling', () => {
             analysis: {
               thematic: {
                 primaryThemes: [
-                  { 
+                  {
                     id: 1,
-                    themeName: "User Experience", 
+                    themeName: "User Experience",
                     frequency: 5,
                     keywords: ["UX", "navigation"],
                     themeQuotes: ["The UX is intuitive", "Easy to navigate"]
                   }
                 ],
                 secondaryThemes: [
-                  { 
+                  {
                     id: 2,
-                    themeName: "Performance", 
+                    themeName: "Performance",
                     frequency: 3,
                     keywords: ["speed", "lag"],
                     themeQuotes: ["It's really fast", "No lag at all"]
@@ -425,11 +425,11 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(deeplyNestedResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Even with deeply nested structure, the normalized result should have standard properties
       expect(result.id).toBe("123");
@@ -457,11 +457,11 @@ describe('API Client - Response Format Handling', () => {
           overall_sentiment: 0.13
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(legacyResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Should map old properties to new format
       expect(result.id).toBeDefined();
@@ -471,7 +471,7 @@ describe('API Client - Response Format Handling', () => {
       expect(result.themes).toBeDefined();
       expect(result.sentiment).toBeDefined();
     });
-    
+
     it('handles the very first API version format', async () => {
       // Setup extremely old API format (version 0.1)
       const veryOldResponse = {
@@ -484,11 +484,11 @@ describe('API Client - Response Format Handling', () => {
           sentiment: "positive"
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(veryOldResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Should convert string themes to array of theme objects
       expect(result.themes).toBeInstanceOf(Array);
@@ -497,7 +497,7 @@ describe('API Client - Response Format Handling', () => {
       expect(result.sentimentOverview).toBeDefined();
     });
   });
-  
+
   describe('Graceful Degradation', () => {
     it('handles missing required fields', async () => {
       // Setup response with minimal data
@@ -509,11 +509,11 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(minimalResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       expect(result.id).toBe("123");
       expect(result.status).toBeDefined(); // Should default to something
@@ -523,7 +523,7 @@ describe('API Client - Response Format Handling', () => {
       expect(result.patterns).toBeDefined(); // Should default to empty array
       expect(result.sentiment).toBeDefined(); // Should default to empty array
     });
-    
+
     it('handles malformed fields with invalid types', async () => {
       // Setup response with incorrect data types
       const malformedResponse = {
@@ -539,11 +539,11 @@ describe('API Client - Response Format Handling', () => {
           }
         }
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(malformedResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // Should handle type conversion or use defaults
       expect(typeof result.id).toBe("string");
@@ -554,17 +554,17 @@ describe('API Client - Response Format Handling', () => {
       expect(Array.isArray(result.patterns)).toBe(true);
       expect(Array.isArray(result.sentiment)).toBe(true);
     });
-    
+
     it('handles completely empty response', async () => {
       // Setup entirely empty response
       const emptyResponse = {
         data: {}
       };
-      
+
       mockAxiosClient.get.mockResolvedValueOnce(emptyResponse);
-      
+
       const result = await apiClient.getAnalysisById("123");
-      
+
       expect(result).toBeDefined();
       // All fields should have defaults
       expect(result.id).toBeDefined();

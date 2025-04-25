@@ -68,7 +68,7 @@ const categorizeError = (err: any): ErrorState => {
     // JSON parsing error
     return { message: 'Error parsing response data. Please try again.', type: 'parsing', retryable: true };
   }
-  
+
   // Fallback for generic errors
   return { message: err.message || 'An unknown error occurred.', type: 'unknown', retryable: true };
 };
@@ -95,13 +95,13 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
         setError(null);
         setErrorDetails(null);
         setAutoRetrying(false);
-        
+
         console.log(`[PriorityInsights] Fetching data for analysis ID: ${analysisId}, attempt ${retryCount + 1}, auto-retry: ${autoRetryAttempts}`);
         const data = await apiClient.getPriorityInsights(analysisId);
-        
+
         console.log(`[PriorityInsights] Success: ${data.insights.length} insights found, high: ${data.metrics.high_urgency_count}, medium: ${data.metrics.medium_urgency_count}, low: ${data.metrics.low_urgency_count}`);
         setPriorityData(data);
-        
+
         // If we successfully load data after errors, show a success toast
         if (retryCount > 0 || autoRetryAttempts > 0) {
           toast({
@@ -112,31 +112,31 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
         }
       } catch (err: any) { // Use 'any' type to access error properties
         console.error('Error fetching priority data:', err);
-        
+
         // Use the categorization utility function
         const errorInfo = categorizeError(err);
         setError(errorInfo.message);
         setErrorDetails(errorInfo);
-        
+
         // Log with detailed error information
         console.error(`[PriorityInsights] Error type: ${errorInfo.type}, Status: ${errorInfo.statusCode || 'N/A'}, Message: ${errorInfo.message}`);
-        
+
         // Show toast notification with appropriate variant
-        const errorVariant: 'destructive' | 'default' = 
+        const errorVariant: 'destructive' | 'default' =
           (errorInfo.type === 'auth' || errorInfo.type === 'server') ? 'destructive' : 'default';
-        
+
         // Custom title based on error type
         let toastTitle = "Error Loading Priority Insights";
         if (errorInfo.type === 'auth') toastTitle = "Authentication Error";
         else if (errorInfo.type === 'network') toastTitle = "Network Error";
         else if (errorInfo.type === 'notFound') toastTitle = "Data Not Found";
-        
+
         toast({
           title: toastTitle,
           description: errorInfo.message,
           variant: errorVariant,
         });
-        
+
         // Implement automatic retry for retryable errors (except auth errors)
         if (errorInfo.retryable && autoRetryAttempts < 2 && errorInfo.type !== 'auth') {
           console.log(`[PriorityInsights] Scheduling auto-retry #${autoRetryAttempts + 1} in 3 seconds...`);
@@ -158,7 +158,7 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
     setAutoRetryAttempts(0);
     setRetryCount(prev => prev + 1);
   };
-  
+
   // Filter insights based on active tab
   const filteredInsights = priorityData?.insights.filter(insight => {
     if (activeTab === 'all') return true;
@@ -208,7 +208,7 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
   // Get error icon based on error type
   const getErrorIcon = () => {
     if (!errorDetails) return <AlertCircle className="h-5 w-5" />;
-    
+
     switch (errorDetails.type) {
       case 'auth':
         return <AlertCircle className="h-5 w-5" />;
@@ -270,7 +270,7 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
           </div>
           {(!autoRetrying && errorDetails?.retryable) && (
             <div className="flex justify-end">
-              <button 
+              <button
                 onClick={handleRetry}
                 className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
               >
@@ -336,20 +336,20 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
                         Score: {insight.priority_score}
                       </Badge>
                     </div>
-                    
+
                     <h3 className="text-base font-semibold mb-1">
                       {/* Use description for pattern name if it starts with "Unnamed Pattern" */}
-                      {insight.type === 'pattern' && insight.name.startsWith('Unnamed Pattern') 
-                        ? insight.description 
+                      {insight.type === 'pattern' && insight.name.startsWith('Unnamed Pattern')
+                        ? insight.description
                         : insight.name}
                     </h3>
-                    
+
                     {/* Show description only if it's different from the displayed name */}
                     {!(insight.type === 'pattern' && insight.name.startsWith('Unnamed Pattern')) && (
                       <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
                     )}
-                    
-                    {/* Display supporting statements (evidence for patterns, examples for themes) */}
+
+                    {/* Display supporting statements (evidence for patterns, statements for themes) */}
                     {insight.type === 'pattern' && (insight.original as PatternOriginal).evidence && (insight.original as PatternOriginal).evidence!.length > 0 && (
                       <div className="mt-2 mb-3 pl-3 border-l-2 border-gray-200">
                         {(insight.original as PatternOriginal).evidence!.map((evidence: string, i: number) => (
@@ -357,14 +357,14 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
                         ))}
                       </div>
                     )}
-                    {insight.type === 'theme' && (insight.original as ThemeOriginal).examples && (insight.original as ThemeOriginal).examples!.length > 0 && (
+                    {insight.type === 'theme' && (insight.original as ThemeOriginal).statements && (insight.original as ThemeOriginal).statements!.length > 0 && (
                       <div className="mt-2 mb-3 pl-3 border-l-2 border-gray-200">
-                        {(insight.original as ThemeOriginal).examples!.map((example: string, i: number) => (
-                          <p key={i} className="text-sm text-muted-foreground italic mb-2">{example}</p>
+                        {(insight.original as ThemeOriginal).statements!.map((statement: string, i: number) => (
+                          <p key={i} className="text-sm text-muted-foreground italic mb-2">{statement}</p>
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="flex items-center gap-3 text-xs">
                       <span className="flex items-center gap-1">
                         <span className="font-medium">Sentiment:</span>

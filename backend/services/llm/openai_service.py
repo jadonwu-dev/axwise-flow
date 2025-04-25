@@ -253,15 +253,9 @@ class OpenAIService:
                     if "frequency" not in pattern:
                         pattern["frequency"] = 0.5  # medium
 
-                    # Handle evidence/examples for backward compatibility
-                    if "evidence" not in pattern and "examples" in pattern:
-                        pattern["evidence"] = pattern["examples"]
-                    elif "evidence" not in pattern and "examples" not in pattern:
+                    # Ensure evidence field exists
+                    if "evidence" not in pattern:
                         pattern["evidence"] = []
-
-                    # Ensure examples exists for backward compatibility
-                    if "examples" not in pattern and "evidence" in pattern:
-                        pattern["examples"] = pattern["evidence"]
 
                     # Ensure impact field exists
                     if "impact" not in pattern:

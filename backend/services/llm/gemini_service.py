@@ -57,7 +57,7 @@ class GeminiService:
         }
 
         logger.info(
-            f"Initialized Gemini service with model: {self.model} using google-genai package v{genai.version}"
+            f"Initialized Gemini service with model: {self.model} using google-genai package v{genai.version.__version__}"
         )
 
     async def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -306,17 +306,9 @@ class GeminiService:
                     if "frequency" not in theme:
                         theme["frequency"] = 0.5  # medium
 
-                    # Handle statements/examples for backward compatibility
+                    # Ensure statements field exists
                     if "statements" not in theme:
-                        if "examples" in theme:
-                            # Copy examples to statements (preferred field)
-                            theme["statements"] = theme["examples"]
-                        else:
-                            theme["statements"] = []
-
-                    # Ensure examples exists for backward compatibility
-                    if "examples" not in theme:
-                        theme["examples"] = theme["statements"]
+                        theme["statements"] = []
 
                     # Ensure keywords exists
                     if "keywords" not in theme:
@@ -453,15 +445,9 @@ class GeminiService:
                     if "frequency" not in pattern:
                         pattern["frequency"] = 0.5  # medium
 
-                    # Handle evidence/examples for backward compatibility
-                    if "evidence" not in pattern and "examples" in pattern:
-                        pattern["evidence"] = pattern["examples"]
-                    elif "evidence" not in pattern and "examples" not in pattern:
+                    # Ensure evidence field exists
+                    if "evidence" not in pattern:
                         pattern["evidence"] = []
-
-                    # Ensure examples exists for backward compatibility
-                    if "examples" not in pattern and "evidence" in pattern:
-                        pattern["examples"] = pattern["evidence"]
 
                     # Ensure impact field exists
                     if "impact" not in pattern:

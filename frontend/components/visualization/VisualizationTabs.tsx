@@ -152,7 +152,7 @@ export default function VisualizationTabsRefactored({
       frequency: theme.frequency || 0,
       keywords: theme.keywords || [],
       statements: theme.statements || [],
-      examples: theme.examples || [],
+      // examples field removed
       definition: theme.definition || '',
       reliability: theme.reliability,
       codes: theme.codes || []

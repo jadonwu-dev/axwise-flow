@@ -122,13 +122,9 @@ class Theme(BaseModel):
         description="Sentiment score (-1 to 1, where -1 is negative, 0 is neutral, 1 is positive)",
     )
 
-    # Supporting quotes (statements is preferred, examples is for backward compatibility)
+    # Supporting quotes
     statements: List[str] = Field(
         default_factory=list, description="Supporting statements from the text"
-    )
-    examples: Optional[List[str]] = Field(
-        default=None,
-        description="Legacy field for backward compatibility. Use statements instead.",
     )
 
     # Additional theme details
@@ -197,12 +193,6 @@ class Pattern(BaseModel):
     suggested_actions: Optional[List[str]] = Field(
         None,
         description="Potential next steps or recommendations based on this pattern",
-    )
-
-    # Legacy field for backward compatibility
-    examples: Optional[List[str]] = Field(
-        None,
-        description="Legacy field for backward compatibility. Use evidence instead.",
     )
 
     class Config:

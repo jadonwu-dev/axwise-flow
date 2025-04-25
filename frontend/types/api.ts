@@ -15,9 +15,8 @@ export interface AnalyzedTheme {
   frequency: number;  // Main frequency field (0-1 representing prevalence)
   sentiment: number;  // Sentiment score (-1 to 1, where -1 is negative, 0 is neutral, 1 is positive)
 
-  // Supporting quotes (statements is the preferred field, examples is for backward compatibility)
+  // Supporting quotes
   statements: string[];
-  examples?: string[];  // Deprecated: Use statements instead
 
   // Additional theme details
   definition?: string;  // One-sentence description of the theme
@@ -97,7 +96,6 @@ export interface Theme {
 
   // Supporting quotes
   statements: string[];     // Supporting statements from the LLM
-  examples?: string[];      // Deprecated: Use statements instead
 
   // Additional theme details
   definition?: string;      // One-sentence description of the theme
@@ -150,6 +148,7 @@ export interface Pattern {
   description?: string;
   frequency?: number;
   sentiment?: number;
+  evidence?: string[];  // Supporting evidence for the pattern
 }
 
 /**

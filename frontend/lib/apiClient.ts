@@ -404,10 +404,7 @@ class ApiClient {
             theme.statements = [...theme.statements, ...theme.supporting_quotes];
           }
 
-          // Check for examples field (backward compatibility)
-          if (theme.examples && Array.isArray(theme.examples) && theme.examples.length > 0 && theme.statements.length === 0) {
-            theme.statements = [...theme.statements, ...theme.examples];
-          }
+          // examples field has been removed
 
           // Check for quotes field (another possible format)
           if (theme.quotes && Array.isArray(theme.quotes) && theme.quotes.length > 0 && theme.statements.length === 0) {

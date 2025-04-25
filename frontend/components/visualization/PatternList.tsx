@@ -31,7 +31,7 @@ export function PatternList({ patterns, className }: PatternListProps) {
  // Unused state
 
   // Filter patterns based on search term
-  const filteredPatterns = patterns.filter(pattern => 
+  const filteredPatterns = patterns.filter(pattern =>
     (pattern.name && pattern.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (pattern.description && pattern.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -104,23 +104,23 @@ export function PatternList({ patterns, className }: PatternListProps) {
                     <TooltipProvider delayDuration={300}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge 
+                          <Badge
                             variant="outline"
                             className="cursor-default"
                           >
-                            {PATTERN_CATEGORIES[category as keyof typeof PATTERN_CATEGORIES] || 
+                            {PATTERN_CATEGORIES[category as keyof typeof PATTERN_CATEGORIES] ||
                              PATTERN_CATEGORIES['Uncategorized']}
                           </Badge>
                         </TooltipTrigger>
-                        <TooltipContent 
-                          side="right" 
+                        <TooltipContent
+                          side="right"
                           className="bg-white dark:bg-slate-900 border shadow-lg p-3"
                           align="center"
                         >
                           <div className="space-y-1">
                             <h4 className="font-semibold">Pattern Category</h4>
                             <p className="text-sm text-muted-foreground">
-                              {PATTERN_CATEGORIES[category as keyof typeof PATTERN_CATEGORIES] || 
+                              {PATTERN_CATEGORIES[category as keyof typeof PATTERN_CATEGORIES] ||
                                PATTERN_CATEGORIES['Uncategorized']}
                             </p>
                           </div>
@@ -141,15 +141,15 @@ export function PatternList({ patterns, className }: PatternListProps) {
                                 <TooltipProvider key={`tooltip-${patternKey}`} delayDuration={300}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Badge 
+                                      <Badge
                                         variant="outline"
                                         className="absolute top-1/2 right-3 -translate-y-1/2 cursor-default"
                                       >
                                         {Math.round((pattern.frequency || 0) * 100)}%
                                       </Badge>
                                     </TooltipTrigger>
-                                    <TooltipContent 
-                                      side="left" 
+                                    <TooltipContent
+                                      side="left"
                                       className="bg-white dark:bg-slate-900 border shadow-lg p-3"
                                       align="center"
                                     >
@@ -157,7 +157,7 @@ export function PatternList({ patterns, className }: PatternListProps) {
                                         <h4 className="font-semibold">Pattern Frequency</h4>
                                         <p className="text-sm text-muted-foreground">
                                           {(pattern.frequency ?? 0) >= 0.7 // Handle undefined frequency
-                                            ? "Strong presence in analysis" 
+                                            ? "Strong presence in analysis"
                                             : "Moderate presence in analysis"}
                                         </p>
                                       </div>
@@ -172,18 +172,18 @@ export function PatternList({ patterns, className }: PatternListProps) {
                               </div>
                             </div>
                           )}
-                          
-{/* Use pattern.examples instead of pattern.evidence */}
-                          {pattern.examples && pattern.examples.length > 0 && (
- 
+
+{/* Supporting evidence */}
+                          {pattern.evidence && pattern.evidence.length > 0 && (
+
                             <div className="mt-3">
                               <span className="text-xs font-semibold uppercase text-muted-foreground bg-muted px-2 py-1 rounded-sm inline-block mb-2">Supporting Statements</span>
                               <div className="pl-3 border-l-2 border-primary/20">
                                 <ul className="space-y-3">
-                                  {pattern.examples.map((example: string, i: number) => ( // Add types
-                                    <li key={`${patternKey}-evidence-${i}-${example.slice(0, 10).replace(/\s+/g, '-')}`} className="relative bg-muted/30 p-3 rounded-md">
+                                  {pattern.evidence.map((evidence: string, i: number) => (
+                                    <li key={`${patternKey}-evidence-${i}-${evidence.slice(0, 10).replace(/\s+/g, '-')}`} className="relative bg-muted/30 p-3 rounded-md">
                                       <div className="absolute top-0 left-0 h-full w-1 bg-primary/30 rounded-l-md"></div>
-                                      <p className="text-muted-foreground text-sm">{example}</p>
+                                      <p className="text-muted-foreground text-sm">{evidence}</p>
                                     </li>
                                   ))}
                                 </ul>

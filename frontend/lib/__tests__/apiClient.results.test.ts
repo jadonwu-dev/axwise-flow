@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach, vi, afterEach } from 'vitest';
 import { apiClient } from '../apiClient';
-import { 
-  mockThemes, 
-  mockPatterns, 
+import {
+  mockThemes,
+  mockPatterns,
   mockSentimentData,
   mockSentimentOverview,
   mockSentimentStatements,
@@ -33,11 +33,11 @@ describe('API Client - Results Retrieval Operations', () => {
     sentiment: mockSentimentData,
     sentimentOverview: mockSentimentOverview
   };
-  
+
   beforeEach(() => {
     // Reset mocks before each test
     fetchMock.mockReset();
-    
+
     // Default successful response setup
     fetchMock.mockResolvedValue({
       ok: true,
@@ -45,19 +45,19 @@ describe('API Client - Results Retrieval Operations', () => {
       json: async () => defaultMockResponse
     });
   });
-  
+
   afterEach(() => {
     vi.clearAllMocks();
   });
-  
+
   describe('getAnalysisById', () => {
     test('should get analysis results successfully', async () => {
       // Arrange
       const analysisId = 'analysis-123';
-      
+
       // Act
       const result = await apiClient.getAnalysisById(analysisId);
-      
+
       // Assert
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock).toHaveBeenCalledWith(
@@ -75,7 +75,7 @@ describe('API Client - Results Retrieval Operations', () => {
       expect(result.sentiment).toEqual(mockSentimentData);
       expect(result.sentimentOverview).toEqual(mockSentimentOverview);
     });
-    
+
     test('should handle extended data structures including personas', async () => {
       // Arrange
       const analysisId = 'analysis-123';
@@ -84,25 +84,25 @@ describe('API Client - Results Retrieval Operations', () => {
         personas: mockPersonas,
         sentimentStatements: mockSentimentStatements
       };
-      
+
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => extendedResponse
       });
-      
+
       // Act
       const result = await apiClient.getAnalysisById(analysisId);
-      
+
       // Assert
       expect(result.personas).toEqual(mockPersonas);
       expect(result.sentimentStatements).toEqual(mockSentimentStatements);
     });
-    
+
     test('should parse theme data correctly', async () => {
       // Act
       const result = await apiClient.getAnalysisById('analysis-123');
-      
+
       // Assert
       expect(result.themes).toHaveLength(mockThemes.length);
       // Check a sample theme
@@ -113,11 +113,11 @@ describe('API Client - Results Retrieval Operations', () => {
       expect(sampleTheme).toHaveProperty('keywords');
       expect(sampleTheme).toHaveProperty('examples');
     });
-    
+
     test('should parse pattern data correctly', async () => {
       // Act
       const result = await apiClient.getAnalysisById('analysis-123');
-      
+
       // Assert
       expect(result.patterns).toHaveLength(mockPatterns.length);
       // Check a sample pattern
@@ -125,13 +125,13 @@ describe('API Client - Results Retrieval Operations', () => {
       expect(samplePattern).toHaveProperty('description');
       expect(samplePattern).toHaveProperty('frequency');
       expect(samplePattern).toHaveProperty('sentiment');
-      expect(samplePattern).toHaveProperty('examples');
+      expect(samplePattern).toHaveProperty('evidence');
     });
-    
+
     test('should parse sentiment data correctly', async () => {
       // Act
       const result = await apiClient.getAnalysisById('analysis-123');
-      
+
       // Assert
       expect(result.sentiment).toHaveLength(mockSentimentData.length);
       // Check a sample sentiment data point
@@ -139,7 +139,7 @@ describe('API Client - Results Retrieval Operations', () => {
       expect(samplePoint).toHaveProperty('timestamp');
       expect(samplePoint).toHaveProperty('score');
     });
-    
+
     test('should handle 404 error when analysis not found', async () => {
       // Arrange
       const analysisId = 'non-existent-id';
@@ -148,43 +148,43 @@ describe('API Client - Results Retrieval Operations', () => {
         status: 404,
         json: async () => ({ error: 'Analysis not found' })
       });
-      
+
       // Act & Assert
       await expect(apiClient.getAnalysisById(analysisId)).rejects.toThrow('Analysis not found');
     });
-    
+
     test('should handle network error', async () => {
       // Arrange
       const analysisId = 'analysis-123';
       fetchMock.mockRejectedValueOnce(new Error('Network error'));
-      
+
       // Act & Assert
       await expect(apiClient.getAnalysisById(analysisId)).rejects.toThrow('Network error');
     });
-    
+
     test('should handle malformed response data', async () => {
       // Arrange
       const analysisId = 'analysis-123';
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ 
+        json: async () => ({
           id: 'analysis-123',
           status: 'completed',
           // Missing expected fields
         })
       });
-      
+
       // Act
       const result = await apiClient.getAnalysisById(analysisId);
-      
+
       // Assert
       expect(result.id).toBe('analysis-123');
       expect(result.themes).toBeUndefined();
       expect(result.patterns).toBeUndefined();
       expect(result.sentiment).toBeUndefined();
     });
-    
+
     test('should validate analysis ID parameter', async () => {
       // Act & Assert
       // @ts-expect-error - Testing with invalid parameter
@@ -192,7 +192,7 @@ describe('API Client - Results Retrieval Operations', () => {
       await expect(apiClient.getAnalysisById('')).rejects.toThrow();
     });
   });
-  
+
   describe('getAnalysisByIdWithPolling', () => {
     test('should poll until analysis is completed', async () => {
       // Arrange
@@ -203,29 +203,29 @@ describe('API Client - Results Retrieval Operations', () => {
         createdAt: '2023-04-15T12:00:00Z',
         fileName: 'customer_feedback.json'
       };
-      
+
       // First call returns processing status
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => processingResponse
       });
-      
+
       // Second call returns completed analysis
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => defaultMockResponse
       });
-      
+
       // Act
       const result = await apiClient.getAnalysisByIdWithPolling(analysisId, 100);
-      
+
       // Assert
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(result).toEqual(defaultMockResponse);
     });
-    
+
     test('should respect polling interval', async () => {
       // Arrange
       const analysisId = 'analysis-123';
@@ -235,41 +235,41 @@ describe('API Client - Results Retrieval Operations', () => {
         createdAt: '2023-04-15T12:00:00Z',
         fileName: 'customer_feedback.json'
       };
-      
+
       vi.useFakeTimers();
-      
+
       // First call returns processing status
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => processingResponse
       });
-      
+
       // Second call returns completed analysis
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => defaultMockResponse
       });
-      
+
       // Act
       const resultPromise = apiClient.getAnalysisByIdWithPolling(analysisId, 1000);
-      
+
       // Wait for the first call to complete
       await vi.advanceTimersByTimeAsync(10);
-      
+
       // Wait for the polling interval
       await vi.advanceTimersByTimeAsync(1000);
-      
+
       const result = await resultPromise;
-      
+
       // Assert
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(result).toEqual(defaultMockResponse);
-      
+
       vi.useRealTimers();
     });
-    
+
     test('should stop polling after max attempts', async () => {
       // Arrange
       const analysisId = 'analysis-123';
@@ -279,20 +279,20 @@ describe('API Client - Results Retrieval Operations', () => {
         createdAt: '2023-04-15T12:00:00Z',
         fileName: 'customer_feedback.json'
       };
-      
+
       // All calls return processing status
       fetchMock.mockResolvedValue({
         ok: true,
         status: 200,
         json: async () => processingResponse
       });
-      
+
       // Act & Assert
       await expect(
         apiClient.getAnalysisByIdWithPolling(analysisId, 100, 3)
       ).rejects.toThrow('Analysis processing timed out after 3 attempts');
-      
+
       expect(fetchMock).toHaveBeenCalledTimes(3);
     });
   });
-}); 
+});
