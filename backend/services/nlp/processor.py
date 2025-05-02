@@ -330,16 +330,45 @@ class NLPProcessor:
             if enhanced_themes_task:
                 try:
                     enhanced_themes_result = await enhanced_themes_task
-                    logger.info(
-                        f"Enhanced theme analysis completed with {len(enhanced_themes_result.get('themes', []))} themes"
-                    )
+                    # Log the full structure of the enhanced_themes_result for debugging
+                    logger.info(f"Enhanced theme analysis result structure: {type(enhanced_themes_result)}")
+                    if isinstance(enhanced_themes_result, dict):
+                        logger.info(f"Enhanced theme analysis result keys: {list(enhanced_themes_result.keys())}")
+
+                        # Log the first few characters of the raw result for debugging
+                        logger.debug(f"Enhanced theme analysis raw result preview: {str(enhanced_themes_result)[:500]}...")
+
+                    # Check for enhanced_themes key first (preferred)
+                    if "enhanced_themes" in enhanced_themes_result and isinstance(enhanced_themes_result["enhanced_themes"], list):
+                        logger.info(
+                            f"Enhanced theme analysis completed with {len(enhanced_themes_result.get('enhanced_themes', []))} themes"
+                        )
+                        # Log the first theme if available
+                        if enhanced_themes_result["enhanced_themes"]:
+                            first_theme = enhanced_themes_result["enhanced_themes"][0]
+                            logger.info(f"First enhanced theme: {first_theme.get('name', 'Unnamed')}")
+                    # Fall back to themes key if enhanced_themes is not present
+                    elif "themes" in enhanced_themes_result and isinstance(enhanced_themes_result["themes"], list):
+                        logger.info(
+                            f"Enhanced theme analysis returned regular themes with {len(enhanced_themes_result.get('themes', []))} themes"
+                        )
+                        # Copy themes to enhanced_themes for consistent handling
+                        enhanced_themes_result["enhanced_themes"] = enhanced_themes_result["themes"]
+                        # Log the first theme if available
+                        if enhanced_themes_result["themes"]:
+                            first_theme = enhanced_themes_result["themes"][0]
+                            logger.info(f"First theme (copied to enhanced_themes): {first_theme.get('name', 'Unnamed')}")
+                    else:
+                        logger.warning(
+                            f"Enhanced theme analysis did not return expected structure. Keys: {list(enhanced_themes_result.keys()) if isinstance(enhanced_themes_result, dict) else 'not a dictionary'}"
+                        )
                 except Exception as e:
                     logger.error(f"Error in enhanced theme analysis: {str(e)}")
                     # Create a fallback enhanced themes result
-                    enhanced_themes_result = {"themes": []}
+                    enhanced_themes_result = {"enhanced_themes": []}
 
             # If enhanced themes are still None or empty, create enhanced themes from basic themes
-            if not enhanced_themes_result or not enhanced_themes_result.get("themes"):
+            if not enhanced_themes_result or (not enhanced_themes_result.get("enhanced_themes") and not enhanced_themes_result.get("themes")):
                 logger.info("Enhanced themes not available, creating from basic themes")
                 try:
                     # Create enhanced themes from basic themes
@@ -483,7 +512,7 @@ class NLPProcessor:
                 "validation": {"valid": True, "confidence": 0.9, "details": None},
                 "original_text": combined_text,  # Store original text for later use
                 "enhanced_themes": (
-                    enhanced_themes_result.get("themes", [])
+                    enhanced_themes_result.get("enhanced_themes", []) or enhanced_themes_result.get("themes", [])
                     if enhanced_themes_result
                     else []
                 ),

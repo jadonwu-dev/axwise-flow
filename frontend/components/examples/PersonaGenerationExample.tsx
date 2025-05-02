@@ -36,7 +36,7 @@ export function PersonaGenerationExample() {
       // Call the API with returnAllPersonas set to true
       const generatedPersonas = await apiClient.generatePersonaFromText(text, {
         llmProvider: 'gemini',
-        llmModel: 'gemini-2.0-flash',
+        llmModel: 'gemini-2.5-pro-preview-03-25',
         returnAllPersonas: true // This is the key option to get all personas
       });
 
@@ -64,10 +64,10 @@ export function PersonaGenerationExample() {
             value={text}
             onChange={handleTextChange}
           />
-          
+
           <div className="flex justify-end">
-            <Button 
-              onClick={handleGeneratePersonas} 
+            <Button
+              onClick={handleGeneratePersonas}
               disabled={isLoading || !text.trim()}
             >
               {isLoading ? (
@@ -80,7 +80,7 @@ export function PersonaGenerationExample() {
               )}
             </Button>
           </div>
-          
+
           {error && (
             <div className="p-4 border border-red-300 bg-red-50 rounded-md text-red-700">
               {error}

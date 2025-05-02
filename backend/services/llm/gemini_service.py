@@ -108,35 +108,17 @@ class GeminiService:
                 model_to_use = "gemini-2.5-pro-preview-03-25"
                 logger.info(f"Using enhanced model {model_to_use} for persona formation")
 
-            # For JSON tasks, use more deterministic parameters
-            if is_json_task:
-                # Use more restrictive parameters for JSON tasks to ensure valid output
-                config_params = {
-                    "temperature": 0.0,  # Force to 0 for JSON tasks regardless of config
-                    "max_output_tokens": self.max_tokens,
-                    "top_p": 0.95,  # Lower top_p for more deterministic output
-                    "top_k": 1,  # Force to 1 for JSON tasks regardless of config
-                }
-                # Set generation parameters for JSON tasks
-                if is_json_task:
-                    # Note: response_mime_type is not supported in google-genai 1.1.0
-                    # We'll use our JSON repair utility instead
-                    pass
+            # Use the temperature from config for all tasks
+            config_params = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+                "top_p": self.top_p,
+                "top_k": self.top_k,
+            }
 
-                logger.debug(
-                    f"JSON Task Generation Config for '{task}': {config_params}"
-                )
-            else:
-                # Use standard config for non-JSON tasks
-                config_params = {
-                    "temperature": self.temperature,
-                    "max_output_tokens": self.max_tokens,
-                    "top_p": self.top_p,
-                    "top_k": self.top_k,
-                }
-                logger.debug(
-                    f"Standard Generation Config for '{task}': temp={self.temperature}, top_p={self.top_p}, top_k={self.top_k}"
-                )
+            logger.debug(
+                f"Generation Config for '{task}': temp={self.temperature}, top_p={self.top_p}, top_k={self.top_k}"
+            )
 
             # For insight_generation, the system_message is already the complete prompt
             if task == "insight_generation":
@@ -196,11 +178,30 @@ class GeminiService:
                     )
                 )
                 # Use the new API structure for the google-genai package
-                response = await self.client.aio.models.generate_content(
-                    model=model_to_use,
-                    contents=[system_message, text],
-                    config=config_params,
-                )
+                # Check if we should enforce JSON output
+                enforce_json = data.get("enforce_json", False)
+
+                # For persona_formation or when enforce_json is True, use response_mime_type to enforce JSON output
+                if task == "persona_formation" or enforce_json:
+                    # Add response_mime_type to config_params to enforce JSON output
+                    config_params["response_mime_type"] = "application/json"
+
+                    # Set temperature to 0 for deterministic output when generating structured data
+                    config_params["temperature"] = 0.0
+
+                    logger.info(f"Using response_mime_type='application/json' and temperature=0.0 for task '{task}' to enforce structured output")
+                    response = await self.client.aio.models.generate_content(
+                        model=model_to_use,
+                        contents=[system_message, text],
+                        config=config_params
+                    )
+                else:
+                    # For other tasks, use the standard API call
+                    response = await self.client.aio.models.generate_content(
+                        model=model_to_use,
+                        contents=[system_message, text],
+                        config=config_params
+                    )
 
                 # Extract and parse response
                 result_text = response.text
@@ -541,9 +542,21 @@ class GeminiService:
                 if "sentiment" not in result:
                     result = {"sentiment": result}
 
-                # Extract sentiment overview
+                # Extract sentiment overview with proper type checking
                 sentiment = result.get("sentiment", {})
+
+                # Ensure sentiment is a dictionary
+                if not isinstance(sentiment, dict):
+                    logger.warning(f"Sentiment is not a dictionary: {sentiment}. Creating default sentiment structure.")
+                    sentiment = {"breakdown": {}, "supporting_statements": {}}
+                    result["sentiment"] = sentiment
+
+                # Ensure breakdown exists and is a dictionary
                 breakdown = sentiment.get("breakdown", {})
+                if not isinstance(breakdown, dict):
+                    logger.warning(f"Sentiment breakdown is not a dictionary: {breakdown}. Creating default breakdown.")
+                    breakdown = {"positive": 0.33, "neutral": 0.34, "negative": 0.33}
+                    sentiment["breakdown"] = breakdown
 
                 # Normalize breakdown to ensure it sums to 1.0
                 total = sum(breakdown.values()) if breakdown else 0
@@ -567,21 +580,30 @@ class GeminiService:
                     "sentiment_details": sentiment.get(
                         "details", []
                     ),  # Store details separately
+                    # Initialize sentimentStatements with empty structure to prevent 'NoneType' has no attribute 'get' errors
+                    "sentimentStatements": {
+                        "positive": [],
+                        "neutral": [],
+                        "negative": []
+                    }
                 }
 
-                # Extract supporting statements with enhanced logging
+                # Extract supporting statements with enhanced logging and type checking
                 if "supporting_statements" in sentiment:
                     logger.info("Found supporting_statements in sentiment data")
+
+                    # Ensure supporting_statements is a dictionary
+                    supporting_statements = sentiment["supporting_statements"]
+                    if not isinstance(supporting_statements, dict):
+                        logger.warning(f"supporting_statements is not a dictionary: {supporting_statements}. Creating default structure.")
+                        supporting_statements = {"positive": [], "neutral": [], "negative": []}
+                        sentiment["supporting_statements"] = supporting_statements
+
+                    # Create sentimentStatements with proper type checking for each category
                     transformed["sentimentStatements"] = {
-                        "positive": sentiment["supporting_statements"].get(
-                            "positive", []
-                        ),
-                        "neutral": sentiment["supporting_statements"].get(
-                            "neutral", []
-                        ),
-                        "negative": sentiment["supporting_statements"].get(
-                            "negative", []
-                        ),
+                        "positive": supporting_statements.get("positive", []) if isinstance(supporting_statements.get("positive"), list) else [],
+                        "neutral": supporting_statements.get("neutral", []) if isinstance(supporting_statements.get("neutral"), list) else [],
+                        "negative": supporting_statements.get("negative", []) if isinstance(supporting_statements.get("negative"), list) else [],
                     }
 
                     # Log the extraction of statements
@@ -616,13 +638,17 @@ class GeminiService:
 
                 # If no supporting statements in the API response, or they're empty,
                 # attempt to extract them from the sentiment details
-                if "sentimentStatements" not in transformed or not any(
-                    [
-                        transformed["sentimentStatements"]["positive"],
-                        transformed["sentimentStatements"]["neutral"],
-                        transformed["sentimentStatements"]["negative"],
-                    ]
-                ):
+                # First check if sentimentStatements exists and has the expected structure
+                if ("sentimentStatements" not in transformed or
+                    not isinstance(transformed.get("sentimentStatements"), dict) or
+                    "positive" not in transformed.get("sentimentStatements", {}) or
+                    "neutral" not in transformed.get("sentimentStatements", {}) or
+                    "negative" not in transformed.get("sentimentStatements", {}) or
+                    not any([
+                        transformed.get("sentimentStatements", {}).get("positive", []),
+                        transformed.get("sentimentStatements", {}).get("neutral", []),
+                        transformed.get("sentimentStatements", {}).get("negative", [])
+                    ])):
                     logger.warning(
                         "No sentiment statements in API response, attempting to extract from details"
                     )
@@ -998,7 +1024,13 @@ class GeminiService:
             elif task == "theme_analysis_enhanced":
                 # Ensure proper enhanced_themes array
                 if "enhanced_themes" not in result:
-                    result["enhanced_themes"] = []
+                    # Check if themes array exists and use it as enhanced_themes
+                    if "themes" in result and isinstance(result["themes"], list):
+                        logger.info("Found 'themes' array in response, using as enhanced_themes")
+                        result["enhanced_themes"] = result["themes"]
+                    else:
+                        logger.info("No themes found in response, creating empty enhanced_themes array")
+                        result["enhanced_themes"] = []
 
                 # Import Theme schema for validation
                 from backend.schemas import Theme as ThemeSchema
@@ -2509,9 +2541,18 @@ class GeminiService:
             """
             )
 
+            # Update generation config to enforce JSON output
+            config_params = self.generation_config.copy()
+            config_params["response_mime_type"] = "application/json"
+            config_params["temperature"] = 0.0  # Set temperature to 0 for deterministic output
+
+            logger.info("Using response_mime_type='application/json' and temperature=0.0 for generate_persona_from_text to enforce structured output")
+
             # Generate content with the prompt using the new API structure
             response = await self.client.aio.models.generate_content(
-                model=self.model, contents=prompt, config=self.generation_config
+                model=self.model,
+                contents=prompt,
+                config=config_params
             )
 
             # Parse and structure the response

@@ -1044,7 +1044,7 @@ class ApiClient {
       const response = await this.client.post('/api/generate-persona', {
         text,
         llm_provider: options?.llmProvider || 'gemini',
-        llm_model: options?.llmModel || 'gemini-2.0-flash'
+        llm_model: options?.llmModel || 'gemini-2.5-pro-preview-03-25'
       }, {
         timeout: 120000, // Longer timeout for persona generation (2 minutes)
         headers: {

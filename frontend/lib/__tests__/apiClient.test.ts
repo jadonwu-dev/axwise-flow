@@ -46,7 +46,7 @@ describe('API Client', () => {
   beforeEach(() => {
     // Reset all mocks between tests
     vi.resetAllMocks();
-    
+
     // Set up default fetch mock implementation for tests
     global.fetch = vi.fn().mockResolvedValue(defaultMockResponse);
   });
@@ -77,21 +77,21 @@ describe('API Client', () => {
 
       // Mock the File
       const file = createMockFile();
-      
+
       // Call the method
       const result = await apiClient.uploadData(file, false);
-      
+
       // Verify the result matches the expected structure
       expect(result).toEqual(expect.objectContaining({
         data_id: 123,
         message: 'File uploaded successfully',
       }));
-      
+
       // Verify the API was called with correct URL
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/data'),
-        expect.objectContaining({ 
+        expect.objectContaining({
           method: 'POST',
           body: expect.any(FormData)
         })
@@ -110,12 +110,12 @@ describe('API Client', () => {
           }
         })
       });
-      
+
       const file = createMockFile();
-      
+
       // The call should throw an error
       await expect(apiClient.uploadData(file, false)).rejects.toThrow();
-      
+
       // Verify the call was made
       expect(fetch).toHaveBeenCalledTimes(1);
     });
@@ -126,7 +126,7 @@ describe('API Client', () => {
 
       // Mock the File
       const file = createMockFile();
-      
+
       // The call should throw an error
       await expect(apiClient.uploadData(file, false)).rejects.toThrow('Network error');
     });
@@ -134,10 +134,10 @@ describe('API Client', () => {
     it('passes isTextFile parameter correctly', async () => {
       // Mock the File
       const file = createMockFile('test.txt', 'text/plain');
-      
+
       // Call the method
       await apiClient.uploadData(file, true);
-      
+
       // Verify is_free_text was set to "true"
       expect(fetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -161,21 +161,21 @@ describe('API Client', () => {
         }),
         status: 200
       });
-      
+
       // Call the method
       const result = await apiClient.analyzeData(123);
-      
+
       // Verify the result
       expect(result).toEqual(expect.objectContaining({
         result_id: 456,
         status: 'started'
       }));
-      
+
       // Verify the API was called
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/analysis'),
-        expect.objectContaining({ 
+        expect.objectContaining({
           method: 'POST',
           body: expect.stringContaining('123')
         })
@@ -193,20 +193,20 @@ describe('API Client', () => {
         }),
         status: 200
       });
-      
+
       // Call the method with Gemini provider
-      const result = await apiClient.analyzeData(123, 'gemini', 'gemini-2.0-flash', true);
-      
+      const result = await apiClient.analyzeData(123, 'gemini', 'models/gemini-2.5-flash-preview-04-17', true);
+
       // Verify the result
       expect(result).toEqual(expect.objectContaining({
         result_id: 789,
         status: 'started'
       }));
-      
+
       // Verify request was called with correct parameters
       expect(fetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ 
+        expect.objectContaining({
           body: expect.stringContaining('123')
         })
       );
@@ -227,7 +227,7 @@ describe('API Client', () => {
           ]
         })
       });
-      
+
       // @ts-expect-error - Testing with invalid provider
       await expect(apiClient.analyzeData(123, 'invalid_provider')).rejects.toThrow();
     });
@@ -259,22 +259,22 @@ describe('API Client', () => {
           }
         }
       };
-      
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockAnalysisResult
       });
-      
+
       // Call the method
       const result = await apiClient.getAnalysisById('analysis-123');
-      
+
       // Verify the result contains expected fields
       expect(result).toHaveProperty('id', 'analysis-123');
       expect(result).toHaveProperty('status', 'completed');
       expect(result).toHaveProperty('themes');
       expect(result).toHaveProperty('patterns');
       expect(result).toHaveProperty('sentimentOverview');
-      
+
       // Verify fetch was called correctly
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
@@ -291,7 +291,7 @@ describe('API Client', () => {
           status: 'processing' // No results field
         })
       });
-      
+
       // Call should throw an error
       await expect(apiClient.getAnalysisById('pending-analysis')).rejects.toThrow(/missing results/i);
     });
@@ -315,10 +315,10 @@ describe('API Client', () => {
           }
         })
       });
-      
+
       // Call the method - should not throw but return result with error
       const result = await apiClient.getAnalysisById('failed-analysis');
-      
+
       // Verify the result contains error information
       expect(result).toHaveProperty('status', 'failed');
       expect(result).toHaveProperty('error', 'Analysis failed due to invalid data format');
@@ -348,31 +348,31 @@ describe('API Client', () => {
           sentimentOverview: { positive: 0, neutral: 0, negative: 0 }
         }
       ];
-      
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockAnalysesList
       });
-      
+
       // Call the method with sort parameters
-      const result = await apiClient.listAnalyses({ 
-        sortBy: 'createdAt', 
-        sortDirection: 'desc' 
+      const result = await apiClient.listAnalyses({
+        sortBy: 'createdAt',
+        sortDirection: 'desc'
       });
-      
+
       // Verify the result
       expect(result).toEqual(mockAnalysesList);
       expect(result.length).toBe(2);
-      
+
       // Verify fetch was called with correct URL and parameters
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/analyses'),
         expect.objectContaining({
           method: 'GET',
-          params: { 
-            sortBy: 'createdAt', 
-            sortDirection: 'desc' 
+          params: {
+            sortBy: 'createdAt',
+            sortDirection: 'desc'
           }
         })
       );
@@ -384,10 +384,10 @@ describe('API Client', () => {
         ok: true,
         json: async () => []
       });
-      
+
       // Call the method
       const result = await apiClient.listAnalyses();
-      
+
       // Verify the result is an empty array
       expect(result).toEqual([]);
       expect(result.length).toBe(0);
@@ -407,18 +407,18 @@ describe('API Client', () => {
           ANALYSIS: { status: 'in_progress', progress: 0.65 }
         }
       };
-      
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockStatus
       });
-      
+
       // Call the method
       const result = await apiClient.getProcessingStatus('in-progress-analysis');
-      
+
       // Verify the result
       expect(result).toEqual(mockStatus);
-      
+
       // Verify fetch was called correctly
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
@@ -430,7 +430,7 @@ describe('API Client', () => {
     it('handles 404 error gracefully for completing analysis', async () => {
       // Set up mock 404 response (API returns 404 when status endpoint isn't found)
       global.fetch = vi.fn().mockRejectedValue(new Error('Not Found'));
-      
+
       // Also mock getAnalysisById to return completed status
       const mockCompleted = {
         id: 'completed-analysis',
@@ -441,18 +441,18 @@ describe('API Client', () => {
         patterns: [],
         sentimentOverview: { positive: 0.5, neutral: 0.3, negative: 0.2 }
       };
-      
+
       // Mock second fetch call for getAnalysisById
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ 
+        json: async () => ({
           results: mockCompleted
         })
       });
-      
+
       // Call the method
       const result = await apiClient.getProcessingStatus('completed-analysis');
-      
+
       // Verify the result indicates completion
       expect(result).toHaveProperty('current_stage', 'COMPLETION');
       expect(result.stage_states).toHaveProperty('COMPLETION');
@@ -465,8 +465,8 @@ describe('API Client', () => {
     it('sets auth token correctly', () => {
       // Call the method
       apiClient.setAuthToken('test-token');
-      
-      // Since we're not directly testing private variables, 
+
+      // Since we're not directly testing private variables,
       // we can verify the token is set on the internal axios client defaults
       // This requires accessing a private member, which isn't ideal, but necessary for this test structure
       // @ts-expect-error - Accessing private member for testing
@@ -482,7 +482,7 @@ describe('API Client', () => {
         statusText: 'Unauthorized',
         json: async () => ({ detail: 'Invalid or expired token' })
       });
-      
+
       // Make a request that should trigger the auth error
       await expect(apiClient.getAnalysisById('test-id')).rejects.toThrow(/authentication required/i);
     });
@@ -509,25 +509,25 @@ describe('API Client', () => {
           // No sentimentOverview provided
         }
       };
-      
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse
       });
-      
+
       // Call the method
       const result = await apiClient.getAnalysisById('analysis-123');
-      
+
       // Verify sentimentOverview was calculated
       expect(result).toHaveProperty('sentimentOverview');
       expect(result.sentimentOverview).toHaveProperty('positive');
       expect(result.sentimentOverview).toHaveProperty('neutral');
       expect(result.sentimentOverview).toHaveProperty('negative');
-      
+
       // The calculation should reflect our test data (2 positive, 1 neutral, 1 negative)
       expect(result.sentimentOverview.positive).toBeCloseTo(0.5);
       expect(result.sentimentOverview.neutral).toBeCloseTo(0.25);
       expect(result.sentimentOverview.negative).toBeCloseTo(0.25);
     });
   });
-}); 
+});

@@ -139,7 +139,23 @@ class ResultsService:
                                 )
 
                         except Exception as e:
-                            logger.error(f"Error mapping persona from JSON: {str(e)}")
+                            logger.error(f"Error mapping persona from JSON: {str(e)}", exc_info=True)
+                            # Log the problematic persona data structure
+                            logger.debug(f"Problematic persona data: {p_data}")
+                            if isinstance(p_data, dict):
+                                logger.debug(f"Persona data keys: {list(p_data.keys())}")
+                                # Check for missing or None trait fields
+                                for trait_field in ['demographics', 'goals_and_motivations', 'skills_and_expertise',
+                                                   'workflow_and_environment', 'challenges_and_frustrations',
+                                                   'needs_and_desires', 'technology_and_tools',
+                                                   'attitude_towards_research', 'attitude_towards_ai',
+                                                   'role_context', 'key_responsibilities', 'tools_used',
+                                                   'collaboration_style', 'analysis_approach', 'pain_points']:
+                                    trait_value = p_data.get(trait_field)
+                                    if trait_value is None:
+                                        logger.debug(f"Trait field '{trait_field}' is None")
+                                    elif not isinstance(trait_value, dict):
+                                        logger.debug(f"Trait field '{trait_field}' is not a dictionary: {type(trait_value)}")
 
                 # Create formatted response
                 formatted_results = {
@@ -431,25 +447,25 @@ class ResultsService:
         metadata = p_data.get("metadata", p_data.get("persona_metadata", {}))
 
         # Extract all trait data with empty defaults
-        # Legacy fields
-        role_context_data = p_data.get("role_context", {})
-        key_resp_data = p_data.get("key_responsibilities", {})
-        tools_data = p_data.get("tools_used", {})
-        collab_style_data = p_data.get("collaboration_style", {})
-        analysis_approach_data = p_data.get("analysis_approach", {})
-        pain_points_data = p_data.get("pain_points", {})
+        # Legacy fields - ensure they're dictionaries
+        role_context_data = p_data.get("role_context", {}) if isinstance(p_data.get("role_context"), dict) else {}
+        key_resp_data = p_data.get("key_responsibilities", {}) if isinstance(p_data.get("key_responsibilities"), dict) else {}
+        tools_data = p_data.get("tools_used", {}) if isinstance(p_data.get("tools_used"), dict) else {}
+        collab_style_data = p_data.get("collaboration_style", {}) if isinstance(p_data.get("collaboration_style"), dict) else {}
+        analysis_approach_data = p_data.get("analysis_approach", {}) if isinstance(p_data.get("analysis_approach"), dict) else {}
+        pain_points_data = p_data.get("pain_points", {}) if isinstance(p_data.get("pain_points"), dict) else {}
 
-        # New fields
-        demographics_data = p_data.get("demographics", {})
-        goals_data = p_data.get("goals_and_motivations", {})
-        skills_data = p_data.get("skills_and_expertise", {})
-        workflow_data = p_data.get("workflow_and_environment", {})
-        challenges_data = p_data.get("challenges_and_frustrations", {})
-        needs_data = p_data.get("needs_and_desires", {})
-        tech_tools_data = p_data.get("technology_and_tools", {})
-        research_attitude_data = p_data.get("attitude_towards_research", {})
-        ai_attitude_data = p_data.get("attitude_towards_ai", {})
-        key_quotes_data = p_data.get("key_quotes", {})
+        # New fields - ensure they're dictionaries
+        demographics_data = p_data.get("demographics", {}) if isinstance(p_data.get("demographics"), dict) else {}
+        goals_data = p_data.get("goals_and_motivations", {}) if isinstance(p_data.get("goals_and_motivations"), dict) else {}
+        skills_data = p_data.get("skills_and_expertise", {}) if isinstance(p_data.get("skills_and_expertise"), dict) else {}
+        workflow_data = p_data.get("workflow_and_environment", {}) if isinstance(p_data.get("workflow_and_environment"), dict) else {}
+        challenges_data = p_data.get("challenges_and_frustrations", {}) if isinstance(p_data.get("challenges_and_frustrations"), dict) else {}
+        needs_data = p_data.get("needs_and_desires", {}) if isinstance(p_data.get("needs_and_desires"), dict) else {}
+        tech_tools_data = p_data.get("technology_and_tools", {}) if isinstance(p_data.get("technology_and_tools"), dict) else {}
+        research_attitude_data = p_data.get("attitude_towards_research", {}) if isinstance(p_data.get("attitude_towards_research"), dict) else {}
+        ai_attitude_data = p_data.get("attitude_towards_ai", {}) if isinstance(p_data.get("attitude_towards_ai"), dict) else {}
+        key_quotes_data = p_data.get("key_quotes", {}) if isinstance(p_data.get("key_quotes"), dict) else {}
 
         # Map legacy fields to new fields when new fields are empty
         # This ensures we don't lose data when only legacy fields are populated

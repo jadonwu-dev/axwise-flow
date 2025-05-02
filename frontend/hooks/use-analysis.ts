@@ -86,7 +86,7 @@ export function useAnalysis(
     return analyzeMutation.mutateAsync({
       data_id: dataId,
       llm_provider: provider,
-      llm_model: provider === 'openai' ? 'gpt-4o-2024-08-06' : 'gemini-2.0-flash'
+      llm_model: provider === 'openai' ? 'gpt-4o-2024-08-06' : 'models/gemini-2.5-flash-preview-04-17'
     })
   }
 
