@@ -461,28 +461,47 @@ class NLPProcessor:
                 processed_sentiment = {"positive": [], "neutral": [], "negative": []}
                 logger.warning("Using empty sentiment data due to processing error")
 
-            # Don't return partial results - either return everything or nothing to ensure consistency
-            # This prevents frontend from showing sentiment while other components are still loading
+            # Be more resilient to partial failures - continue if at least some core results are present
+            # This allows the pipeline to continue even if one analysis step fails
             try:
-                if (
-                    len(themes_result.get("themes", [])) == 0
-                    or len(patterns_result.get("patterns", [])) == 0
-                ):
+                # Check if we have at least some usable results
+                has_basic_themes = len(themes_result.get("themes", [])) > 0
+                has_enhanced_themes = enhanced_themes_result and (
+                    len(enhanced_themes_result.get("enhanced_themes", [])) > 0 or
+                    len(enhanced_themes_result.get("themes", [])) > 0
+                )
+                has_patterns = len(patterns_result.get("patterns", [])) > 0
+
+                # Log the status of each analysis component
+                logger.info(f"Analysis components status - Basic themes: {has_basic_themes}, " +
+                           f"Enhanced themes: {has_enhanced_themes}, Patterns: {has_patterns}")
+
+                # Continue if we have at least some usable results
+                # Either themes (basic OR enhanced) AND patterns should be present to continue
+                if not ((has_basic_themes or has_enhanced_themes) and has_patterns):
                     logger.warning(
-                        "Themes or patterns analysis incomplete - returning empty results to ensure consistency"
+                        "Insufficient analysis results - need at least themes (basic or enhanced) AND patterns"
                     )
-                    # Don't return partial results
-                    return {
-                        "status": "processing",
-                        "message": "Analysis still in progress. Please try again later.",
-                    }
+                    # If enhanced themes succeeded but basic themes failed, we can still proceed
+                    if has_enhanced_themes and not has_basic_themes:
+                        logger.info("Using enhanced themes as fallback for basic themes")
+                        # Copy enhanced themes to basic themes
+                        if "enhanced_themes" in enhanced_themes_result:
+                            themes_result["themes"] = enhanced_themes_result["enhanced_themes"]
+                        elif "themes" in enhanced_themes_result:
+                            themes_result["themes"] = enhanced_themes_result["themes"]
+                    # If we still don't have enough data, return a processing status
+                    elif not ((has_basic_themes or has_enhanced_themes) and has_patterns):
+                        logger.warning("Returning processing status due to insufficient analysis results")
+                        return {
+                            "status": "processing",
+                            "message": "Analysis still in progress. Please try again later.",
+                        }
             except Exception as e:
-                logger.error(f"Error checking themes/patterns completeness: {str(e)}")
-                # Return a helpful error message instead of crashing
-                return {
-                    "status": "error",
-                    "message": "Error during analysis processing. Please try again.",
-                }
+                logger.error(f"Error checking analysis completeness: {str(e)}")
+                # Continue processing instead of returning an error
+                # This allows the pipeline to proceed even if there's an error in the completeness check
+                logger.info("Continuing despite error in completeness check")
 
             # Generate insights using the results from parallel analysis
             insight_start_time = asyncio.get_event_loop().time()

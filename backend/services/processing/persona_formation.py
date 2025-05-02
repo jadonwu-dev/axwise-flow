@@ -1553,6 +1553,16 @@ class PersonaFormationService:
             6. Ensure all JSON syntax is valid (quotes, commas, brackets)
             7. Ensure all nested objects have proper structure
             8. ONLY return the JSON object - nothing else
+            9. If you're not sure about a field, provide a reasonable default with lower confidence
+            10. ALL attributes MUST follow the nested structure with value, confidence, and evidence
+            11. Temperature is set to 0 to ensure consistent, deterministic output
+
+            FINAL CHECK:
+            Before returning your response, verify that:
+            - You've included ALL required attributes (demographics through pain_points)
+            - Each attribute has the proper nested structure with value, confidence, and evidence
+            - The JSON is valid and properly formatted
+            - There is no text before or after the JSON object
             """
 
     def _parse_llm_json_response(
