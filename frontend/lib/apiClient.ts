@@ -1038,6 +1038,7 @@ class ApiClient {
   async generatePersonaFromText(text: string, options?: {
     llmProvider?: string;
     llmModel?: string;
+    returnAllPersonas?: boolean;
   }): Promise<any> {
     try {
       const response = await this.client.post('/api/generate-persona', {
@@ -1045,19 +1046,35 @@ class ApiClient {
         llm_provider: options?.llmProvider || 'gemini',
         llm_model: options?.llmModel || 'gemini-2.0-flash'
       }, {
-        timeout: 60000, // Longer timeout for persona generation
+        timeout: 120000, // Longer timeout for persona generation (2 minutes)
         headers: {
           'Content-Type': 'application/json',
           'X-Client-Origin': window.location.origin
         }
       });
 
+      // Check if we have multiple personas in the response
+      if (response.data && response.data.personas && Array.isArray(response.data.personas)) {
+        console.log(`Generated ${response.data.personas.length} personas`);
+
+        // If returnAllPersonas is true, return all personas
+        if (options?.returnAllPersonas) {
+          return response.data.personas;
+        }
+
+        // Otherwise, return the first persona (backward compatibility)
+        if (response.data.personas.length > 0) {
+          return response.data.personas[0];
+        }
+      }
+
+      // For backward compatibility, check for single persona
       if (response.data && response.data.persona) {
         return response.data.persona;
       }
 
       // Fall back to mock data if response structure is unexpected
-      return this.generateMockPersonas()[0];
+      return options?.returnAllPersonas ? this.generateMockPersonas() : this.generateMockPersonas()[0];
 
     } catch (error: any) {
       console.error('Error generating persona:', error);
@@ -1076,7 +1093,7 @@ class ApiClient {
       }
 
       // Return mock data
-      return this.generateMockPersonas()[0];
+      return options?.returnAllPersonas ? this.generateMockPersonas() : this.generateMockPersonas()[0];
     }
   }
 

@@ -101,6 +101,13 @@ class GeminiService:
             ]
             is_json_task = task in json_tasks
 
+            # Use a more powerful model for persona formation
+            model_to_use = self.model
+            if task == "persona_formation":
+                # Use Gemini 2.5 Pro for persona formation to handle more complex tasks
+                model_to_use = "gemini-2.5-pro-preview-03-25"
+                logger.info(f"Using enhanced model {model_to_use} for persona formation")
+
             # For JSON tasks, use more deterministic parameters
             if is_json_task:
                 # Use more restrictive parameters for JSON tasks to ensure valid output
@@ -141,7 +148,7 @@ class GeminiService:
                 )
                 # Use the new API structure for the google-genai package
                 response = await self.client.aio.models.generate_content(
-                    model=self.model, contents=system_message, config=config_params
+                    model=model_to_use, contents=system_message, config=config_params
                 )
 
                 # For insight generation, return a structured result
@@ -190,7 +197,7 @@ class GeminiService:
                 )
                 # Use the new API structure for the google-genai package
                 response = await self.client.aio.models.generate_content(
-                    model=self.model,
+                    model=model_to_use,
                     contents=[system_message, text],
                     config=config_params,
                 )

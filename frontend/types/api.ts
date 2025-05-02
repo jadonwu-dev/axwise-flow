@@ -218,6 +218,7 @@ export type Persona = {
   name: string;
   archetype?: string;
   description: string;
+  role_in_interview?: string; // Role in the interview (Interviewee, Interviewer, Participant)
 
   // Detailed attributes (new fields)
   demographics?: PersonaTrait;
@@ -246,6 +247,7 @@ export type Persona = {
   metadata?: {
     sample_size?: number;
     timestamp?: string;
+    speaker?: string; // Speaker name from transcript
     validation_metrics?: {
       pattern_confidence?: number;
       evidence_count?: number;

@@ -1,6 +1,6 @@
 """Enhanced persona formation service with comprehensive attribute analysis"""
 
-from typing import List, Dict, Any, Optional, Union  # Corrected duplicate Union import
+from typing import List, Dict, Any, Optional, Union, Tuple  # Corrected duplicate Union import
 from dataclasses import dataclass, asdict, field
 import asyncio
 import json
@@ -155,6 +155,7 @@ class Persona:
     confidence: float = 0.7  # Default confidence
     evidence: List[str] = field(default_factory=list)
     persona_metadata: Optional[Dict[str, Any]] = None  # Changed from metadata
+    role_in_interview: str = "Participant"  # Default role in the interview (Interviewee, Interviewer, etc.)
 
 
 def persona_to_dict(persona: Persona) -> Dict[str, Any]:
@@ -887,6 +888,168 @@ class PersonaFormationService:
 
         return metadata
 
+    def _group_text_by_speaker(self, transcript: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Group text by speaker from a structured transcript
+
+        Args:
+            transcript: List of transcript entries with speaker and text fields
+
+        Returns:
+            Dictionary mapping speaker names to their combined text
+        """
+        logger.info(f"Grouping text by speaker from {len(transcript)} transcript entries")
+
+        speaker_texts = {}
+
+        for entry in transcript:
+            # Skip entries without speaker or text
+            if not isinstance(entry, dict):
+                continue
+
+            speaker = entry.get("speaker", "")
+            text = entry.get("text", "")
+
+            # Skip if missing speaker or text
+            if not speaker or not text:
+                continue
+
+            # Add text to existing speaker or create new entry
+            if speaker in speaker_texts:
+                speaker_texts[speaker] += f"\n{text}"
+            else:
+                speaker_texts[speaker] = text
+
+        logger.info(f"Found {len(speaker_texts)} unique speakers in transcript")
+        return speaker_texts
+
+    def _identify_roles(self, speaker_texts: Dict[str, str],
+                       participants: Optional[List[Dict[str, Any]]] = None) -> Dict[str, str]:
+        """Identify the role of each speaker in the conversation
+
+        Args:
+            speaker_texts: Dictionary mapping speaker names to their combined text
+            participants: Optional list of participant information with roles
+
+        Returns:
+            Dictionary mapping speaker names to their roles (Interviewee, Interviewer, Participant)
+        """
+        logger.info(f"Identifying roles for {len(speaker_texts)} speakers")
+
+        # If participants with roles are provided, use them
+        if participants:
+            roles = {}
+            for speaker in speaker_texts:
+                # Find matching participant
+                for participant in participants:
+                    if participant.get("name", "") == speaker:
+                        roles[speaker] = participant.get("role", "Participant")
+                        break
+                else:
+                    # Default to Participant if no match found
+                    roles[speaker] = "Participant"
+            return roles
+
+        # Otherwise, use heuristics to identify roles
+        roles = {}
+
+        # Heuristic 1: The speaker with the most text is likely the interviewee
+        text_lengths = {speaker: len(text) for speaker, text in speaker_texts.items()}
+        if text_lengths:
+            primary_speaker = max(text_lengths, key=text_lengths.get)
+            roles[primary_speaker] = "Interviewee"
+
+            # All others are likely interviewers
+            for speaker in speaker_texts:
+                if speaker != primary_speaker:
+                    roles[speaker] = "Interviewer"
+
+        # If no speakers found, return empty dict
+        if not roles:
+            logger.warning("No speakers identified for role assignment")
+
+        return roles
+
+    def _group_text_by_speaker(self, transcript: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Group text by speaker from a structured transcript
+
+        Args:
+            transcript: List of transcript entries with speaker and text fields
+
+        Returns:
+            Dictionary mapping speaker names to their combined text
+        """
+        logger.info(f"Grouping text by speaker from {len(transcript)} transcript entries")
+
+        speaker_texts = {}
+
+        for entry in transcript:
+            # Skip entries without speaker or text
+            if not isinstance(entry, dict):
+                continue
+
+            speaker = entry.get("speaker", "")
+            text = entry.get("text", "")
+
+            # Skip if missing speaker or text
+            if not speaker or not text:
+                continue
+
+            # Add text to existing speaker or create new entry
+            if speaker in speaker_texts:
+                speaker_texts[speaker] += f"\n{text}"
+            else:
+                speaker_texts[speaker] = text
+
+        logger.info(f"Found {len(speaker_texts)} unique speakers in transcript")
+        return speaker_texts
+
+    def _identify_roles(self, speaker_texts: Dict[str, str],
+                       participants: Optional[List[Dict[str, Any]]] = None) -> Dict[str, str]:
+        """Identify the role of each speaker in the conversation
+
+        Args:
+            speaker_texts: Dictionary mapping speaker names to their combined text
+            participants: Optional list of participant information with roles
+
+        Returns:
+            Dictionary mapping speaker names to their roles (Interviewee, Interviewer, Participant)
+        """
+        logger.info(f"Identifying roles for {len(speaker_texts)} speakers")
+
+        # If participants with roles are provided, use them
+        if participants:
+            roles = {}
+            for speaker in speaker_texts:
+                # Find matching participant
+                for participant in participants:
+                    if participant.get("name", "") == speaker:
+                        roles[speaker] = participant.get("role", "Participant")
+                        break
+                else:
+                    # Default to Participant if no match found
+                    roles[speaker] = "Participant"
+            return roles
+
+        # Otherwise, use heuristics to identify roles
+        roles = {}
+
+        # Heuristic 1: The speaker with the most text is likely the interviewee
+        text_lengths = {speaker: len(text) for speaker, text in speaker_texts.items()}
+        if text_lengths:
+            primary_speaker = max(text_lengths, key=text_lengths.get)
+            roles[primary_speaker] = "Interviewee"
+
+            # All others are likely interviewers
+            for speaker in speaker_texts:
+                if speaker != primary_speaker:
+                    roles[speaker] = "Interviewer"
+
+        # If no speakers found, return empty dict
+        if not roles:
+            logger.warning("No speakers identified for role assignment")
+
+        return roles
+
     def _get_direct_persona_prompt(self, text: str) -> str:
         """Helper method to generate the refined prompt for direct text analysis."""
         # Simplified prompt - DEPRECATED, use _get_direct_persona_prompt_nested
@@ -894,6 +1057,69 @@ class PersonaFormationService:
             "_get_direct_persona_prompt is deprecated, use _get_direct_persona_prompt_nested"
         )
         return self._get_direct_persona_prompt_nested(text)  # Call the correct one
+
+    def _get_interviewer_persona_prompt(self, text: str) -> str:
+        """Generate a prompt for creating interviewer personas
+
+        This prompt is simpler than the full persona prompt and focuses on
+        the interviewer's role in the conversation.
+
+        Args:
+            text: The interviewer's text from the transcript
+
+        Returns:
+            Prompt for generating an interviewer persona
+        """
+        return f"""
+            Analyze the following text from an interviewer in a conversation and create a focused persona profile.
+
+            INTERVIEWER TEXT:
+            {text[:4000]}
+
+            Create a persona that captures this interviewer's style, approach, and interests.
+            Focus on their questioning techniques, areas of interest, and interaction style.
+
+            FORMAT YOUR RESPONSE AS JSON with the following structure:
+            {{
+              "name": "Descriptive Interviewer Role",
+              "archetype": "Interviewer Type",
+              "description": "Brief overview of the interviewer's approach",
+              "role_context": {{
+                "value": "Professional context and role",
+                "confidence": 0.8,
+                "evidence": ["Example question 1", "Example question 2"]
+              }},
+              "key_responsibilities": {{
+                "value": "Main interviewing responsibilities",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "tools_used": {{
+                "value": "Interview techniques and approaches",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "collaboration_style": {{
+                "value": "How they interact with interviewees",
+                "confidence": 0.8,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "analysis_approach": {{
+                "value": "How they structure questions and follow-ups",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "pain_points": {{
+                "value": "Challenges in their interviewing approach",
+                "confidence": 0.6,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "overall_confidence": 0.7,
+              "supporting_evidence_summary": ["Key evidence about their interview style"]
+            }}
+
+            Return ONLY a valid JSON object. Do NOT include markdown formatting or any explanatory text.
+        """
 
     def _get_direct_persona_prompt_nested(self, text: str) -> str:
         """Generates the prompt asking for the NESTED PersonaTrait structure."""
@@ -1136,6 +1362,266 @@ class PersonaFormationService:
             logger.error(f"[{context_msg}] All JSON parsing attempts failed.")
             return None
 
+    async def form_personas_from_transcript(
+        self, transcript: List[Dict[str, Any]],
+        participants: Optional[List[Dict[str, Any]]] = None,
+        context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Generate personas from a structured transcript with speaker identification
+
+        This method processes a structured transcript to generate personas for each speaker,
+        identifying their roles in the conversation (interviewee vs interviewer).
+
+        Args:
+            transcript: List of transcript entries with speaker and text fields
+            participants: Optional list of participant information with roles
+            context: Optional additional context information
+
+        Returns:
+            List of persona dictionaries with role identification
+        """
+        try:
+            logger.info(f"Forming personas from structured transcript with {len(transcript)} entries")
+
+            # Group text by speaker
+            speaker_texts = self._group_text_by_speaker(transcript)
+            if not speaker_texts:
+                logger.warning("No speaker text found in transcript")
+                return []
+
+            # Identify speaker roles
+            speaker_roles = self._identify_roles(speaker_texts, participants)
+
+            # Generate personas for each speaker
+            personas = []
+
+            for i, (speaker, text) in enumerate(speaker_texts.items()):
+                try:
+                    # Get the role for this speaker
+                    role = speaker_roles.get(speaker, "Participant")
+                    logger.info(f"Generating persona for {speaker} with role {role}")
+
+                    # Create context with speaker info
+                    speaker_context = context.copy() if context else {}
+                    speaker_context.update({
+                        "speaker": speaker,
+                        "role_in_interview": role,
+                        "original_text": text
+                    })
+
+                    # Choose appropriate prompt based on role
+                    if role == "Interviewee":
+                        # Use the detailed persona prompt for interviewees
+                        prompt = self._get_direct_persona_prompt_nested(text)
+                    else:
+                        # Use a simpler prompt for interviewers and other participants
+                        prompt = self._get_interviewer_persona_prompt(text)
+
+                    # Call LLM to generate persona
+                    # Use more text for analysis with Gemini 2.5 Pro's larger context window
+                    text_to_analyze = text
+                    if len(text) > 16000:  # If text is very long, use a reasonable chunk
+                        logger.info(f"Text for {speaker} is very long ({len(text)} chars), using first 16000 chars")
+                        text_to_analyze = text[:16000]
+
+                    llm_response = await self.llm_service.analyze({
+                        "task": "persona_formation",
+                        "text": text_to_analyze,  # Use more text for analysis with Gemini 2.5 Pro
+                        "prompt": prompt,
+                    })
+
+                    # Parse the response
+                    persona_data = self._parse_llm_json_response(
+                        llm_response, f"form_personas_from_transcript for {speaker}"
+                    )
+
+                    if persona_data and isinstance(persona_data, dict):
+                        # Add role information to the persona
+                        persona_data["role_in_interview"] = role
+
+                        # Try to validate with Pydantic schema
+                        try:
+                            validated_persona = PersonaSchema(**persona_data)
+                            persona_dict = validated_persona.model_dump(by_alias=True)
+                            persona_dict["metadata"] = self._get_text_metadata(text, speaker_context)
+                            personas.append(persona_dict)
+                            logger.info(f"Successfully created persona for {speaker}: {persona_dict.get('name', 'Unnamed')}")
+                        except ValidationError as e:
+                            logger.error(f"Validation error for {speaker} persona: {str(e)}")
+                            # Fall back to manual creation
+                            persona = self._create_persona_from_attributes(persona_data, text, speaker_context)
+                            personas.append(persona_to_dict(persona))
+                    else:
+                        logger.warning(f"Failed to generate valid persona data for {speaker}")
+                        # Create a minimal persona for this speaker
+                        minimal_persona = self._create_minimal_fallback_persona()
+                        minimal_persona.name = f"{role}: {speaker}"
+                        minimal_persona.role_in_interview = role
+                        personas.append(persona_to_dict(minimal_persona))
+
+                except Exception as e:
+                    logger.error(f"Error generating persona for speaker {speaker}: {str(e)}", exc_info=True)
+                    # Create a minimal persona for this speaker
+                    minimal_persona = self._create_minimal_fallback_persona()
+                    minimal_persona.name = f"{speaker_roles.get(speaker, 'Participant')}: {speaker}"
+                    minimal_persona.role_in_interview = speaker_roles.get(speaker, "Participant")
+                    personas.append(persona_to_dict(minimal_persona))
+
+                # Emit progress event
+                try:
+                    await event_manager.emit(
+                        EventType.PROCESSING_STEP,
+                        {
+                            "stage": "persona_formation_from_transcript",
+                            "progress": (i + 1) / len(speaker_texts),
+                            "data": {
+                                "personas_found": len(personas),
+                                "speakers_processed": i + 1,
+                            },
+                        },
+                    )
+                except Exception as event_error:
+                    logger.warning(f"Could not emit processing step event: {str(event_error)}")
+
+            logger.info(f"Generated {len(personas)} personas from transcript")
+            return personas
+
+        except Exception as e:
+            logger.error(f"Error forming personas from transcript: {str(e)}", exc_info=True)
+            try:
+                await event_manager.emit_error(e, {"stage": "persona_formation_from_transcript"})
+            except Exception as event_error:
+                logger.warning(f"Could not emit error event: {str(event_error)}")
+            return []
+
+    def _get_interviewer_persona_prompt(self, text: str) -> str:
+        """Generate a prompt for creating interviewer personas
+
+        This prompt is simpler than the full persona prompt and focuses on
+        the interviewer's role in the conversation.
+
+        Args:
+            text: The interviewer's text from the transcript
+
+        Returns:
+            Prompt for generating an interviewer persona
+        """
+        return f"""
+            Analyze the following text from an interviewer in a conversation and create a focused persona profile.
+
+            INTERVIEWER TEXT:
+            {text[:4000]}
+
+            Create a persona that captures this interviewer's style, approach, and interests.
+            Focus on their questioning techniques, areas of interest, and interaction style.
+
+            FORMAT YOUR RESPONSE AS JSON with the following structure:
+            {{
+              "name": "Descriptive Interviewer Role",
+              "archetype": "Interviewer Type",
+              "description": "Brief overview of the interviewer's approach",
+              "role_context": {{
+                "value": "Professional context and role",
+                "confidence": 0.8,
+                "evidence": ["Example question 1", "Example question 2"]
+              }},
+              "key_responsibilities": {{
+                "value": "Main interviewing responsibilities",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "tools_used": {{
+                "value": "Interview techniques and approaches",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "collaboration_style": {{
+                "value": "How they interact with interviewees",
+                "confidence": 0.8,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "analysis_approach": {{
+                "value": "How they structure questions and follow-ups",
+                "confidence": 0.7,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "pain_points": {{
+                "value": "Challenges in their interviewing approach",
+                "confidence": 0.6,
+                "evidence": ["Example 1", "Example 2"]
+              }},
+              "overall_confidence": 0.7,
+              "supporting_evidence_summary": ["Key evidence about their interview style"]
+            }}
+
+            Return ONLY a valid JSON object. Do NOT include markdown formatting or any explanatory text.
+        """
+
+    def _create_persona_from_attributes(self, attributes: Dict[str, Any],
+                                       text: str,
+                                       context: Optional[Dict[str, Any]] = None) -> Persona:
+        """Create a Persona object from attribute dictionary
+
+        Args:
+            attributes: Dictionary of persona attributes
+            text: Original text used to generate the persona
+            context: Optional additional context
+
+        Returns:
+            Persona object
+        """
+        # Extract nested trait data, providing default dict if key missing
+        role_context_data = attributes.get("role_context", {})
+        key_responsibilities_data = attributes.get("key_responsibilities", {})
+        tools_used_data = attributes.get("tools_used", {})
+        collaboration_style_data = attributes.get("collaboration_style", {})
+        analysis_approach_data = attributes.get("analysis_approach", {})
+        pain_points_data = attributes.get("pain_points", {})
+
+        # Create a persona object from the extracted data
+        persona = Persona(
+            name=attributes.get("name", "Unknown Persona"),
+            description=attributes.get("description", "Generated from interview analysis"),
+            # Create PersonaTrait instances from nested data
+            role_context=PersonaTrait(
+                value=role_context_data.get("value", ""),
+                confidence=float(role_context_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(role_context_data.get("evidence", [])),
+            ),
+            key_responsibilities=PersonaTrait(
+                value=key_responsibilities_data.get("value", ""),
+                confidence=float(key_responsibilities_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(key_responsibilities_data.get("evidence", [])),
+            ),
+            tools_used=PersonaTrait(
+                value=tools_used_data.get("value", ""),
+                confidence=float(tools_used_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(tools_used_data.get("evidence", [])),
+            ),
+            collaboration_style=PersonaTrait(
+                value=collaboration_style_data.get("value", ""),
+                confidence=float(collaboration_style_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(collaboration_style_data.get("evidence", [])),
+            ),
+            analysis_approach=PersonaTrait(
+                value=analysis_approach_data.get("value", ""),
+                confidence=float(analysis_approach_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(analysis_approach_data.get("evidence", [])),
+            ),
+            pain_points=PersonaTrait(
+                value=pain_points_data.get("value", ""),
+                confidence=float(pain_points_data.get("confidence", 0.7)),
+                evidence=self._clean_evidence_list(pain_points_data.get("evidence", [])),
+            ),
+            patterns=attributes.get("patterns", []),
+            confidence=float(attributes.get("confidence", 0.7)),
+            evidence=self._clean_evidence_list(attributes.get("evidence", [])),
+            persona_metadata=self._get_text_metadata(text, context),
+            role_in_interview=context.get("role_in_interview", "Participant") if context else "Participant",
+        )
+
+        return persona
+
     async def generate_persona_from_text(
         self, text: str, context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
@@ -1146,14 +1632,118 @@ class PersonaFormationService:
         like Teams chat exports.
 
         Args:
-            text: Raw interview transcript text
+            text: Raw interview transcript text or structured transcript data
             context: Optional additional context information
 
         Returns:
             List of persona dictionaries ready for frontend display
         """
         try:
-            logger.info(f"Generating persona directly from text ({len(text)} chars)")
+            logger.info(f"Generating persona from input (length: {len(str(text))})")
+
+            # Check if the input is a structured transcript
+            is_structured_transcript = False
+            transcript_data = None
+
+            # Try to parse as JSON if it's a string
+            if isinstance(text, str):
+                try:
+                    # Check if it's a JSON string
+                    if text.strip().startswith(('[', '{')):
+                        potential_transcript = json.loads(text)
+                        if isinstance(potential_transcript, list) and len(potential_transcript) > 0:
+                            # Check if it has the expected structure for a transcript
+                            if all(isinstance(entry, dict) for entry in potential_transcript):
+                                # Check if entries have speaker and text fields
+                                if any('speaker' in entry for entry in potential_transcript):
+                                    is_structured_transcript = True
+                                    transcript_data = potential_transcript
+                                    logger.info("Detected structured transcript in JSON string format")
+                except json.JSONDecodeError:
+                    # Not a valid JSON string, continue with regular text processing
+                    pass
+            # Check if it's already a list of dictionaries (structured transcript)
+            elif isinstance(text, list) and len(text) > 0:
+                if all(isinstance(entry, dict) for entry in text):
+                    # Check if entries have speaker and text fields
+                    if any('speaker' in entry for entry in text):
+                        is_structured_transcript = True
+                        transcript_data = text
+                        logger.info("Detected structured transcript in list format")
+
+            # Check for Teams-like transcript format with speaker prefixes
+            if isinstance(text, str) and not is_structured_transcript:
+                speaker_pattern = r"^([A-Za-z\s]+):\s"
+                lines = text.split("\n")
+                speaker_line_count = 0
+
+                for line in lines[:20]:  # Check first 20 lines
+                    if re.match(speaker_pattern, line):
+                        speaker_line_count += 1
+
+                # If more than 30% of the first 20 lines match the speaker pattern, consider it a transcript
+                if speaker_line_count >= 6:  # 30% of 20 lines
+                    logger.info(f"Detected Teams-style transcript format with {speaker_line_count} speaker lines")
+                    # Convert to structured format
+                    structured_data = []
+                    current_speaker = None
+                    current_text = []
+
+                    for line in lines:
+                        match = re.match(speaker_pattern, line)
+                        if match:
+                            # Save previous speaker's text if any
+                            if current_speaker and current_text:
+                                structured_data.append({
+                                    "speaker": current_speaker,
+                                    "text": " ".join(current_text)
+                                })
+                                current_text = []
+
+                            # Start new speaker
+                            current_speaker = match.group(1).strip()
+                            current_text.append(line[len(current_speaker)+2:].strip())
+                        elif current_speaker:
+                            # Continue with current speaker
+                            current_text.append(line.strip())
+
+                    # Add the last speaker's text
+                    if current_speaker and current_text:
+                        structured_data.append({
+                            "speaker": current_speaker,
+                            "text": " ".join(current_text)
+                        })
+
+                    if structured_data:
+                        is_structured_transcript = True
+                        transcript_data = structured_data
+                        logger.info(f"Converted Teams-style transcript to structured format with {len(structured_data)} entries")
+
+            # If it's a structured transcript, use the transcript processing method
+            if is_structured_transcript and transcript_data:
+                logger.info(f"Processing structured transcript with {len(transcript_data)} entries")
+                return await self.form_personas_from_transcript(transcript_data, context=context)
+
+            # If it's a Teams-like transcript with timestamps and speakers
+            if isinstance(text, str) and re.search(r'\[\d+:\d+ [AP]M\] \w+:', text):
+                logger.info("Detected Teams-like transcript format")
+                # Parse the Teams format into a structured transcript
+                transcript_data = []
+                for line in text.split('\n'):
+                    match = re.match(r'\[(\d+:\d+ [AP]M)\] (\w+): (.*)', line)
+                    if match:
+                        timestamp, speaker, content = match.groups()
+                        transcript_data.append({
+                            'timestamp': timestamp,
+                            'speaker': speaker,
+                            'text': content
+                        })
+
+                if transcript_data:
+                    logger.info(f"Parsed Teams transcript into {len(transcript_data)} entries")
+                    return await self.form_personas_from_transcript(transcript_data, context=context)
+
+            # If we get here, it's a regular text, so proceed with the standard approach
             try:
                 # Try to emit event, but don't fail if it doesn't work
                 await event_manager.emit(
@@ -1166,7 +1756,7 @@ class PersonaFormationService:
                 )
 
             # Create the refined prompt asking for nested structure
-            prompt = self._get_direct_persona_prompt_nested(text)  # Use nested prompt
+            prompt = self._get_direct_persona_prompt_nested(text if isinstance(text, str) else str(text))  # Use nested prompt
 
             # Try different methods to generate persona
             attributes = None
@@ -1174,12 +1764,17 @@ class PersonaFormationService:
 
             # Method 1: Use standard analyze method (preferred)
             try:
+                text_to_analyze = text if isinstance(text, str) else str(text)
+
+                # Use more text for analysis with Gemini 2.5 Pro's larger context window
+                if len(text_to_analyze) > 16000:  # If text is very long, use a reasonable chunk
+                    logger.info(f"Text is very long ({len(text_to_analyze)} chars), using first 16000 chars")
+                    text_to_analyze = text_to_analyze[:16000]
+
                 llm_response = await self.llm_service.analyze(
                     {
                         "task": "persona_formation",
-                        "text": text[
-                            :4000
-                        ],  # Pass original text snippet for context if needed by analyze
+                        "text": text_to_analyze,  # Use more text for analysis with Gemini 2.5 Pro
                         "prompt": prompt,
                     }
                 )

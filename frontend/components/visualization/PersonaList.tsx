@@ -190,13 +190,23 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               </div>
 
               {/* Basic Information */}
-              {persona.archetype && (
-                <div className="mb-4">
+              <div className="mb-4 flex flex-wrap gap-2">
+                {persona.archetype && (
                   <Badge variant="outline" className="text-sm">
                     {persona.archetype}
                   </Badge>
-                </div>
-              )}
+                )}
+                {persona.role_in_interview && (
+                  <Badge variant="secondary" className="text-sm">
+                    {persona.role_in_interview}
+                  </Badge>
+                )}
+                {persona.metadata?.speaker && (
+                  <Badge variant="outline" className="text-sm bg-blue-50">
+                    Speaker: {persona.metadata.speaker}
+                  </Badge>
+                )}
+              </div>
 
               {/* Tabs for different persona aspects */}
               <Tabs defaultValue="detailed" className="w-full mt-4">
