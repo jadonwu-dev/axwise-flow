@@ -4,7 +4,7 @@ import os
 import asyncio
 import httpx
 import google.genai as genai
-from backend.utils.json_repair import repair_json
+from backend.utils.json.json_repair import repair_json
 import random
 from typing import Dict, Any, List, Optional, Union
 from domain.interfaces.llm_service import ILLMService
@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 from backend.schemas import Theme, Pattern, Insight
-from backend.utils.json_parser import (
+from backend.utils.json.json_parser import (
     parse_llm_json_response,
     normalize_persona_response,
 )
