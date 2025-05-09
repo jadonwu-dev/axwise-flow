@@ -49,7 +49,7 @@ from backend.services.nlp import get_nlp_processor
 from backend.database import get_db, create_tables
 from backend.models import User, InterviewData, AnalysisResult
 from infrastructure.config.settings import settings
-from backend.services.processing.persona_formation import PersonaFormationService
+from backend.services.processing.persona_formation_service import PersonaFormationService
 
 # Configure logging
 logging.basicConfig(

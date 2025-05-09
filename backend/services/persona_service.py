@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 
 from backend.models import User
 from backend.services.llm import LLMServiceFactory
-from backend.services.processing.persona_formation import PersonaFormationService
+from backend.services.processing.persona_formation_service import PersonaFormationService
 from infrastructure.config.settings import settings
 
 # Configuration values
