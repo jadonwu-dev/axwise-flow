@@ -81,14 +81,14 @@ class SessionManager:
         """Get a value from session state"""
         return cls._session_state.get(key, default)
 
-    @staticmethod
-    def add_question(question):
+    @classmethod
+    def add_question(cls, question):
         """Add a question to the question list"""
-        if 'question_list' not in st.session_state:
-            st.session_state['question_list'] = []
-        st.session_state['question_list'].append(question)
+        if 'question_list' not in cls._session_state:
+            cls._session_state['question_list'] = []
+        cls._session_state['question_list'].append(question)
 
-    @staticmethod
-    def get_questions():
+    @classmethod
+    def get_questions(cls):
         """Get all questions from the question list"""
-        return st.session_state.get('question_list', [])
+        return cls._session_state.get('question_list', [])

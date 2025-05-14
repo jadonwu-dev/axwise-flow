@@ -1,11 +1,17 @@
 import json
 import pytest
-from .persona_analyzer import PersonaAnalyzer, create_personas_from_interviews
+import os
+from pathlib import Path
+from backend.utils.persona.persona_analyzer import PersonaAnalyzer, create_personas_from_interviews
 
+# Path to sample data
+SAMPLE_DATA_PATH = Path(__file__).parent.parent.parent.parent / 'sample-data' / 'edu_interviews_syntethic.json'
+
+@pytest.mark.skipif(not SAMPLE_DATA_PATH.exists(), reason="Sample data file not found")
 def test_persona_analyzer_with_sample_data():
     """Test PersonaAnalyzer with sample interview data"""
     # Load sample data
-    with open('sample-data/edu_interviews_syntethic.json', 'r') as f:
+    with open(SAMPLE_DATA_PATH, 'r') as f:
         sample_data = json.load(f)
     
     # Create analyzer instance
@@ -41,9 +47,10 @@ def test_persona_analyzer_with_sample_data():
     assert 'supporting_quotes' in persona
     assert 'metadata' in persona
 
+@pytest.mark.skipif(not SAMPLE_DATA_PATH.exists(), reason="Sample data file not found")
 def test_create_personas_from_interviews():
     """Test creating multiple personas from interview file"""
-    personas = create_personas_from_interviews('sample-data/edu_interviews_syntethic.json')
+    personas = create_personas_from_interviews(str(SAMPLE_DATA_PATH))
     assert isinstance(personas, list)
     assert len(personas) > 0
     
@@ -56,9 +63,10 @@ def test_create_personas_from_interviews():
         assert 'supporting_quotes' in persona
         assert 'metadata' in persona
 
+@pytest.mark.skipif(not SAMPLE_DATA_PATH.exists(), reason="Sample data file not found")
 def test_extract_representative_quotes():
     """Test quote extraction and categorization"""
-    with open('sample-data/edu_interviews_syntethic.json', 'r') as f:
+    with open(SAMPLE_DATA_PATH, 'r') as f:
         sample_data = json.load(f)
     
     analyzer = PersonaAnalyzer(sample_data)
@@ -83,9 +91,10 @@ def test_extract_representative_quotes():
             if 'experiences' in category:
                 assert 'sentiment' in sample_quote
 
+@pytest.mark.skipif(not SAMPLE_DATA_PATH.exists(), reason="Sample data file not found")
 def test_extract_common_patterns():
     """Test pattern extraction from responses"""
-    with open('sample-data/edu_interviews_syntethic.json', 'r') as f:
+    with open(SAMPLE_DATA_PATH, 'r') as f:
         sample_data = json.load(f)
     
     analyzer = PersonaAnalyzer(sample_data)
@@ -107,6 +116,3 @@ def test_extract_common_patterns():
         assert 'examples' in pattern
         assert isinstance(pattern['frequency'], int)
         assert isinstance(pattern['examples'], list)
-
-if __name__ == '__main__':
-    pytest.main([__file__])
