@@ -104,12 +104,12 @@ class AttributeExtractor:
             logger.error(f"Error extracting attributes for {role}: {str(e)}", exc_info=True)
             return self._create_fallback_attributes(role)
 
-    def _parse_llm_json_response(self, response: str, context: str = "") -> Dict[str, Any]:
+    def _parse_llm_json_response(self, response: Any, context: str = "") -> Dict[str, Any]:
         """
         Parse JSON response from LLM.
 
         Args:
-            response: LLM response string
+            response: LLM response (can be a string or a dictionary)
             context: Context for error logging
 
         Returns:
@@ -119,6 +119,12 @@ class AttributeExtractor:
             logger.warning(f"Empty response from LLM in {context}")
             return {}
 
+        # If response is already a dictionary, return it directly
+        if isinstance(response, dict):
+            logger.info(f"Response is already a dictionary in {context}")
+            return response
+
+        # Otherwise, try to parse it as a JSON string
         try:
             # Try to parse as JSON directly
             return json.loads(response)
@@ -148,6 +154,7 @@ class AttributeExtractor:
             Cleaned persona attributes
         """
         logger.info("Cleaning persona attributes")
+        logger.info(f"Attributes before cleaning: {json.dumps(attributes, indent=2)}")
 
         # Ensure all required fields are present
         required_fields = [
@@ -168,7 +175,29 @@ class AttributeExtractor:
         ]
 
         for field in trait_fields:
-            if field not in attributes or not isinstance(attributes[field], dict):
+            # Check if the field is key_quotes and is a list
+            if field == "key_quotes" and isinstance(attributes[field], list) and attributes[field]:
+                # Convert list of quotes to structured trait
+                quotes_list = attributes[field]
+                quotes_value = "\n".join([f"• {quote}" for quote in quotes_list])
+                attributes[field] = {
+                    "value": quotes_value,
+                    "confidence": 0.9,
+                    "evidence": quotes_list
+                }
+                logger.info(f"Converted list of quotes to structured trait for {field}")
+            # Check if the field exists as a string value
+            elif field in attributes and isinstance(attributes[field], str) and attributes[field]:
+                # Convert string value to structured trait
+                string_value = attributes[field]
+                attributes[field] = {
+                    "value": string_value,
+                    "confidence": 0.7,
+                    "evidence": [f"Extracted from text: {string_value[:100]}..."]
+                }
+                logger.info(f"Converted string value to structured trait for {field}")
+            # Check if the field doesn't exist or isn't a dict
+            elif field not in attributes or not isinstance(attributes[field], dict):
                 attributes[field] = {
                     "value": "",
                     "confidence": 0.5,
@@ -177,8 +206,30 @@ class AttributeExtractor:
             else:
                 # Ensure trait has all required fields
                 trait = attributes[field]
-                if "value" not in trait:
-                    trait["value"] = ""
+                if "value" not in trait or not trait["value"]:
+                    # Set default value based on field name
+                    default_values = {
+                        "demographics": f"Information about {attributes.get('name', 'the persona')}",
+                        "goals_and_motivations": "Primary objectives and driving factors",
+                        "skills_and_expertise": "Technical and soft skills, knowledge areas",
+                        "workflow_and_environment": "Work processes and environment",
+                        "challenges_and_frustrations": "Pain points and obstacles",
+                        "needs_and_desires": "Specific needs and desires",
+                        "technology_and_tools": "Software, hardware, and tools used",
+                        "attitude_towards_research": "Views on research and data",
+                        "attitude_towards_ai": "Perspective on AI and automation",
+                        "key_quotes": "Representative quotes from the text",
+                        "role_context": "Primary job function and work environment",
+                        "key_responsibilities": "Main tasks and responsibilities",
+                        "tools_used": "Specific tools or methods used",
+                        "collaboration_style": "How they work with others",
+                        "analysis_approach": "How they approach problems/analysis",
+                        "pain_points": "Specific challenges mentioned"
+                    }
+                    default_value = default_values.get(field, f"Information about {field}")
+                    logger.info(f"Setting default value for {field}: {default_value}")
+                    trait["value"] = default_value
+
                 if "confidence" not in trait:
                     trait["confidence"] = 0.5
                 if "evidence" not in trait:
@@ -196,6 +247,30 @@ class AttributeExtractor:
                     trait["evidence"] = []
                 trait["evidence"] = [str(e) for e in trait["evidence"] if e]
 
+                # If evidence is still empty, add a default evidence item
+                if not trait["evidence"]:
+                    # Add default evidence based on the field
+                    default_evidence = {
+                        "demographics": ["Inferred from the overall context of the conversation"],
+                        "goals_and_motivations": ["Based on statements about objectives and priorities"],
+                        "skills_and_expertise": ["Derived from mentions of capabilities and knowledge areas"],
+                        "workflow_and_environment": ["Inferred from descriptions of work processes"],
+                        "challenges_and_frustrations": ["Based on mentions of difficulties and pain points"],
+                        "needs_and_desires": ["Derived from expressions of wants and requirements"],
+                        "technology_and_tools": ["Inferred from mentions of software, hardware, and tools"],
+                        "attitude_towards_research": ["Based on statements about research and data"],
+                        "attitude_towards_ai": ["Derived from mentions of AI and automation"],
+                        "key_quotes": ["Representative statements from the text"],
+                        "role_context": ["Inferred from descriptions of job function and environment"],
+                        "key_responsibilities": ["Based on mentions of tasks and duties"],
+                        "tools_used": ["Derived from mentions of specific tools and methods"],
+                        "collaboration_style": ["Inferred from descriptions of interactions with others"],
+                        "analysis_approach": ["Based on statements about problem-solving methods"],
+                        "pain_points": ["Derived from mentions of specific challenges"]
+                    }
+
+                    trait["evidence"] = default_evidence.get(field, [f"No specific evidence found in the text for {field}"])
+
         # Ensure patterns, confidence, and evidence are present
         if "patterns" not in attributes or not isinstance(attributes["patterns"], list):
             attributes["patterns"] = []
@@ -212,6 +287,7 @@ class AttributeExtractor:
         if "evidence" not in attributes or not isinstance(attributes["evidence"], list):
             attributes["evidence"] = []
 
+        logger.info(f"Attributes after cleaning: {json.dumps(attributes, indent=2)}")
         return attributes
 
     def _enhance_evidence_fields(self, attributes: Dict[str, Any], text: str) -> Dict[str, Any]:
@@ -371,354 +447,18 @@ class AttributeExtractor:
         Returns:
             Enhanced prompt
         """
-        if role == "Interviewer":
-            return self._create_enhanced_interviewer_prompt(text)
-        elif role == "Interviewee":
-            return self._create_enhanced_interviewee_prompt(text)
-        else:
-            return self._create_enhanced_participant_prompt(text)
+        # Use the simplified persona formation prompts
+        from backend.services.llm.prompts.tasks.simplified_persona_formation import SimplifiedPersonaFormationPrompts
 
-    def _create_enhanced_interviewer_prompt(self, text: str) -> str:
-        """
-        Create an enhanced prompt for interviewer persona formation.
+        # Create a data dictionary for the prompt generator
+        data = {
+            "text": text,
+            "role": role
+        }
 
-        Args:
-            text: Text to analyze
+        # Get the simplified prompt
+        logger.info(f"Using simplified persona formation prompt for {role}")
+        return SimplifiedPersonaFormationPrompts.get_prompt(data)
 
-        Returns:
-            Enhanced prompt
-        """
-        return f"""
-        CRITICAL INSTRUCTION: Your ENTIRE response must be a single, valid JSON object. Start with '{{' and end with '}}'. DO NOT include ANY text, comments, or markdown formatting before or after the JSON.
-
-        Analyze the following interview text excerpt and create a comprehensive, detailed interviewer persona profile with specific, concrete details.
-
-        INTERVIEW TEXT:
-        {text}
-
-        IMPORTANT: For each attribute, include EXACT QUOTES from the text as evidence. Do not paraphrase or summarize.
-        Extract at least 3-5 direct quotes for each attribute whenever possible.
-
-        FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
-        {{
-            "name": "Descriptive name for the interviewer (e.g., 'Methodical UX Researcher')",
-            "description": "Brief 1-3 sentence overview of the interviewer",
-            "archetype": "General category (e.g., 'Research Professional', 'Design Facilitator')",
-
-            "demographics": {{
-                "value": "Age, experience level, professional background",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "goals_and_motivations": {{
-                "value": "Primary research objectives and motivations",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "skills_and_expertise": {{
-                "value": "Technical and soft skills demonstrated",
-                "confidence": 0.75,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "workflow_and_environment": {{
-                "value": "Interview approach and environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "challenges_and_frustrations": {{
-                "value": "Difficulties faced during the interview",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "needs_and_desires": {{
-                "value": "What the interviewer is trying to achieve",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "technology_and_tools": {{
-                "value": "Tools or methods mentioned",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_research": {{
-                "value": "Approach to research and data",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_ai": {{
-                "value": "Views on AI and technology",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_quotes": {{
-                "value": "Representative quotes from the interviewer",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "role_context": {{
-                "value": "Primary job function and work environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_responsibilities": {{
-                "value": "Main tasks and responsibilities",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "tools_used": {{
-                "value": "Specific tools or methods used",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "collaboration_style": {{
-                "value": "How they work with others",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "analysis_approach": {{
-                "value": "How they approach problems/analysis",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "pain_points": {{
-                "value": "Specific challenges mentioned",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-            "confidence": 0.8,
-            "evidence": ["Overall evidence 1", "Overall evidence 2", "Overall evidence 3"]
-        }}
-        """
-
-    def _create_enhanced_interviewee_prompt(self, text: str) -> str:
-        """
-        Create an enhanced prompt for interviewee persona formation.
-
-        Args:
-            text: Text to analyze
-
-        Returns:
-            Enhanced prompt
-        """
-        return f"""
-        CRITICAL INSTRUCTION: Your ENTIRE response must be a single, valid JSON object. Start with '{{' and end with '}}'. DO NOT include ANY text, comments, or markdown formatting before or after the JSON.
-
-        Analyze the following interview text excerpt and create a comprehensive, detailed user persona profile with specific, concrete details.
-
-        INTERVIEW TEXT:
-        {text}
-
-        IMPORTANT: For each attribute, include EXACT QUOTES from the text as evidence. Do not paraphrase or summarize.
-        Extract at least 3-5 direct quotes for each attribute whenever possible.
-
-        FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
-        {{
-            "name": "Descriptive name for the persona (e.g., 'Data-Driven Product Manager')",
-            "description": "Brief 1-3 sentence overview of the persona",
-            "archetype": "General category (e.g., 'Decision Maker', 'Technical Expert')",
-
-            "demographics": {{
-                "value": "Age, gender, education, experience level",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "goals_and_motivations": {{
-                "value": "Primary objectives and driving factors",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "skills_and_expertise": {{
-                "value": "Technical and soft skills, knowledge areas",
-                "confidence": 0.75,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "workflow_and_environment": {{
-                "value": "Work processes and environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "challenges_and_frustrations": {{
-                "value": "Pain points and obstacles",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "needs_and_desires": {{
-                "value": "Specific needs and desires",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "technology_and_tools": {{
-                "value": "Software, hardware, and tools used",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_research": {{
-                "value": "Views on research and data",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_ai": {{
-                "value": "Perspective on AI and automation",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_quotes": {{
-                "value": "Representative quotes that capture the persona's voice",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "role_context": {{
-                "value": "Primary job function and work environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_responsibilities": {{
-                "value": "Main tasks and responsibilities",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "tools_used": {{
-                "value": "Specific tools or methods used",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "collaboration_style": {{
-                "value": "How they work with others",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "analysis_approach": {{
-                "value": "How they approach problems/analysis",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "pain_points": {{
-                "value": "Specific challenges mentioned",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-            "confidence": 0.8,
-            "evidence": ["Overall evidence 1", "Overall evidence 2", "Overall evidence 3"]
-        }}
-        """
-
-    def _create_enhanced_participant_prompt(self, text: str) -> str:
-        """
-        Create an enhanced prompt for general participant persona formation.
-
-        Args:
-            text: Text to analyze
-
-        Returns:
-            Enhanced prompt
-        """
-        return f"""
-        CRITICAL INSTRUCTION: Your ENTIRE response must be a single, valid JSON object. Start with '{{' and end with '}}'. DO NOT include ANY text, comments, or markdown formatting before or after the JSON.
-
-        Analyze the following text excerpt and create a comprehensive, detailed persona profile with specific, concrete details.
-
-        TEXT:
-        {text}
-
-        IMPORTANT: For each attribute, include EXACT QUOTES from the text as evidence. Do not paraphrase or summarize.
-        Extract at least 3-5 direct quotes for each attribute whenever possible.
-
-        FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
-        {{
-            "name": "Descriptive name for the persona (e.g., 'Analytical Business Strategist')",
-            "description": "Brief 1-3 sentence overview of the persona",
-            "archetype": "General category (e.g., 'Decision Maker', 'Technical Expert')",
-
-            "demographics": {{
-                "value": "Age, gender, education, experience level",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "goals_and_motivations": {{
-                "value": "Primary objectives and driving factors",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "skills_and_expertise": {{
-                "value": "Technical and soft skills, knowledge areas",
-                "confidence": 0.75,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "workflow_and_environment": {{
-                "value": "Work processes and environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "challenges_and_frustrations": {{
-                "value": "Pain points and obstacles",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "needs_and_desires": {{
-                "value": "Specific needs and desires",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "technology_and_tools": {{
-                "value": "Software, hardware, and tools used",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_research": {{
-                "value": "Views on research and data",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "attitude_towards_ai": {{
-                "value": "Perspective on AI and automation",
-                "confidence": 0.6,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_quotes": {{
-                "value": "Representative quotes that capture the persona's voice",
-                "confidence": 0.9,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "role_context": {{
-                "value": "Primary job function and work environment",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "key_responsibilities": {{
-                "value": "Main tasks and responsibilities",
-                "confidence": 0.8,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "tools_used": {{
-                "value": "Specific tools or methods used",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "collaboration_style": {{
-                "value": "How they work with others",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "analysis_approach": {{
-                "value": "How they approach problems/analysis",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-            "pain_points": {{
-                "value": "Specific challenges mentioned",
-                "confidence": 0.7,
-                "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-            }},
-
-            "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-            "confidence": 0.8,
-            "evidence": ["Overall evidence 1", "Overall evidence 2", "Overall evidence 3"]
-        }}
-        """
+# These methods have been removed as they are no longer needed.
+# The _create_enhanced_persona_prompt method now handles all persona formation prompts.

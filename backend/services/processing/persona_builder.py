@@ -10,6 +10,7 @@ This module provides functionality for:
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field, asdict
 import logging
+import re
 from datetime import datetime
 from pydantic import ValidationError
 
@@ -130,35 +131,20 @@ class PersonaBuilder:
 
         try:
             # Extract name from attributes or use override
-            name = name_override if name_override else attributes.get("name", role)
+            name = name_override
+            if not name:
+                # Get name from attributes, ensuring it's a string
+                attr_name = attributes.get("name", role)
+                if isinstance(attr_name, str):
+                    name = attr_name
+                else:
+                    # If name is not a string, use role as fallback
+                    logger.warning(f"Name is not a string: {attr_name}, using role as fallback")
+                    name = role
 
             # Log the attributes for debugging
             logger.info(f"Building persona with name: {name}, role: {role}")
             logger.info(f"Attribute keys: {list(attributes.keys())}")
-
-            # Handle key_quotes specially - it can be a string, list, or dict
-            key_quotes_data = attributes.get("key_quotes", {})
-            if isinstance(key_quotes_data, list):
-                # Convert list of quotes to a trait
-                key_quotes_value = ", ".join(key_quotes_data[:5])  # Take first 5 quotes
-                key_quotes_data = {
-                    "value": key_quotes_value,
-                    "confidence": 0.9,
-                    "evidence": key_quotes_data
-                }
-            elif isinstance(key_quotes_data, str):
-                # Convert string to a trait
-                key_quotes_data = {
-                    "value": key_quotes_data,
-                    "confidence": 0.8,
-                    "evidence": [key_quotes_data]
-                }
-            elif not isinstance(key_quotes_data, dict):
-                key_quotes_data = {
-                    "value": str(key_quotes_data),
-                    "confidence": 0.5,
-                    "evidence": []
-                }
 
             # Get overall confidence score if available (for simplified format)
             overall_confidence = 0.7  # Default confidence
@@ -167,12 +153,45 @@ class PersonaBuilder:
             elif "overall_confidence" in attributes and isinstance(attributes["overall_confidence"], (int, float)):
                 overall_confidence = float(attributes["overall_confidence"])
 
-            # Get key quotes for evidence (for simplified format)
+            # Handle key_quotes specially - it can be a string, list, or dict
+            key_quotes_data = attributes.get("key_quotes", {})
             key_quotes_list = []
-            if isinstance(key_quotes_data, dict) and "evidence" in key_quotes_data and isinstance(key_quotes_data["evidence"], list):
-                key_quotes_list = key_quotes_data["evidence"]
-            elif isinstance(attributes.get("key_quotes"), list):
-                key_quotes_list = attributes["key_quotes"]
+
+            if isinstance(key_quotes_data, list):
+                # For simplified format: list of quotes
+                key_quotes_list = key_quotes_data
+                # Convert list of quotes to a trait
+                key_quotes_value = ", ".join(key_quotes_data[:5])  # Take first 5 quotes
+                key_quotes_data = {
+                    "value": key_quotes_value,
+                    "confidence": overall_confidence,  # Use overall confidence
+                    "evidence": key_quotes_data  # Use the quotes as evidence
+                }
+                logger.info(f"Converted key_quotes list to trait: {len(key_quotes_list)} quotes")
+            elif isinstance(key_quotes_data, str):
+                # Convert string to a trait
+                key_quotes_list = [key_quotes_data]
+                key_quotes_data = {
+                    "value": key_quotes_data,
+                    "confidence": overall_confidence,  # Use overall confidence
+                    "evidence": [key_quotes_data]
+                }
+                logger.info(f"Converted key_quotes string to trait")
+            elif isinstance(key_quotes_data, dict) and "value" in key_quotes_data:
+                # Already in trait format
+                if "evidence" in key_quotes_data and isinstance(key_quotes_data["evidence"], list):
+                    key_quotes_list = key_quotes_data["evidence"]
+                # Ensure confidence uses overall_confidence if not specified
+                if "confidence" not in key_quotes_data:
+                    key_quotes_data["confidence"] = overall_confidence
+            else:
+                # Default empty trait
+                key_quotes_data = {
+                    "value": "",
+                    "confidence": overall_confidence,
+                    "evidence": []
+                }
+                logger.info(f"Created default key_quotes trait")
 
             # Process trait fields with robust error handling
             trait_fields = {
@@ -198,28 +217,39 @@ class PersonaBuilder:
             for field_name, field_data in trait_fields.items():
                 if isinstance(field_data, dict) and "value" in field_data:
                     # Standard format - already a dict with value, confidence, evidence
-                    processed_traits[field_name] = field_data
-                elif isinstance(field_data, str):
+                    processed_trait = field_data.copy()
+                    # Ensure confidence uses overall_confidence if not specified
+                    if "confidence" not in processed_trait:
+                        processed_trait["confidence"] = overall_confidence
+                    # Ensure evidence is a list
+                    if "evidence" not in processed_trait or not isinstance(processed_trait["evidence"], list):
+                        processed_trait["evidence"] = key_quotes_list[:2] if key_quotes_list else []
+                    processed_traits[field_name] = processed_trait
+                    logger.debug(f"Field {field_name} already in trait format")
+                elif isinstance(field_data, str) and field_data.strip():
                     # String format - convert to dict (simplified format)
                     processed_traits[field_name] = {
                         "value": field_data,
                         "confidence": overall_confidence,
                         "evidence": key_quotes_list[:2] if key_quotes_list else []  # Use key quotes as evidence
                     }
-                elif isinstance(field_data, list):
+                    logger.debug(f"Converted string field {field_name} to trait")
+                elif isinstance(field_data, list) and field_data:
                     # List format - convert to dict
                     processed_traits[field_name] = {
                         "value": ", ".join(str(item) for item in field_data[:3]),  # Take first 3 items
                         "confidence": overall_confidence,
                         "evidence": key_quotes_list[:2] if key_quotes_list else []  # Use key quotes as evidence
                     }
+                    logger.debug(f"Converted list field {field_name} to trait")
                 else:
                     # Default empty dict
                     processed_traits[field_name] = {
                         "value": "",
-                        "confidence": 0.5,
+                        "confidence": overall_confidence,  # Use overall confidence
                         "evidence": []
                     }
+                    logger.debug(f"Created default trait for field {field_name}")
 
             # Add key_quotes to processed traits
             processed_traits["key_quotes"] = key_quotes_data
@@ -253,8 +283,8 @@ class PersonaBuilder:
             # Create Persona object
             persona = Persona(
                 name=name,
-                description=attributes.get("description", "No description provided."),
-                archetype=attributes.get("archetype", "Unknown"),
+                description=self._get_string_value(attributes.get("description"), "No description provided."),
+                archetype=self._get_string_value(attributes.get("archetype"), "Unknown"),
 
                 # Create PersonaTrait instances from processed data
                 role_context=PersonaTrait(
@@ -348,30 +378,36 @@ class PersonaBuilder:
                 role_in_interview=role
             )
 
-            # Calculate overall confidence based on trait confidences
-            trait_confidences = [
-                persona.role_context.confidence,
-                persona.key_responsibilities.confidence,
-                persona.tools_used.confidence,
-                persona.collaboration_style.confidence,
-                persona.analysis_approach.confidence,
-                persona.pain_points.confidence,
-                persona.demographics.confidence,
-                persona.goals_and_motivations.confidence,
-                persona.skills_and_expertise.confidence,
-                persona.workflow_and_environment.confidence,
-                persona.challenges_and_frustrations.confidence,
-                persona.needs_and_desires.confidence,
-                persona.technology_and_tools.confidence,
-                persona.attitude_towards_research.confidence,
-                persona.attitude_towards_ai.confidence,
-                persona.key_quotes.confidence
-            ]
+            # For simplified format, use the overall_confidence_score directly if available
+            if "overall_confidence_score" in attributes and isinstance(attributes["overall_confidence_score"], (int, float)):
+                persona.confidence = float(attributes["overall_confidence_score"])
+                logger.info(f"Using overall_confidence_score directly: {persona.confidence}")
+            else:
+                # Calculate overall confidence based on trait confidences
+                trait_confidences = [
+                    persona.role_context.confidence,
+                    persona.key_responsibilities.confidence,
+                    persona.tools_used.confidence,
+                    persona.collaboration_style.confidence,
+                    persona.analysis_approach.confidence,
+                    persona.pain_points.confidence,
+                    persona.demographics.confidence,
+                    persona.goals_and_motivations.confidence,
+                    persona.skills_and_expertise.confidence,
+                    persona.workflow_and_environment.confidence,
+                    persona.challenges_and_frustrations.confidence,
+                    persona.needs_and_desires.confidence,
+                    persona.technology_and_tools.confidence,
+                    persona.attitude_towards_research.confidence,
+                    persona.attitude_towards_ai.confidence,
+                    persona.key_quotes.confidence
+                ]
 
-            # Filter out zero confidences
-            valid_confidences = [c for c in trait_confidences if c > 0]
-            if valid_confidences:
-                persona.confidence = sum(valid_confidences) / len(valid_confidences)
+                # Filter out zero confidences
+                valid_confidences = [c for c in trait_confidences if c > 0]
+                if valid_confidences:
+                    persona.confidence = sum(valid_confidences) / len(valid_confidences)
+                    logger.info(f"Calculated average confidence from traits: {persona.confidence}")
 
             # Ensure we have at least some evidence
             if not persona.evidence:
@@ -447,7 +483,11 @@ class PersonaBuilder:
             technology_and_tools=minimal_trait,
             attitude_towards_research=minimal_trait,
             attitude_towards_ai=minimal_trait,
-            key_quotes=minimal_trait,
+            key_quotes=PersonaTrait(
+                value="No quotes available",
+                confidence=0.3,
+                evidence=["Fallback due to processing error"]
+            ),
             # Other fields
             patterns=[],
             confidence=0.3,
@@ -455,7 +495,9 @@ class PersonaBuilder:
             persona_metadata={
                 "source": "fallback_persona",
                 "timestamp": datetime.now().isoformat(),
-                "role": role
+                "role": role,
+                "is_fallback": True,
+                "overall_confidence_score": 0.3
             },
             role_in_interview=role
         )
@@ -480,6 +522,29 @@ class PersonaBuilder:
             return [str(e) for e in evidence if e]
 
         return []
+
+    def _get_string_value(self, value: Any, default: str = "") -> str:
+        """
+        Get a string value from a value of any type.
+
+        Args:
+            value: Value to convert to string
+            default: Default value if value is not a string
+
+        Returns:
+            String value
+        """
+        if isinstance(value, str):
+            return value
+        elif value is None:
+            return default
+        else:
+            try:
+                # Try to convert to string
+                return str(value)
+            except Exception as e:
+                logger.warning(f"Could not convert value to string: {e}")
+                return default
 
     def _create_metadata(self, attributes: Dict[str, Any], role: str) -> Dict[str, Any]:
         """
