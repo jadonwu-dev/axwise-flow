@@ -28,6 +28,18 @@ except ImportError:
             async def generate_response(self, *args, **kwargs):
                 raise NotImplementedError("This is a minimal interface")
 
+# Import new services
+try:
+    # Try to import from backend structure
+    from backend.services.processing.evidence_linking_service import EvidenceLinkingService
+    from backend.services.processing.trait_formatting_service import TraitFormattingService
+    from backend.services.processing.adaptive_tool_recognition_service import AdaptiveToolRecognitionService
+except ImportError:
+    # Try to import from regular structure
+    from services.processing.evidence_linking_service import EvidenceLinkingService
+    from services.processing.trait_formatting_service import TraitFormattingService
+    from services.processing.adaptive_tool_recognition_service import AdaptiveToolRecognitionService
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -45,6 +57,20 @@ class AttributeExtractor:
             llm_service: LLM service for text analysis
         """
         self.llm_service = llm_service
+
+        # Initialize the evidence linking service
+        self.evidence_linking_service = EvidenceLinkingService(llm_service)
+
+        # Initialize the trait formatting service
+        self.trait_formatting_service = TraitFormattingService(llm_service)
+
+        # Initialize the adaptive tool recognition service
+        self.tool_recognition_service = AdaptiveToolRecognitionService(
+            llm_service=llm_service,
+            similarity_threshold=0.75,
+            learning_enabled=True
+        )
+
         logger.info(f"Initialized AttributeExtractor with {llm_service.__class__.__name__}")
 
     async def extract_attributes_from_text(
@@ -88,11 +114,31 @@ class AttributeExtractor:
                 # Clean the attributes
                 attributes = self._clean_persona_attributes(attributes)
 
-                # Enhance evidence fields
-                attributes = self._enhance_evidence_fields(attributes, text)
+                # Enhance tool identification with industry-aware approach
+                try:
+                    logger.info("Using AdaptiveToolRecognitionService to identify tools")
+                    attributes = await self._enhance_tool_identification(attributes, text)
+                except Exception as e:
+                    logger.error(f"Error using AdaptiveToolRecognitionService: {str(e)}", exc_info=True)
+                    # Continue with other enhancements if tool recognition fails
 
-                # Fix trait value formatting
-                attributes = self._fix_trait_value_formatting(attributes)
+                # Use the new evidence linking service for enhanced evidence
+                try:
+                    logger.info("Using EvidenceLinkingService to find relevant quotes")
+                    attributes = await self.evidence_linking_service.link_evidence_to_attributes(attributes, text)
+                except Exception as e:
+                    logger.error(f"Error using EvidenceLinkingService: {str(e)}", exc_info=True)
+                    # Fall back to basic evidence enhancement if the service fails
+                    attributes = self._enhance_evidence_fields(attributes, text)
+
+                # Use the new trait formatting service for improved formatting
+                try:
+                    logger.info("Using TraitFormattingService to improve trait value formatting")
+                    attributes = await self.trait_formatting_service.format_trait_values(attributes)
+                except Exception as e:
+                    logger.error(f"Error using TraitFormattingService: {str(e)}", exc_info=True)
+                    # Fall back to basic formatting if the service fails
+                    attributes = self._fix_trait_value_formatting(attributes)
 
                 logger.info(f"Successfully extracted and enhanced attributes for {role}")
                 return attributes
@@ -344,6 +390,53 @@ class AttributeExtractor:
                         if new_evidence:
                             attributes[field]["evidence"] = new_evidence
                             attributes[field]["confidence"] = min(attributes[field].get("confidence", 0.5) + 0.1, 1.0)
+
+        return attributes
+
+    async def _enhance_tool_identification(self, attributes: Dict[str, Any], text: str) -> Dict[str, Any]:
+        """
+        Enhance tool identification in persona attributes using industry-aware approach.
+
+        Args:
+            attributes: Persona attributes
+            text: Original text
+
+        Returns:
+            Enhanced persona attributes
+        """
+        logger.info("Enhancing tool identification with industry-aware approach")
+
+        # Tool-related fields
+        tool_fields = ["technology_and_tools", "tools_used"]
+
+        for field in tool_fields:
+            if field in attributes and isinstance(attributes[field], dict):
+                # Get the current value
+                current_value = attributes[field].get("value", "")
+
+                # Identify tools with industry context
+                identified_tools = await self.tool_recognition_service.identify_tools_in_text(
+                    current_value or text,  # Use current value if available, otherwise full text
+                    surrounding_context=text  # Always provide full text as context
+                )
+
+                # Format tools for persona
+                if identified_tools:
+                    formatted_tools = self.tool_recognition_service.format_tools_for_persona(identified_tools, "bullet")
+                    attributes[field]["value"] = formatted_tools
+
+                    # Add evidence from original mentions
+                    tool_evidence = []
+                    for tool in identified_tools:
+                        if tool.get("confidence", 0) >= 0.8:
+                            evidence = f"Identified '{tool['tool_name']}' from '{tool['original_mention']}'"
+                            if tool.get("is_misspelling"):
+                                evidence += f" (corrected from possible transcription error)"
+                            tool_evidence.append(evidence)
+
+                    if tool_evidence:
+                        attributes[field]["evidence"] = tool_evidence
+                        attributes[field]["confidence"] = 0.9  # High confidence for tool identification
 
         return attributes
 

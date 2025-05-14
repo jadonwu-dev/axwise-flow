@@ -20,6 +20,8 @@ from .transcript_structuring_service import TranscriptStructuringService
 from .attribute_extractor import AttributeExtractor
 from .persona_builder import PersonaBuilder, persona_to_dict, Persona
 from .prompts import PromptGenerator
+from .evidence_linking_service import EvidenceLinkingService
+from .trait_formatting_service import TraitFormattingService
 
 # Import LLM interface
 try:
@@ -117,8 +119,14 @@ class PersonaFormationService:
         self.persona_builder = PersonaBuilder()
         self.prompt_generator = PromptGenerator()
 
+        # Initialize our new services
+        self.evidence_linking_service = EvidenceLinkingService(llm_service)
+        self.trait_formatting_service = TraitFormattingService(llm_service)
+
         # No longer using TranscriptProcessor - all functionality is now in TranscriptStructuringService
         logger.info("Using TranscriptStructuringService for transcript processing")
+        logger.info("Using EvidenceLinkingService for enhanced evidence linking")
+        logger.info("Using TraitFormattingService for improved trait value formatting")
 
         logger.info(f"Initialized PersonaFormationService with {llm_service.__class__.__name__}")
 

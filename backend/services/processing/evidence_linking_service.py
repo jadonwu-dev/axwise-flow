@@ -1,0 +1,296 @@
+"""
+Evidence linking service for persona formation.
+
+This module provides functionality for:
+1. Finding the most relevant quotes for persona attributes
+2. Linking quotes directly to specific attributes
+3. Including quote context when necessary
+"""
+
+from typing import Dict, Any, List, Optional, Tuple
+import logging
+import re
+try:
+    # Try to import from backend structure
+    from domain.interfaces.llm_unified import ILLMService
+except ImportError:
+    try:
+        # Try to import from regular structure
+        from backend.domain.interfaces.llm_unified import ILLMService
+    except ImportError:
+        # Create a minimal interface if both fail
+        class ILLMService:
+            """Minimal LLM service interface"""
+            async def analyze(self, *args, **kwargs):
+                raise NotImplementedError("This is a minimal interface")
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+class EvidenceLinkingService:
+    """
+    Service for linking evidence to persona attributes.
+
+    This service uses targeted LLM calls to find the most relevant quotes
+    for each attribute in a persona.
+    """
+
+    def __init__(self, llm_service: ILLMService):
+        """
+        Initialize the evidence linking service.
+
+        Args:
+            llm_service: LLM service for finding relevant quotes
+        """
+        self.llm_service = llm_service
+        logger.info("Initialized EvidenceLinkingService")
+
+    async def link_evidence_to_attributes(
+        self, attributes: Dict[str, Any], full_text: str
+    ) -> Dict[str, Any]:
+        """
+        Link evidence to persona attributes.
+
+        Args:
+            attributes: Persona attributes
+            full_text: Full text to extract evidence from
+
+        Returns:
+            Enhanced persona attributes with linked evidence
+        """
+        logger.info("Linking evidence to attributes")
+
+        # List of trait fields to enhance with evidence
+        trait_fields = [
+            "demographics", "goals_and_motivations", "skills_and_expertise",
+            "workflow_and_environment", "challenges_and_frustrations",
+            "needs_and_desires", "technology_and_tools", "attitude_towards_research",
+            "attitude_towards_ai", "key_quotes", "role_context", "key_responsibilities",
+            "tools_used", "collaboration_style", "analysis_approach", "pain_points"
+        ]
+
+        # Process each trait field
+        for field in trait_fields:
+            if field in attributes and isinstance(attributes[field], dict):
+                try:
+                    # Get the current trait value
+                    trait_value = attributes[field].get("value", "")
+
+                    # Skip if the trait value is empty or default
+                    if not trait_value or trait_value.startswith("Unknown") or trait_value.startswith("Default"):
+                        continue
+
+                    # Find relevant quotes for this trait
+                    quotes = await self._find_relevant_quotes(field, trait_value, full_text)
+
+                    # Update the evidence if quotes were found
+                    if quotes:
+                        attributes[field]["evidence"] = quotes
+                        # Increase confidence slightly since we found supporting evidence
+                        attributes[field]["confidence"] = min(
+                            attributes[field].get("confidence", 0.7) + 0.1, 1.0
+                        )
+                        logger.info(f"Added {len(quotes)} quotes as evidence for {field}")
+                    else:
+                        logger.warning(f"No relevant quotes found for {field}")
+                except Exception as e:
+                    logger.error(f"Error linking evidence for {field}: {str(e)}", exc_info=True)
+
+        return attributes
+
+    async def _find_relevant_quotes(
+        self, field: str, trait_value: str, full_text: str
+    ) -> List[str]:
+        """
+        Find relevant quotes for a trait using LLM.
+
+        Args:
+            field: Trait field name
+            trait_value: Trait value
+            full_text: Full text to extract quotes from
+
+        Returns:
+            List of relevant quotes with context
+        """
+        try:
+            # Create a prompt for finding relevant quotes
+            prompt = self._create_quote_finding_prompt(field, trait_value)
+
+            # Limit text length for LLM processing
+            text_to_analyze = full_text
+            if len(full_text) > 16000:
+                logger.info(f"Text is very long ({len(full_text)} chars), using first 16000 chars")
+                text_to_analyze = full_text[:16000]
+
+            # Call LLM to find relevant quotes
+            llm_response = await self.llm_service.analyze({
+                "task": "evidence_linking",
+                "text": text_to_analyze,
+                "prompt": prompt,
+                "enforce_json": True,
+                "temperature": 0.0  # Use deterministic output for consistent results
+            })
+
+            # Parse the response
+            quotes = self._parse_llm_response(llm_response)
+
+            # If LLM failed to find quotes, fall back to regex-based approach
+            if not quotes:
+                logger.info(f"LLM failed to find quotes for {field}, falling back to regex approach")
+                quotes = self._find_quotes_with_regex(trait_value, full_text)
+
+            # Limit to 2-3 most relevant quotes
+            return quotes[:3]
+
+        except Exception as e:
+            logger.error(f"Error finding quotes for {field}: {str(e)}", exc_info=True)
+            # Fall back to regex-based approach on error
+            return self._find_quotes_with_regex(trait_value, full_text)
+
+    def _create_quote_finding_prompt(self, field: str, trait_value: str) -> str:
+        """
+        Create a prompt for finding relevant quotes.
+
+        Args:
+            field: Trait field name
+            trait_value: Trait value
+
+        Returns:
+            Prompt string
+        """
+        # Format field name for better readability
+        formatted_field = field.replace("_", " ").title()
+
+        return f"""
+CRITICAL INSTRUCTION: Your ENTIRE response MUST be a single, valid JSON array of strings. Start with '[' and end with ']'. DO NOT include ANY text, comments, or markdown formatting before or after the JSON array.
+
+You are an expert UX researcher analyzing interview transcripts. Your task is to find the most relevant direct quotes that provide evidence for a specific persona trait.
+
+PERSONA TRAIT: {formatted_field}
+TRAIT VALUE: {trait_value}
+
+INSTRUCTIONS:
+1. Carefully read the interview transcript provided.
+2. Identify 2-3 direct quotes that most strongly support or demonstrate the persona trait described above.
+3. For each quote:
+   - Include the exact words from the transcript (verbatim)
+   - Include enough context to understand the quote (1-2 sentences before/after if needed)
+   - Prioritize quotes that explicitly demonstrate the trait rather than vaguely relate to it
+   - Ensure the quote is substantial enough to be meaningful evidence (at least 10-15 words)
+
+4. Return ONLY an array of quote strings, with each quote being a separate string in the array.
+
+EXAMPLE RESPONSE FORMAT:
+[
+  "I typically spend about 3-4 hours each day analyzing user feedback. It's time-consuming but essential for understanding pain points.",
+  "The most frustrating part is when stakeholders ignore our research findings. I've had projects where clear user needs were deprioritized due to business constraints."
+]
+
+Remember to focus on finding DIRECT EVIDENCE that specifically supports the trait value provided. Quality of evidence is more important than quantity.
+"""
+
+    def _parse_llm_response(self, llm_response: Any) -> List[str]:
+        """
+        Parse LLM response to extract quotes.
+
+        Args:
+            llm_response: Response from LLM
+
+        Returns:
+            List of quotes
+        """
+        try:
+            # Handle different response types
+            if isinstance(llm_response, list):
+                # Response is already a list of quotes
+                return [str(quote) for quote in llm_response if quote]
+            elif isinstance(llm_response, str):
+                # Try to parse as JSON
+                import json
+                try:
+                    quotes = json.loads(llm_response)
+                    if isinstance(quotes, list):
+                        return [str(quote) for quote in quotes if quote]
+                except json.JSONDecodeError:
+                    # If not valid JSON, try to extract quotes using regex
+                    return self._extract_quotes_from_text(llm_response)
+
+            # Default empty list if parsing fails
+            return []
+
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {str(e)}", exc_info=True)
+            return []
+
+    def _extract_quotes_from_text(self, text: str) -> List[str]:
+        """
+        Extract quotes from text using regex.
+
+        Args:
+            text: Text to extract quotes from
+
+        Returns:
+            List of quotes
+        """
+        # Try to extract quotes enclosed in quotation marks
+        quotes = re.findall(r'"([^"]+)"', text)
+
+        # If no quotes found, try to extract lines that look like quotes
+        if not quotes:
+            lines = text.split('\n')
+            quotes = [line.strip() for line in lines if len(line.strip()) > 15 and not line.startswith(('```', '#', '/*', '*/', '//'))]
+
+        return quotes
+
+    def _find_quotes_with_regex(self, trait_value: str, full_text: str) -> List[str]:
+        """
+        Find quotes using regex pattern matching.
+
+        Args:
+            trait_value: Trait value to find evidence for
+            full_text: Full text to search in
+
+        Returns:
+            List of quotes
+        """
+        # Extract key terms from the trait value
+        key_terms = []
+
+        # Split by common delimiters
+        for delimiter in [',', '.', ';', ':', '-', '(', ')', '&']:
+            if delimiter in trait_value:
+                key_terms.extend([term.strip() for term in trait_value.split(delimiter)])
+
+        # If no terms found with delimiters, use the whole trait value
+        if not key_terms:
+            key_terms = [trait_value]
+
+        # Filter out short terms and duplicates
+        key_terms = list(set([term for term in key_terms if len(term) > 5]))
+
+        # Find sentences containing key terms
+        quotes = []
+        sentences = re.split(r'(?<=[.!?])\s+', full_text)
+
+        for term in key_terms:
+            term_quotes = []
+            for i, sentence in enumerate(sentences):
+                if term.lower() in sentence.lower():
+                    # Get context (previous and next sentence if available)
+                    start_idx = max(0, i - 1)
+                    end_idx = min(len(sentences), i + 2)
+                    context = ' '.join(sentences[start_idx:end_idx])
+                    term_quotes.append(context)
+
+            # Sort by length (prefer longer quotes with more context)
+            term_quotes.sort(key=len, reverse=True)
+
+            # Take the top 1-2 quotes for this term
+            quotes.extend(term_quotes[:2])
+
+            # Limit to 3 quotes total
+            if len(quotes) >= 3:
+                break
+
+        return quotes[:3]
