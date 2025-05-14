@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { API_ENDPOINTS } from '@/lib/apiEndpoints';
+import { getPdfExportUrl, getMarkdownExportUrl } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,22 +24,19 @@ export function ExportButton({ analysisId }: ExportButtonProps): JSX.Element {
     try {
       setIsExporting(true);
 
-      // Get API URL from environment or use default
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
       // Get auth token from cookie
       const authToken = document.cookie
         .split('; ')
         .find(row => row.startsWith('auth_token='))
         ?.split('=')[1] || 'DEV_TOKEN_REDACTED'; // Fallback to dev token
 
-      // Create URL for export endpoint
-      const endpoint = format === 'pdf'
-        ? API_ENDPOINTS.EXPORT_PDF(Number(analysisId))
-        : API_ENDPOINTS.EXPORT_MARKDOWN(Number(analysisId));
+      // Get the export URL using our API client functions
+      const exportUrl = format === 'pdf'
+        ? getPdfExportUrl(analysisId)
+        : getMarkdownExportUrl(analysisId);
 
       // Open the URL in a new tab/window with auth token as query parameter
-      window.open(`${apiUrl}${endpoint}?auth_token=${encodeURIComponent(authToken)}`, '_blank');
+      window.open(`${exportUrl}?auth_token=${encodeURIComponent(authToken)}`, '_blank');
 
       toast({
         title: 'Export Started',
