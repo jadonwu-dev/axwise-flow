@@ -13,16 +13,25 @@ import re
 try:
     # Try to import from backend structure
     from domain.interfaces.llm_unified import ILLMService
+    from backend.services.llm.prompts.tasks.trait_formatting import TraitFormattingPrompts
 except ImportError:
     try:
         # Try to import from regular structure
         from backend.domain.interfaces.llm_unified import ILLMService
+        from backend.services.llm.prompts.tasks.trait_formatting import TraitFormattingPrompts
     except ImportError:
         # Create a minimal interface if both fail
         class ILLMService:
             """Minimal LLM service interface"""
             async def analyze(self, *args, **kwargs):
                 raise NotImplementedError("This is a minimal interface")
+
+        # Create a minimal prompt class
+        class TraitFormattingPrompts:
+            """Minimal prompt class"""
+            @staticmethod
+            def get_prompt(data):
+                return ""
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -150,26 +159,11 @@ class TraitFormattingService:
         Returns:
             Prompt string
         """
-        # Format field name for better readability
-        formatted_field = field.replace("_", " ").title()
-
-        return f"""
-You are an expert UX researcher specializing in creating clear, concise persona descriptions. Your task is to improve the formatting and clarity of a persona trait value while preserving its original meaning.
-
-PERSONA TRAIT: {formatted_field}
-CURRENT VALUE: {trait_value}
-
-INSTRUCTIONS:
-1. Rewrite the trait value to be more concise, clear, and natural-sounding.
-2. Preserve ALL the original information and meaning.
-3. Fix any awkward phrasing, run-on sentences, or grammatical issues.
-4. Format as a complete sentence or phrase that flows naturally.
-5. If the value is already well-formatted, return it unchanged.
-6. If the value is a list of items, format it as a bulleted list with each item on a new line, starting with "• ".
-7. Keep the length similar to the original - don't add new information.
-
-Your response should ONLY contain the reformatted trait value, nothing else.
-"""
+        # Use the prompt from the TraitFormattingPrompts class
+        return TraitFormattingPrompts.get_prompt({
+            "field": field,
+            "trait_value": trait_value
+        })
 
     def _parse_llm_response(self, llm_response: Any) -> str:
         """

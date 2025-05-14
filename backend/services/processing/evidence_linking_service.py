@@ -10,19 +10,29 @@ This module provides functionality for:
 from typing import Dict, Any, List, Optional, Tuple
 import logging
 import re
+import json
 try:
     # Try to import from backend structure
     from domain.interfaces.llm_unified import ILLMService
+    from backend.services.llm.prompts.tasks.evidence_linking import EvidenceLinkingPrompts
 except ImportError:
     try:
         # Try to import from regular structure
         from backend.domain.interfaces.llm_unified import ILLMService
+        from backend.services.llm.prompts.tasks.evidence_linking import EvidenceLinkingPrompts
     except ImportError:
         # Create a minimal interface if both fail
         class ILLMService:
             """Minimal LLM service interface"""
             async def analyze(self, *args, **kwargs):
                 raise NotImplementedError("This is a minimal interface")
+
+        # Create a minimal prompt class
+        class EvidenceLinkingPrompts:
+            """Minimal prompt class"""
+            @staticmethod
+            def get_prompt(data):
+                return ""
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -162,33 +172,11 @@ class EvidenceLinkingService:
         # Format field name for better readability
         formatted_field = field.replace("_", " ").title()
 
-        return f"""
-CRITICAL INSTRUCTION: Your ENTIRE response MUST be a single, valid JSON array of strings. Start with '[' and end with ']'. DO NOT include ANY text, comments, or markdown formatting before or after the JSON array.
-
-You are an expert UX researcher analyzing interview transcripts. Your task is to find the most relevant direct quotes that provide evidence for a specific persona trait.
-
-PERSONA TRAIT: {formatted_field}
-TRAIT VALUE: {trait_value}
-
-INSTRUCTIONS:
-1. Carefully read the interview transcript provided.
-2. Identify 2-3 direct quotes that most strongly support or demonstrate the persona trait described above.
-3. For each quote:
-   - Include the exact words from the transcript (verbatim)
-   - Include enough context to understand the quote (1-2 sentences before/after if needed)
-   - Prioritize quotes that explicitly demonstrate the trait rather than vaguely relate to it
-   - Ensure the quote is substantial enough to be meaningful evidence (at least 10-15 words)
-
-4. Return ONLY an array of quote strings, with each quote being a separate string in the array.
-
-EXAMPLE RESPONSE FORMAT:
-[
-  "I typically spend about 3-4 hours each day analyzing user feedback. It's time-consuming but essential for understanding pain points.",
-  "The most frustrating part is when stakeholders ignore our research findings. I've had projects where clear user needs were deprioritized due to business constraints."
-]
-
-Remember to focus on finding DIRECT EVIDENCE that specifically supports the trait value provided. Quality of evidence is more important than quantity.
-"""
+        # Use the prompt from the EvidenceLinkingPrompts class
+        return EvidenceLinkingPrompts.get_prompt({
+            "field": field,
+            "trait_value": trait_value
+        })
 
     def _parse_llm_response(self, llm_response: Any) -> List[str]:
         """
@@ -205,13 +193,23 @@ Remember to focus on finding DIRECT EVIDENCE that specifically supports the trai
             if isinstance(llm_response, list):
                 # Response is already a list of quotes
                 return [str(quote) for quote in llm_response if quote]
+            elif isinstance(llm_response, dict) and "quotes" in llm_response:
+                # Response is a dictionary with a "quotes" key (new format)
+                quotes = llm_response["quotes"]
+                if isinstance(quotes, list):
+                    return [str(quote) for quote in quotes if quote]
             elif isinstance(llm_response, str):
                 # Try to parse as JSON
-                import json
                 try:
-                    quotes = json.loads(llm_response)
-                    if isinstance(quotes, list):
-                        return [str(quote) for quote in quotes if quote]
+                    parsed_json = json.loads(llm_response)
+                    if isinstance(parsed_json, list):
+                        # Old format: direct list of quotes
+                        return [str(quote) for quote in parsed_json if quote]
+                    elif isinstance(parsed_json, dict) and "quotes" in parsed_json:
+                        # New format: dictionary with "quotes" key
+                        quotes = parsed_json["quotes"]
+                        if isinstance(quotes, list):
+                            return [str(quote) for quote in quotes if quote]
                 except json.JSONDecodeError:
                     # If not valid JSON, try to extract quotes using regex
                     return self._extract_quotes_from_text(llm_response)

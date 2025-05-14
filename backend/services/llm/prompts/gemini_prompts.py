@@ -12,6 +12,8 @@ from .tasks.theme_analysis_enhanced import ThemeAnalysisEnhancedPrompts
 from .tasks.persona_formation import PersonaFormationPrompts
 from .tasks.simplified_persona_formation import SimplifiedPersonaFormationPrompts
 from .tasks.transcript_structuring import TranscriptStructuringPrompts
+from .tasks.evidence_linking import EvidenceLinkingPrompts
+from .tasks.trait_formatting import TraitFormattingPrompts
 
 class GeminiPrompts:
     """
@@ -30,6 +32,8 @@ class GeminiPrompts:
         "theme_analysis_enhanced": ThemeAnalysisEnhancedPrompts.get_prompt,
         "persona_formation": PersonaFormationPrompts.get_prompt,
         "transcript_structuring": TranscriptStructuringPrompts.get_prompt,
+        "evidence_linking": EvidenceLinkingPrompts.get_prompt,
+        "trait_formatting": TraitFormattingPrompts.get_prompt,
     }
 
     DEFAULT_PROMPT = "Analyze the following text."
@@ -50,6 +54,6 @@ class GeminiPrompts:
 
         if generator_func:
             return generator_func(request) # All generators now accept 'request'
-        
+
         # Fallback if the task is not found in the dictionary
         return GeminiPrompts.DEFAULT_PROMPT

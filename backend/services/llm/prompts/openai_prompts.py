@@ -8,16 +8,16 @@ class OpenAIPrompts:
     """
     Prompt templates for OpenAI LLM service.
     """
-    
+
     @staticmethod
     def get_system_message(task: str, request: Dict[str, Any]) -> Dict[str, str]:
         """
         Get system message for OpenAI based on task.
-        
+
         Args:
             task: Task type
             request: Request dictionary
-            
+
         Returns:
             System message dictionary
         """
@@ -31,14 +31,18 @@ class OpenAIPrompts:
             return OpenAIPrompts.persona_formation_prompt(request)
         elif task == "insight_generation":
             return OpenAIPrompts.insight_generation_prompt(request)
+        elif task == "evidence_linking":
+            return OpenAIPrompts.evidence_linking_prompt(request)
+        elif task == "trait_formatting":
+            return OpenAIPrompts.trait_formatting_prompt(request)
         else:
             return {"role": "system", "content": "Analyze the following text."}
-    
+
     @staticmethod
     def theme_analysis_prompt() -> Dict[str, str]:
         """
         Get theme analysis prompt.
-        
+
         Returns:
             System message dictionary
         """
@@ -76,12 +80,12 @@ class OpenAIPrompts:
             Ensure you identify at least 3-5 distinct themes. Focus on patterns related to user needs, pain points, workflows, and goals.
             """
         }
-    
+
     @staticmethod
     def pattern_recognition_prompt() -> Dict[str, str]:
         """
         Get pattern recognition prompt.
-        
+
         Returns:
             System message dictionary
         """
@@ -119,12 +123,12 @@ class OpenAIPrompts:
             Identify at least 5-7 distinct patterns. Focus on behaviors, needs, pain points, and workflows that appear multiple times.
             """
         }
-    
+
     @staticmethod
     def sentiment_analysis_prompt() -> Dict[str, str]:
         """
         Get sentiment analysis prompt.
-        
+
         Returns:
             System message dictionary
         """
@@ -163,22 +167,22 @@ class OpenAIPrompts:
             Sentiment scores range from -1.0 (very negative) to 1.0 (very positive).
             """
         }
-    
+
     @staticmethod
     def persona_formation_prompt(request: Dict[str, Any]) -> Dict[str, str]:
         """
         Get persona formation prompt.
-        
+
         Args:
             request: Request dictionary
-            
+
         Returns:
             System message dictionary
         """
         # Use custom prompt if provided
         if "prompt" in request:
             return {"role": "system", "content": request["prompt"]}
-        
+
         return {
             "role": "system",
             "content": """
@@ -226,31 +230,31 @@ class OpenAIPrompts:
             Ensure each trait has a confidence score (0.0 to 1.0) and supporting evidence from the text.
             """
         }
-    
+
     @staticmethod
     def insight_generation_prompt(request: Dict[str, Any]) -> Dict[str, str]:
         """
         Get insight generation prompt.
-        
+
         Args:
             request: Request dictionary
-            
+
         Returns:
             System message dictionary
         """
         # Use custom prompt if provided
         if "prompt" in request:
             return {"role": "system", "content": request["prompt"]}
-        
+
         # Get themes, patterns, and sentiment from request
         themes = request.get("themes", [])
         patterns = request.get("patterns", [])
         sentiment = request.get("sentiment", {})
-        
+
         # Create a context-aware prompt
         theme_text = "\n".join([f"- {t.get('name', 'Unnamed')}: {t.get('definition', '')}" for t in themes[:5]])
         pattern_text = "\n".join([f"- {p.get('name', 'Unnamed')}: {p.get('description', '')}" for p in patterns[:5]])
-        
+
         return {
             "role": "system",
             "content": f"""
@@ -285,5 +289,112 @@ class OpenAIPrompts:
             }}
 
             Generate 3-5 high-quality, actionable insights. Focus on implications for design and concrete recommendations.
+            """
+        }
+
+    @staticmethod
+    def evidence_linking_prompt(request: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Get evidence linking prompt.
+
+        Args:
+            request: Request dictionary
+
+        Returns:
+            System message dictionary
+        """
+        # Use custom prompt if provided
+        if "prompt" in request:
+            return {"role": "system", "content": request["prompt"]}
+
+        # Get field and trait value
+        field = request.get("field", "")
+        trait_value = request.get("trait_value", "")
+
+        # Format field name for better readability
+        formatted_field = field.replace("_", " ").title()
+
+        return {
+            "role": "system",
+            "content": f"""
+            You are an expert UX researcher analyzing interview transcripts. Your task is to find the most relevant direct quotes that provide evidence for a specific persona trait.
+
+            PERSONA TRAIT: {formatted_field}
+            TRAIT VALUE: {trait_value}
+
+            INSTRUCTIONS:
+            1. Carefully read the interview transcript provided.
+            2. Identify 2-3 direct quotes that most strongly support or demonstrate the persona trait described above.
+            3. For each quote:
+               - Include the exact words from the transcript (verbatim)
+               - Include enough context to understand the quote (1-2 sentences before/after if needed)
+               - Prioritize quotes that explicitly demonstrate the trait rather than vaguely relate to it
+               - Ensure the quote is substantial enough to be meaningful evidence (at least 10-15 words)
+            4. Focus on finding quotes that directly support the specific trait value, not just the general trait category.
+            5. If you cannot find direct quotes supporting the trait, return an empty array.
+
+            FORMAT YOUR RESPONSE AS JSON with the following structure:
+            {{
+              "quotes": [
+                "First direct quote with context...",
+                "Second direct quote with context...",
+                "Third direct quote with context..."
+              ]
+            }}
+
+            IMPORTANT:
+            - The quotes must be EXACT text from the transcript, not paraphrased or summarized.
+            - Include only the most relevant 2-3 quotes that provide the strongest evidence.
+            - If you cannot find relevant quotes, return an empty array: {{"quotes": []}}
+            """
+        }
+
+    @staticmethod
+    def trait_formatting_prompt(request: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Get trait formatting prompt.
+
+        Args:
+            request: Request dictionary
+
+        Returns:
+            System message dictionary
+        """
+        # Use custom prompt if provided
+        if "prompt" in request:
+            return {"role": "system", "content": request["prompt"]}
+
+        # Get field and trait value
+        field = request.get("field", "")
+        trait_value = request.get("trait_value", "")
+
+        # Format field name for better readability
+        formatted_field = field.replace("_", " ").title()
+
+        return {
+            "role": "system",
+            "content": f"""
+            You are an expert UX researcher specializing in creating clear, concise persona descriptions. Your task is to improve the formatting and clarity of a persona trait value while preserving its original meaning.
+
+            PERSONA TRAIT: {formatted_field}
+            CURRENT VALUE: {trait_value}
+
+            INSTRUCTIONS:
+            1. Rewrite the trait value to be more clear, concise, and natural-sounding.
+            2. Preserve ALL the original information and meaning.
+            3. Fix any awkward phrasing, grammatical errors, or formatting issues.
+            4. Format lists appropriately (use bullet points if there are multiple distinct items).
+            5. Remove redundancies and unnecessary words.
+            6. Ensure the tone is professional and objective.
+            7. DO NOT add any new information that wasn't in the original.
+
+            FORMATTING GUIDELINES:
+            - For lists, use bullet points (•) with one item per line
+            - For demographics, ensure age, experience level, and role are clearly stated
+            - For tools/technologies, format as a clean list if multiple items are present
+            - For goals/motivations, ensure they are expressed as clear statements
+            - For challenges/frustrations, ensure they are specific and actionable
+
+            RESPOND WITH ONLY THE IMPROVED TEXT. Do not include any explanations, introductions, or metadata.
             """
         }

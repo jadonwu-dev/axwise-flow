@@ -8,5 +8,14 @@ from backend.services.llm.prompts.openai_prompts import OpenAIPrompts
 # Import new prompt modules
 from backend.services.llm.prompts.tasks.transcript_structuring import TranscriptStructuringPrompts
 from backend.services.llm.prompts.tasks.simplified_persona_formation import SimplifiedPersonaFormationPrompts
+from backend.services.llm.prompts.tasks.evidence_linking import EvidenceLinkingPrompts
+from backend.services.llm.prompts.tasks.trait_formatting import TraitFormattingPrompts
 
-__all__ = ["GeminiPrompts", "OpenAIPrompts", "TranscriptStructuringPrompts", "SimplifiedPersonaFormationPrompts"]
+__all__ = [
+    "GeminiPrompts",
+    "OpenAIPrompts",
+    "TranscriptStructuringPrompts",
+    "SimplifiedPersonaFormationPrompts",
+    "EvidenceLinkingPrompts",
+    "TraitFormattingPrompts"
+]
