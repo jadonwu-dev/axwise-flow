@@ -64,12 +64,21 @@ class AttributeExtractor:
         # Initialize the trait formatting service
         self.trait_formatting_service = TraitFormattingService(llm_service)
 
-        # Initialize the adaptive tool recognition service
+        # Initialize the adaptive tool recognition service with enhanced configuration
         self.tool_recognition_service = AdaptiveToolRecognitionService(
             llm_service=llm_service,
             similarity_threshold=0.75,
             learning_enabled=True
         )
+
+        # Log the number of predefined corrections
+        correction_count = len(self.tool_recognition_service.learned_corrections)
+        logger.info(f"Initialized AdaptiveToolRecognitionService with {correction_count} predefined corrections")
+
+        # Log some key corrections for debugging
+        if "mirrorboards" in self.tool_recognition_service.learned_corrections:
+            miro_correction = self.tool_recognition_service.learned_corrections["mirrorboards"]
+            logger.info(f"Miro correction loaded: 'mirrorboards' → '{miro_correction['tool_name']}' (confidence: {miro_correction['confidence']})")
 
         logger.info(f"Initialized AttributeExtractor with {llm_service.__class__.__name__}")
 
@@ -111,14 +120,6 @@ class AttributeExtractor:
 
             # Process attributes
             if attributes:
-                # Enhance tool identification with industry-aware approach
-                try:
-                    logger.info("Using AdaptiveToolRecognitionService to identify tools")
-                    attributes = await self._enhance_tool_identification(attributes, text)
-                except Exception as e:
-                    logger.error(f"Error using AdaptiveToolRecognitionService: {str(e)}", exc_info=True)
-                    # Continue with other enhancements if tool recognition fails
-
                 # Use the new evidence linking service for enhanced evidence
                 # This should be done BEFORE converting to nested structures
                 try:
@@ -138,6 +139,85 @@ class AttributeExtractor:
                     logger.error(f"Error using TraitFormattingService: {str(e)}", exc_info=True)
                     # Fall back to basic formatting if the service fails
                     attributes = self._fix_trait_value_formatting(attributes)
+
+                # SOLUTION 1: Analyze the full transcript for tools first, then update the attributes
+                try:
+                    logger.info("Using AdaptiveToolRecognitionService to improve tool identification")
+
+                    # First, identify all tools in the full transcript
+                    logger.info("Identifying all tools in the full transcript")
+                    all_identified_tools = await self.tool_recognition_service.identify_tools_in_text(
+                        text,  # Use the full transcript as the primary text to analyze
+                        ""     # No additional context needed since we're using the full text
+                    )
+
+                    if all_identified_tools:
+                        logger.info(f"Identified {len(all_identified_tools)} tools in the full transcript")
+
+                        # Format all identified tools
+                        all_formatted_tools = self.tool_recognition_service.format_tools_for_persona(
+                            all_identified_tools, "bullet"
+                        )
+
+                        # Create evidence from identified tools
+                        tool_evidence = []
+                        for tool in all_identified_tools:
+                            if tool.get("confidence", 0) >= 0.8:
+                                evidence = f"Identified '{tool['tool_name']}' from '{tool['original_mention']}'"
+                                if tool.get("is_misspelling"):
+                                    evidence += f" (corrected from possible transcription error)"
+                                tool_evidence.append(evidence)
+
+                        # Process both tools_used and technology_and_tools fields
+                        for tool_field in ["tools_used", "technology_and_tools"]:
+                            if tool_field in attributes:
+                                # Update the attribute with all identified tools
+                                if isinstance(attributes[tool_field], dict):
+                                    attributes[tool_field]["value"] = all_formatted_tools
+                                    if tool_evidence:
+                                        attributes[tool_field]["evidence"] = tool_evidence
+                                        attributes[tool_field]["confidence"] = 0.9  # High confidence
+                                else:
+                                    attributes[tool_field] = all_formatted_tools
+
+                                logger.info(f"Updated {tool_field} with all tools identified from the full transcript")
+                    else:
+                        logger.info("No tools identified in the full transcript, falling back to field-specific analysis")
+
+                        # Fall back to analyzing each field individually
+                        for tool_field in ["tools_used", "technology_and_tools"]:
+                            if tool_field in attributes:
+                                # Get the current tool value
+                                current_tools = attributes[tool_field]
+                                if isinstance(current_tools, dict) and "value" in current_tools:
+                                    tool_value = current_tools["value"]
+                                else:
+                                    tool_value = str(current_tools)
+
+                                # Skip if empty
+                                if not tool_value or tool_value.lower() in ["unknown", "n/a", "none"]:
+                                    continue
+
+                                # Identify tools in the specific field value, with full text as context
+                                field_tools = await self.tool_recognition_service.identify_tools_in_text(tool_value, text)
+
+                                # Format the tools for the persona
+                                if field_tools:
+                                    # Format as bullet points
+                                    formatted_tools = self.tool_recognition_service.format_tools_for_persona(
+                                        field_tools, "bullet"
+                                    )
+
+                                    # Update the attribute
+                                    if isinstance(attributes[tool_field], dict):
+                                        attributes[tool_field]["value"] = formatted_tools
+                                    else:
+                                        attributes[tool_field] = formatted_tools
+
+                                    logger.info(f"Updated {tool_field} with field-specific tool identification")
+                except Exception as e:
+                    logger.error(f"Error using AdaptiveToolRecognitionService: {str(e)}", exc_info=True)
+                    # Continue without tool recognition if it fails
 
                 # NOW convert to nested structures for PersonaBuilder
                 attributes = self._clean_persona_attributes(attributes)

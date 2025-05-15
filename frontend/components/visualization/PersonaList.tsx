@@ -189,6 +189,38 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                 </TooltipProvider>
               </div>
 
+              {/* Patterns Section (Always Visible) */}
+              {persona.patterns && persona.patterns.length > 0 && (
+                <div className="mt-3 mb-2">
+                  <h4 className="text-xs font-medium mb-1">Associated Patterns</h4>
+                  <ul className="list-disc pl-5 text-sm">
+                    {persona.patterns.map((pattern, i) => (
+                      <li key={i}>{pattern}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Evidence Section (Collapsible) */}
+              {persona.evidence && persona.evidence.length > 0 && (
+                <div className="mt-1">
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value="evidence">
+                      <AccordionTrigger className="text-xs text-muted-foreground">
+                        Supporting Evidence
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                          {persona.evidence.map((item: string, i: number) => (
+                            <li key={i}>{item}</li>
+                          ))}
+                        </ul>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
+
               {/* Basic Information */}
               <div className="mb-4 flex flex-wrap gap-2">
                 {persona.archetype && (
@@ -213,7 +245,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                 <TabsList className="mb-4">
                   <TabsTrigger value="detailed">Detailed Profile</TabsTrigger>
                   <TabsTrigger value="legacy">Legacy Fields</TabsTrigger>
-                  <TabsTrigger value="patterns">Patterns & Evidence</TabsTrigger>
+                  <TabsTrigger value="insights">Insights</TabsTrigger>
                 </TabsList>
 
                 {/* Detailed Profile Tab */}
@@ -244,31 +276,23 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                   </div>
                 </TabsContent>
 
-                {/* Patterns & Evidence Tab */}
-                <TabsContent value="patterns" className="space-y-4">
-                  {/* Patterns */}
-                  {persona.patterns && persona.patterns.length > 0 && (
-                    <div className="mt-2">
-                      <h3 className="text-sm font-medium mb-2">Associated Patterns</h3>
-                      <ul className="list-disc pl-5">
-                        {persona.patterns.map((pattern, i) => (
-                          <li key={i} className="text-sm">{pattern}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                {/* Insights Tab */}
+                <TabsContent value="insights" className="space-y-4">
+                  {/* Note about patterns & evidence location */}
+                  <div className="p-4 bg-muted/20 rounded-md">
+                    <h3 className="text-sm font-medium mb-2">Patterns & Evidence</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Associated patterns are now visible directly below the persona description. Supporting evidence is available in a collapsible section below the patterns.
+                    </p>
+                  </div>
 
-                  {/* Evidence */}
-                  {persona.evidence && persona.evidence.length > 0 && (
-                    <div className="mt-4">
-                      <h3 className="text-sm font-medium mb-2">Supporting Evidence</h3>
-                      <ul className="list-disc pl-5">
-                        {persona.evidence.map((item, i) => (
-                          <li key={i} className="text-sm text-muted-foreground">{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {/* Future insights content placeholder */}
+                  <div className="mt-4">
+                    <h3 className="text-sm font-medium mb-2">Additional Insights</h3>
+                    <p className="text-sm text-muted-foreground">
+                      This tab will be used for additional persona insights in future updates.
+                    </p>
+                  </div>
                 </TabsContent>
               </Tabs>
 

@@ -431,7 +431,24 @@ class PersonaBuilder:
             except ValidationError as e:
                 logger.warning(f"Persona validation failed: {str(e)}")
 
+            # Log evidence counts for debugging
+            evidence_counts = {}
+            for field_name in processed_traits:
+                trait = getattr(persona, field_name)
+                if trait and hasattr(trait, 'evidence') and trait.evidence:
+                    evidence_counts[field_name] = len(trait.evidence)
+
+            logger.info(f"Evidence counts for persona {persona.name}: {evidence_counts}")
             logger.info(f"Successfully built persona: {persona.name}")
+
+            # Ensure evidence is preserved in the persona_to_dict conversion
+            test_dict = persona_to_dict(persona)
+            for field_name, count in evidence_counts.items():
+                if field_name in test_dict and isinstance(test_dict[field_name], dict) and 'evidence' in test_dict[field_name]:
+                    actual_count = len(test_dict[field_name]['evidence'])
+                    if actual_count != count:
+                        logger.warning(f"Evidence count mismatch for {field_name}: {count} in persona object, {actual_count} in dict")
+
             return persona
 
         except Exception as e:

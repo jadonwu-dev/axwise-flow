@@ -157,6 +157,10 @@ app.add_middleware(
 app.include_router(priority_insights_router, prefix="/api/analysis")
 app.include_router(export_router)
 
+# Include debug router
+from backend.api.endpoints.debug import router as debug_router
+app.include_router(debug_router, prefix="/api")
+
 # Initialize database tables
 create_tables()
 

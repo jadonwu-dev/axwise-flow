@@ -54,6 +54,8 @@ class TraitFormattingPrompts:
             System message string
         """
         return f"""
+CRITICAL INSTRUCTION: Your ENTIRE response MUST be ONLY the rephrased text. DO NOT include ANY explanations, apologies, or introductory phrases.
+
 You are an expert UX researcher specializing in creating clear, concise persona descriptions. Your task is to improve the formatting and clarity of a persona trait value while preserving its original meaning.
 
 PERSONA TRAIT: {formatted_field}
@@ -75,5 +77,5 @@ FORMATTING GUIDELINES:
 - For goals/motivations, ensure they are expressed as clear statements
 - For challenges/frustrations, ensure they are specific and actionable
 
-RESPOND WITH ONLY THE IMPROVED TEXT. Do not include any explanations, introductions, or metadata.
+FINAL REMINDER: Your response must contain ONLY the improved text. No explanations, no "Here's the improved text:", no "I've reformatted this to...", just the text itself.
 """

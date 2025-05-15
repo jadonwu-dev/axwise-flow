@@ -135,28 +135,47 @@ class TraitFormattingService:
         try:
             # Skip if LLM service is not available
             if not self.llm_service:
+                logger.warning("LLM service not available, using string processing instead")
+                return self._format_with_string_processing(field, trait_value)
+
+            # Skip if trait value is too short (likely already well-formatted)
+            if len(trait_value) < 10:
+                logger.info(f"Trait value for {field} is very short, skipping LLM formatting")
                 return trait_value
 
             # Create a prompt for formatting
             prompt = self._create_formatting_prompt(field, trait_value)
 
+            # Log the prompt for debugging
+            logger.debug(f"Trait formatting prompt for {field}: {prompt[:100]}...")
+
             # Call LLM to format the trait value
+            logger.info(f"Calling LLM to format trait value for {field}")
             llm_response = await self.llm_service.analyze({
                 "task": "trait_formatting",
                 "text": trait_value,
                 "prompt": prompt,
                 "enforce_json": False,  # Simple text response is sufficient
-                "temperature": 0.0  # Use deterministic output for consistent results
+                "temperature": 0.2  # Slightly higher temperature for more natural language
             })
+
+            # Log the raw response
+            logger.debug(f"Raw LLM response for {field}: {str(llm_response)[:200]}...")
 
             # Parse the response
             formatted_value = self._parse_llm_response(llm_response)
 
-            # If LLM failed to format, fall back to string processing
+            # If LLM failed to format or returned the same value, fall back to string processing
             if not formatted_value:
-                logger.info(f"LLM failed to format trait value for {field}, falling back to string processing")
+                logger.info(f"LLM returned empty response for {field}, falling back to string processing")
                 return self._format_with_string_processing(field, trait_value)
 
+            if formatted_value.strip() == trait_value.strip():
+                logger.info(f"LLM returned unchanged value for {field}, falling back to string processing")
+                return self._format_with_string_processing(field, trait_value)
+
+            # Log success
+            logger.info(f"Successfully formatted trait value for {field} using LLM")
             return formatted_value
 
         except Exception as e:
@@ -192,22 +211,45 @@ class TraitFormattingService:
             Formatted trait value
         """
         try:
+            # Log the raw response for debugging
+            logger.debug(f"Raw LLM response: {llm_response}")
+
             # Handle different response types
-            if isinstance(llm_response, str):
-                # Clean up the response
-                formatted_value = llm_response.strip()
+            response_text = ""
 
-                # Remove any markdown formatting
-                formatted_value = re.sub(r'```.*?```', '', formatted_value, flags=re.DOTALL)
-                formatted_value = re.sub(r'`(.*?)`', r'\1', formatted_value)
+            # If response is a dictionary with a 'text' key (from GeminiService for non-JSON tasks)
+            if isinstance(llm_response, dict) and "text" in llm_response:
+                response_text = llm_response["text"]
+            # If response is a string directly
+            elif isinstance(llm_response, str):
+                response_text = llm_response
+            # If response is some other object with a text attribute
+            elif hasattr(llm_response, "text"):
+                response_text = llm_response.text
+            else:
+                logger.warning(f"Unexpected LLM response type: {type(llm_response)}")
+                return ""
 
-                # Remove any "Formatted Value:" prefix
-                formatted_value = re.sub(r'^(Formatted Value:|Reformatted Value:|Result:)\s*', '', formatted_value, flags=re.IGNORECASE)
+            # Clean up the response
+            formatted_value = response_text.strip()
 
-                return formatted_value.strip()
+            # Remove any markdown formatting
+            formatted_value = re.sub(r'```.*?```', '', formatted_value, flags=re.DOTALL)
+            formatted_value = re.sub(r'`(.*?)`', r'\1', formatted_value)
 
-            # Default to empty string if parsing fails
-            return ""
+            # Remove any common prefixes that LLMs might add despite instructions
+            prefixes_to_remove = [
+                r'^(Formatted Value:|Reformatted Value:|Result:|Here\'s the improved text:|The formatted trait value is:|Improved text:|Rephrased text:)\s*',
+                r'^(I\'ve reformatted this to:|I\'ve improved the formatting:|Here is the reformatted text:)\s*'
+            ]
+
+            for prefix_pattern in prefixes_to_remove:
+                formatted_value = re.sub(prefix_pattern, '', formatted_value, flags=re.IGNORECASE)
+
+            # Log the cleaned response
+            logger.debug(f"Cleaned LLM response: {formatted_value}")
+
+            return formatted_value.strip()
 
         except Exception as e:
             logger.error(f"Error parsing LLM response: {str(e)}", exc_info=True)

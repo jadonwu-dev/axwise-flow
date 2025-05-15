@@ -118,7 +118,9 @@ class NLPProcessor:
         if config is None:
             config = {}
 
-        use_enhanced_theme_analysis = config.get("use_enhanced_theme_analysis", False)
+        # Solution 1: Enable enhanced theme analysis by default
+        use_enhanced_theme_analysis = config.get("use_enhanced_theme_analysis", True)  # Changed default to True
+        logger.info(f"Enhanced theme analysis is {'enabled' if use_enhanced_theme_analysis else 'disabled'}")
 
         try:
             # Extract text content
@@ -325,7 +327,7 @@ class NLPProcessor:
             # Store the basic themes as the main themes result
             themes_result = basic_themes_result
 
-            # Run enhanced theme analysis
+            # Solution 2: Improve the handling of enhanced theme results
             enhanced_themes_result = None
             if enhanced_themes_task:
                 try:
@@ -353,76 +355,134 @@ class NLPProcessor:
                         )
                         # Copy themes to enhanced_themes for consistent handling
                         enhanced_themes_result["enhanced_themes"] = enhanced_themes_result["themes"]
+                        logger.info("Copied themes to enhanced_themes for consistent handling")
                         # Log the first theme if available
                         if enhanced_themes_result["themes"]:
                             first_theme = enhanced_themes_result["themes"][0]
                             logger.info(f"First theme (copied to enhanced_themes): {first_theme.get('name', 'Unnamed')}")
+                    # Handle direct list of themes (no wrapper object)
+                    elif isinstance(enhanced_themes_result, list) and len(enhanced_themes_result) > 0:
+                        logger.info(f"Enhanced theme analysis returned a direct list of {len(enhanced_themes_result)} themes")
+                        # Wrap the list in a dictionary with enhanced_themes key
+                        enhanced_themes_result = {"enhanced_themes": enhanced_themes_result}
+                        logger.info("Wrapped theme list in enhanced_themes key for consistent handling")
                     else:
                         logger.warning(
                             f"Enhanced theme analysis did not return expected structure. Keys: {list(enhanced_themes_result.keys()) if isinstance(enhanced_themes_result, dict) else 'not a dictionary'}"
                         )
                         # Create a default structure if the result is not as expected
                         enhanced_themes_result = {"enhanced_themes": []}
+                        logger.warning("Created empty enhanced_themes structure as fallback")
                 except Exception as e:
                     logger.error(f"Error in enhanced theme analysis: {str(e)}")
                     # Create a fallback enhanced themes result
                     enhanced_themes_result = {"enhanced_themes": []}
+                    logger.warning("Created empty enhanced_themes structure due to error")
 
-            # If enhanced themes are still None or empty, create enhanced themes from basic themes
-            if not enhanced_themes_result or (not enhanced_themes_result.get("enhanced_themes") and not enhanced_themes_result.get("themes")):
-                logger.info("Enhanced themes not available, creating from basic themes")
+            # Solution 3: Improve the fallback mechanism
+            # Always create enhanced themes from basic themes if enhanced themes are missing or empty
+            if not enhanced_themes_result or not enhanced_themes_result.get("enhanced_themes", []):
+                logger.info("Enhanced themes not available or empty, creating from basic themes")
                 try:
                     # Create enhanced themes from basic themes
                     basic_themes = basic_themes_result.get("themes", [])
                     enhanced_themes = []
 
-                    for theme in basic_themes:
-                        # Create a deep copy of the theme
-                        enhanced_theme = theme.copy()
+                    if basic_themes:
+                        logger.info(f"Creating enhanced themes from {len(basic_themes)} basic themes")
 
-                        # Modify the theme to make it "enhanced"
-                        enhanced_theme["process"] = "enhanced"
+                        for theme in basic_themes:
+                            # Create a deep copy of the theme to avoid modifying the original
+                            enhanced_theme = copy.deepcopy(theme)
 
-                        # Add more detailed reliability information
-                        reliability = enhanced_theme.get("reliability", 0.7)
-                        enhanced_theme["reliability"] = reliability
+                            # Modify the theme to make it "enhanced"
+                            enhanced_theme["process"] = "enhanced"
 
-                        # Adjust sentiment to be more nuanced (not just making everything positive)
-                        sentiment = enhanced_theme.get("sentiment", 0)
-                        # Keep the sentiment direction but make it more nuanced
-                        if sentiment > 0:
-                            enhanced_theme["sentiment"] = min(sentiment + 0.1, 1.0)
-                        elif sentiment < 0:
-                            enhanced_theme["sentiment"] = max(sentiment - 0.1, -1.0)
+                            # Add more detailed reliability information
+                            reliability = enhanced_theme.get("reliability", 0.7)
+                            enhanced_theme["reliability"] = reliability
 
-                        # Ensure codes exist
-                        if (
-                            not enhanced_theme.get("codes")
-                            or len(enhanced_theme.get("codes", [])) < 2
-                        ):
-                            keywords = enhanced_theme.get("keywords", [])
-                            codes = enhanced_theme.get("codes", [])
+                            # Adjust sentiment to be more nuanced (not just making everything positive)
+                            sentiment = enhanced_theme.get("sentiment", 0)
+                            # Keep the sentiment direction but make it more nuanced
+                            if sentiment > 0:
+                                enhanced_theme["sentiment"] = min(sentiment + 0.1, 1.0)
+                            elif sentiment < 0:
+                                enhanced_theme["sentiment"] = max(sentiment - 0.1, -1.0)
 
-                            # Generate codes from keywords if needed
-                            for keyword in keywords[:3]:
-                                code = keyword.upper().replace(" ", "_")
-                                if code not in codes:
-                                    codes.append(code)
+                            # Ensure codes exist
+                            if (
+                                not enhanced_theme.get("codes")
+                                or len(enhanced_theme.get("codes", [])) < 2
+                            ):
+                                keywords = enhanced_theme.get("keywords", [])
+                                codes = enhanced_theme.get("codes", []) or []
 
-                            enhanced_theme["codes"] = codes
+                                # Generate codes from keywords if needed
+                                for keyword in keywords[:3]:
+                                    if keyword and isinstance(keyword, str):
+                                        code = keyword.upper().replace(" ", "_")
+                                        if code not in codes:
+                                            codes.append(code)
 
-                        enhanced_themes.append(enhanced_theme)
+                                enhanced_theme["codes"] = codes
 
-                    enhanced_themes_result = {"themes": enhanced_themes}
-                    logger.info(
-                        f"Created {len(enhanced_themes)} enhanced themes from basic themes"
-                    )
+                            # Ensure all required fields exist
+                            for field in ["name", "definition", "keywords", "statements", "frequency", "sentiment"]:
+                                if field not in enhanced_theme or enhanced_theme[field] is None:
+                                    if field == "name":
+                                        enhanced_theme[field] = f"Theme {len(enhanced_themes) + 1}"
+                                    elif field == "definition":
+                                        enhanced_theme[field] = "Generated theme from basic analysis"
+                                    elif field in ["keywords", "statements"]:
+                                        enhanced_theme[field] = []
+                                    elif field == "frequency":
+                                        enhanced_theme[field] = 0.5
+                                    elif field == "sentiment":
+                                        enhanced_theme[field] = 0.0
+
+                            enhanced_themes.append(enhanced_theme)
+                    else:
+                        logger.warning("No basic themes available to create enhanced themes")
+                        # Create a minimal default theme if no basic themes are available
+                        enhanced_themes = [{
+                            "name": "General Theme",
+                            "definition": "A general theme extracted from the interview",
+                            "keywords": ["general", "theme", "interview"],
+                            "statements": [],
+                            "frequency": 0.5,
+                            "sentiment": 0.0,
+                            "reliability": 0.5,
+                            "process": "enhanced",
+                            "codes": ["GENERAL_THEME"]
+                        }]
+                        logger.info("Created a minimal default theme as fallback")
+
+                    # Store the enhanced themes in the result
+                    if enhanced_themes_result is None:
+                        enhanced_themes_result = {}
+
+                    # Always store in enhanced_themes key for consistency
+                    enhanced_themes_result["enhanced_themes"] = enhanced_themes
+                    logger.info(f"Created {len(enhanced_themes)} enhanced themes from basic themes")
                 except Exception as e:
-                    logger.error(
-                        f"Error creating enhanced themes from basic themes: {str(e)}"
-                    )
-                    # Create an empty fallback enhanced themes result
-                    enhanced_themes_result = {"themes": []}
+                    logger.error(f"Error creating enhanced themes from basic themes: {str(e)}")
+                    # Create a minimal fallback enhanced themes result
+                    if enhanced_themes_result is None:
+                        enhanced_themes_result = {}
+
+                    enhanced_themes_result["enhanced_themes"] = [{
+                        "name": "Fallback Theme",
+                        "definition": "A fallback theme created due to processing error",
+                        "keywords": ["fallback", "error", "recovery"],
+                        "statements": [],
+                        "frequency": 0.5,
+                        "sentiment": 0.0,
+                        "reliability": 0.5,
+                        "process": "enhanced",
+                        "codes": ["ERROR_RECOVERY"]
+                    }]
+                    logger.warning("Created fallback theme due to error in enhanced theme creation")
 
             # Detect industry from the text
             industry = await self._detect_industry(combined_text, llm_service)
@@ -563,28 +623,70 @@ class NLPProcessor:
             total_duration = asyncio.get_event_loop().time() - start_time
             logger.info(f"Total analysis completed in {total_duration:.2f} seconds")
 
-            # Combine results
+            # Solution 4: Ensure consistent result structure
+
+            # First, ensure enhanced_themes is always populated with the best available themes
+            enhanced_themes = []
+
+            # Get enhanced themes from the result if available
+            if enhanced_themes_result:
+                enhanced_themes = enhanced_themes_result.get("enhanced_themes", [])
+
+                # If enhanced_themes is empty but themes is available, use that
+                if not enhanced_themes and "themes" in enhanced_themes_result:
+                    enhanced_themes = enhanced_themes_result.get("themes", [])
+                    logger.info("Using themes from enhanced_themes_result as enhanced_themes")
+
+            # If enhanced_themes is still empty, create from basic themes
+            if not enhanced_themes:
+                logger.info("Enhanced themes still empty, using basic themes as enhanced themes")
+                basic_themes = themes_result.get("themes", [])
+
+                # Convert basic themes to enhanced themes
+                for theme in basic_themes:
+                    enhanced_theme = copy.deepcopy(theme)
+                    enhanced_theme["process"] = "enhanced"
+                    enhanced_themes.append(enhanced_theme)
+
+                logger.info(f"Created {len(enhanced_themes)} enhanced themes from basic themes")
+
+            # If we still have no enhanced themes, create a minimal default theme
+            if not enhanced_themes:
+                logger.warning("No themes available at all, creating minimal default theme")
+                enhanced_themes = [{
+                    "name": "General Theme",
+                    "definition": "A general theme extracted from the interview",
+                    "keywords": ["general", "theme", "interview"],
+                    "statements": [],
+                    "frequency": 0.5,
+                    "sentiment": 0.0,
+                    "reliability": 0.5,
+                    "process": "enhanced",
+                    "codes": ["GENERAL_THEME"]
+                }]
+
+            # Combine results with enhanced themes as the primary themes
             results = {
-                "themes": themes_result.get("themes", []),
+                "themes": enhanced_themes,  # Use enhanced themes as the primary themes
                 "patterns": patterns_result.get("patterns", []),
                 "sentiment": processed_sentiment,
                 "insights": insights_result.get("insights", []),
                 "validation": {"valid": True, "confidence": 0.9, "details": None},
                 "original_text": combined_text,  # Store original text for later use
-                "enhanced_themes": (
-                    enhanced_themes_result.get("enhanced_themes", []) or enhanced_themes_result.get("themes", [])
-                    if enhanced_themes_result
-                    else []
-                ),
+                "enhanced_themes": [],  # Keep this empty to avoid duplication
                 "industry": industry,  # Add detected industry to the result
             }
 
-            # If we have enhanced themes, use only those
-            if results["enhanced_themes"]:
-                # Use only enhanced themes
-                results["themes"] = results["enhanced_themes"]
-                # Remove the enhanced_themes field to avoid duplication
-                results["enhanced_themes"] = []
+            logger.info(f"Final results contain {len(results['themes'])} themes and {len(results['patterns'])} patterns")
+
+            # Add metadata about the theme processing
+            results["metadata"] = {
+                "theme_processing": {
+                    "source": "enhanced",
+                    "count": len(results["themes"]),
+                    "has_enhanced_themes": len(enhanced_themes) > 0
+                }
+            }
 
             return results
 
