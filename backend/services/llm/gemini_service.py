@@ -44,16 +44,12 @@ class GeminiService:
             raise ValueError("Gemini API key not found.")
 
         try:
-            # Initialize the client using the newer pattern from the Google Generative AI SDK migration guide
-            genai.configure(api_key=self.api_key)
-            self.client = genai
-            logger.info(f"Successfully initialized genai with configure() method.")
-        except AttributeError as e:
-            logger.error(f"Failed to initialize genai: 'google.genai' module may be missing 'configure' or related attributes. Error: {e}. This is critical.")
-            raise ValueError("Failed to initialize Gemini client due to AttributeError. Check google-genai library installation and version.") from e
+            # Initialize the client using the new client-based pattern from google-genai 1.2.0+
+            self.client = genai.Client(api_key=self.api_key)
+            logger.info(f"Successfully initialized genai with Client() constructor.")
         except Exception as e:
-            logger.error(f"An unexpected error occurred during genai initialization: {e}")
-            raise ValueError("Unexpected error initializing Gemini client.") from e
+            logger.error(f"An unexpected error occurred during genai client initialization: {e}")
+            raise ValueError(f"Failed to initialize Gemini client: {e}") from e
 
         logger.info(
             f"GeminiService initialized with model: {self.default_model_name}, temp: {self.default_temperature}, max_tokens: {self.default_max_tokens}, top_p: {self.default_top_p}"
@@ -84,12 +80,12 @@ class GeminiService:
             config_params["top_k"] = 1
             config_params["top_p"] = 0.95
             logger.info(f"Using enhanced config for {task}: max_tokens=131072, top_k=1, top_p=0.95")
-        elif task == "persona_formation":
-            # For persona_formation, use the specific configuration from the original implementation
+        elif task in ["persona_formation", "pattern_recognition"]:
+            # For persona_formation and pattern_recognition, use the specific configuration
             config_params["max_output_tokens"] = 65536
             config_params["top_k"] = 1
             config_params["top_p"] = 0.95
-            logger.info(f"Using specific config for persona_formation: max_tokens=65536, top_k=1, top_p=0.95")
+            logger.info(f"Using specific config for {task}: max_tokens=65536, top_k=1, top_p=0.95")
 
         # Remove automatic_function_calling as it's causing validation errors
 
@@ -142,14 +138,28 @@ class GeminiService:
                 system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
                 final_contents = [system_content] + final_contents
 
-        # Create safety settings
-        # Use string values for safety settings as shown in the documentation
+        # Create safety settings using the types module from google.genai
+        # This ensures we're using the correct SafetySetting class from the SDK
+        from google.genai import types
         safety_settings = [
-            SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-            SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-            SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-            SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
         ]
+        logger.info(f"Created safety settings: {safety_settings}")
 
         # Create the final GenerateContentConfig object with only valid fields
         try:
@@ -170,11 +180,45 @@ class GeminiService:
         )
 
         try:
-            # Use client.aio.models.generate_content with the correct parameter structure
+            # Use client.models.generate_content with the correct parameter structure
+            # In the new SDK, safety_settings should be included in the config
+            if final_config:
+                config_dict = final_config.model_dump() if hasattr(final_config, "model_dump") else final_config.dict()
+                final_config = GenerateContentConfig(**config_dict)
+
+            # Log the API call details
+            logger.info(f"Calling client.aio.models.generate_content with model={model_name}, safety_settings={safety_settings}")
+
+            # Create a new config object that includes all necessary parameters
+            from google.genai import types
+            config = types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=65536,
+                top_k=1,
+                top_p=0.95,
+                safety_settings=safety_settings
+            )
+
+            # Add response_mime_type for JSON tasks
+            if "response_mime_type" in config_dict:
+                response_mime_type = config_dict["response_mime_type"]
+                logger.info(f"Using response_mime_type={response_mime_type} from config")
+                # Create a new config with the response_mime_type included
+                config = types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=65536,
+                    top_k=1,
+                    top_p=0.95,
+                    safety_settings=safety_settings,
+                    response_mime_type=response_mime_type
+                )
+
+            # Make the API call with the correct config parameter
+            logger.info(f"Making API call with config={config}")
             response = await self.client.aio.models.generate_content(
                 model=model_name,
                 contents=final_contents,
-                config=final_config
+                config=config
             )
             return response
         except Exception as e:
@@ -241,14 +285,28 @@ class GeminiService:
                         system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
                         final_contents = [system_content] + final_contents
 
-                # Create safety settings
-                # Use string values for safety settings as shown in the documentation
+                # Create safety settings using the types module from google.genai
+                # This ensures we're using the correct SafetySetting class from the SDK
+                from google.genai import types
                 safety_settings = [
-                    SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                    SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                    SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                    SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
                 ]
+                logger.info(f"Created safety settings for streaming: {safety_settings}")
 
                 # Create the final GenerateContentConfig object with only valid fields
                 try:
@@ -268,10 +326,44 @@ class GeminiService:
                     f"Config: {final_config}"
                 )
 
+                # In the new SDK, safety_settings should be included in the config
+                if final_config:
+                    config_dict = final_config.model_dump() if hasattr(final_config, "model_dump") else final_config.dict()
+                    final_config = GenerateContentConfig(**config_dict)
+
+                # Log the API call details
+                logger.info(f"Calling client.aio.models.generate_content_stream with model={model_name}, safety_settings={safety_settings}")
+
+                # Create a new config object that includes all necessary parameters
+                from google.genai import types
+                config = types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=65536,
+                    top_k=1,
+                    top_p=0.95,
+                    safety_settings=safety_settings
+                )
+
+                # Add response_mime_type for JSON tasks
+                if "response_mime_type" in config_dict:
+                    response_mime_type = config_dict["response_mime_type"]
+                    logger.info(f"Using response_mime_type={response_mime_type} from config for streaming")
+                    # Create a new config with the response_mime_type included
+                    config = types.GenerateContentConfig(
+                        temperature=0.0,
+                        max_output_tokens=65536,
+                        top_k=1,
+                        top_p=0.95,
+                        safety_settings=safety_settings,
+                        response_mime_type=response_mime_type
+                    )
+
+                # Make the API call with the correct config parameter
+                logger.info(f"Making streaming API call with config={config}")
                 async for chunk in await self.client.aio.models.generate_content_stream(
                     model=model_name, # Note: parameter is 'model', not 'model_name'
                     contents=final_contents,
-                    config=final_config
+                    config=config
                 ):
                     yield chunk.text
 
@@ -365,7 +457,7 @@ class GeminiService:
         # All these parameters are bundled into a single config object passed to generate_content().
 
         # Define JSON tasks
-        json_tasks = ["transcript_structuring", "persona_formation", "theme_analysis", "insight_generation", "pattern_analysis"]
+        json_tasks = ["transcript_structuring", "persona_formation", "theme_analysis", "insight_generation", "pattern_analysis", "pattern_recognition"]
         is_json_task = task in json_tasks
 
         # Get base generation config
@@ -395,13 +487,15 @@ class GeminiService:
         response_schema = data.get("response_schema", None)
 
         # Check if we should enforce JSON output
-        if enforce_json or is_json_task:
+        if enforce_json or is_json_task or task == "pattern_recognition":
             # Add response_mime_type to config_params to enforce JSON output
             config_params["response_mime_type"] = "application/json"
             response_mime_type = "application/json"
 
             # Set temperature to 0 for deterministic output when generating structured data
             config_params["temperature"] = 0.0
+
+            logger.info(f"Enforcing JSON output for task: {task}")
 
             # For persona_formation, ensure we use the maximum possible tokens (already set in _get_generation_config)
             # This is just a double-check to ensure consistency with the original implementation
@@ -642,11 +736,38 @@ class GeminiService:
                 if isinstance(result, list):
                     result = {"patterns": result}
 
-                # If patterns are missing or empty, return an empty patterns array
-                # without attempting to generate fallback patterns
-                if "patterns" not in result or not result["patterns"]:
-                    logger.warning(f"Pattern recognition returned no patterns, returning empty array")
-                    result = {"patterns": []}
+                # Ensure patterns key exists
+                if "patterns" not in result:
+                    logger.warning(f"Pattern recognition response missing 'patterns' key, adding empty array")
+                    result["patterns"] = []
+
+                # Ensure each pattern has required fields
+                for pattern in result.get("patterns", []):
+                    # Ensure required fields with default values
+                    if "name" not in pattern or not pattern["name"]:
+                        pattern["name"] = "Unnamed Pattern"
+                    if "category" not in pattern or not pattern["category"]:
+                        pattern["category"] = "Workflow"
+                    if "description" not in pattern or not pattern["description"]:
+                        pattern["description"] = "No description provided"
+                    if "frequency" not in pattern:
+                        pattern["frequency"] = 0.5  # medium
+                    if "sentiment" not in pattern:
+                        pattern["sentiment"] = 0.0  # neutral
+                    if "evidence" not in pattern:
+                        pattern["evidence"] = []
+                    if "impact" not in pattern or not pattern["impact"]:
+                        pattern["impact"] = "Impact not specified"
+                    if "suggested_actions" not in pattern:
+                        pattern["suggested_actions"] = ["Consider further investigation"]
+
+                # Log the patterns for debugging
+                if result["patterns"]:
+                    logger.info(f"Pattern recognition returned {len(result['patterns'])} patterns")
+                    if len(result["patterns"]) > 0:
+                        logger.info(f"First pattern: {result['patterns'][0].get('name', 'Unnamed')}")
+                else:
+                    logger.warning(f"Pattern recognition returned empty patterns array")
 
             elif task == "theme_analysis":
                 # If response is a list of themes directly (not wrapped in an object)

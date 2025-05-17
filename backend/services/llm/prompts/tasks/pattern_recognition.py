@@ -91,10 +91,16 @@ class PatternRecognitionPrompts:
                   "Develop a streamlined validation checklist",
                   "Implement a faster user testing protocol for quick validation"
               ]
-            }},
-            ...
+            }}
           ]
         }}
+
+        EXTREMELY IMPORTANT: Your response MUST be a valid JSON object with a "patterns" array, even if you only identify one pattern. If you cannot identify any patterns, return an empty array like this:
+        {{
+          "patterns": []
+        }}
+
+        DO NOT return a raw array or any other format. The response MUST be a JSON object with a "patterns" key containing an array of pattern objects.
 
         CRITICAL REQUIREMENTS:
         1. EVERY pattern MUST have a clear, descriptive name (never "Uncategorized" or generic labels)
@@ -172,10 +178,16 @@ class PatternRecognitionPrompts:
                   "Develop a streamlined validation checklist",
                   "Implement a faster user testing protocol for quick validation"
               ]
-            },
-            ...
+            }
           ]
         }
+
+        EXTREMELY IMPORTANT: Your response MUST be a valid JSON object with a "patterns" array, even if you only identify one pattern. If you cannot identify any patterns, return an empty array like this:
+        {
+          "patterns": []
+        }
+
+        DO NOT return a raw array or any other format. The response MUST be a JSON object with a "patterns" key containing an array of pattern objects.
 
         CRITICAL REQUIREMENTS:
         1. EVERY pattern MUST have a clear, descriptive name (never "Uncategorized" or generic labels)

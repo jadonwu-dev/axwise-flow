@@ -548,13 +548,21 @@ class NLPProcessor:
                 # Continue if we have at least some usable results
                 # Ideally, we want both themes (basic OR enhanced) AND patterns, but we'll be more resilient
                 if not has_patterns:
-                    logger.warning("No patterns found from LLM, returning empty patterns array")
+                    logger.warning("No patterns found from LLM, attempting to generate fallback patterns from themes")
 
-                    # Instead of generating fallback patterns, just return an empty array
-                    patterns_result["patterns"] = []
+                    # Generate fallback patterns from themes
+                    fallback_patterns = await self._generate_fallback_patterns(
+                        combined_text,
+                        themes_result.get("themes", []),
+                        llm_service
+                    )
 
-                    # Log that we're skipping fallback pattern generation
-                    logger.info("Skipping fallback pattern generation as requested")
+                    if fallback_patterns and len(fallback_patterns) > 0:
+                        logger.info(f"Successfully generated {len(fallback_patterns)} fallback patterns from themes")
+                        patterns_result["patterns"] = fallback_patterns
+                    else:
+                        logger.warning("Failed to generate fallback patterns, returning empty patterns array")
+                        patterns_result["patterns"] = []
 
                 # If we have patterns but no themes, we'll continue with empty themes
                 if not (has_basic_themes or has_enhanced_themes):
@@ -1402,6 +1410,82 @@ class NLPProcessor:
                 "Implement user journey mapping to visualize and improve common interaction patterns"
             ]
         }]
+
+    async def _generate_fallback_patterns(self, text: str, themes: list, llm_service) -> list:
+        """
+        Generate fallback patterns from themes when direct pattern generation fails.
+
+        Args:
+            text: The interview text
+            themes: List of themes to convert to patterns
+            llm_service: LLM service to use for pattern enhancement
+
+        Returns:
+            List of generated patterns
+        """
+        try:
+            logger.info(f"Generating fallback patterns from {len(themes)} themes")
+
+            # If no themes, return empty list
+            if not themes:
+                logger.warning("No themes available to generate fallback patterns")
+                return []
+
+            # Create patterns from themes
+            patterns = []
+
+            for theme in themes:
+                # Skip themes without names or definitions
+                if not theme.get("name") or not theme.get("definition"):
+                    continue
+
+                # Create a pattern from the theme
+                pattern = {
+                    "name": f"Pattern: {theme.get('name')}",
+                    "description": theme.get("definition"),
+                    "category": self._determine_pattern_category(
+                        theme.get("name", ""),
+                        theme.get("definition", ""),
+                        theme.get("statements", [])
+                    ),
+                    "frequency": theme.get("frequency", 0.7),
+                    "impact": "This pattern affects how users approach their work and may influence tool adoption.",
+                    "suggested_actions": "Consider addressing this pattern in the design process.",
+                    "evidence": theme.get("statements", [])
+                }
+
+                # Add the pattern to the list
+                patterns.append(pattern)
+
+            logger.info(f"Generated {len(patterns)} fallback patterns from themes")
+
+            # If we have patterns, try to enhance them with the LLM
+            if patterns:
+                try:
+                    # Call LLM to enhance patterns
+                    enhanced_patterns_result = await llm_service.analyze(
+                        {
+                            "task": "pattern_enhancement",
+                            "text": text[:5000],  # Limit text size
+                            "patterns": patterns
+                        }
+                    )
+
+                    # Extract enhanced patterns from result
+                    enhanced_patterns = enhanced_patterns_result.get("patterns", [])
+
+                    # If we got enhanced patterns, use them
+                    if enhanced_patterns and len(enhanced_patterns) > 0:
+                        logger.info(f"Successfully enhanced {len(enhanced_patterns)} patterns")
+                        return enhanced_patterns
+                except Exception as e:
+                    logger.error(f"Error enhancing patterns: {str(e)}")
+                    # Continue with original patterns
+
+            return patterns
+        except Exception as e:
+            logger.error(f"Error generating fallback patterns: {str(e)}")
+            return []
 
     async def _detect_industry(self, text: str, llm_service) -> str:
         """
