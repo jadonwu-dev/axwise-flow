@@ -51,9 +51,10 @@ class GeminiLLMService(BaseLLMService, ILLMService):
         as self.service.analyze (GeminiService.analyze) expects all necessary info in the 'request' dict.
         """
         logger.debug(f"[{self.__class__.__name__}] _call_llm_api called for task: {task}. Delegating to self.service.analyze.")
-        # The 'request' dictionary already contains the 'task', 'text' (if needed directly by GeminiService),
-        # and any other parameters GeminiService.analyze expects.
-        return await self.service.analyze(request) # GeminiService.analyze is already robust
+        # The 'text' and 'task' are passed directly.
+        # The 'request' dictionary (which is request_data_for_provider from BaseLLMService)
+        # is passed as the 'data' argument to GeminiService.analyze, containing additional parameters.
+        return await self.service.analyze(text=text, task=task, data=request)
 
     def _parse_llm_response(self, response: Any, task: str) -> Dict[str, Any]:
         """

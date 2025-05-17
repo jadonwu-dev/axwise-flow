@@ -44,7 +44,7 @@ class PersonaSchema:
 
 
 async def test_gemini_direct():
-    """Test direct Gemini API connection for persona generation."""
+    """Test direct Gemini API connection for persona generation using client.aio pattern."""
     try:
         logger.info("Testing direct Gemini API connection for persona generation")
 
@@ -57,6 +57,7 @@ async def test_gemini_direct():
         # Import Gemini library
         try:
             import google.genai as genai
+            from google.genai import types
 
             logger.info("Using google.genai package")
         except ImportError:
@@ -65,9 +66,13 @@ async def test_gemini_direct():
             )
             return False
 
-        # Create Gemini model
-        logger.info("Creating Gemini model")
-        model = genai.GenerativeModel("gemini-1.5-pro", api_key=gemini_api_key)
+        # Create Gemini client
+        logger.info("Creating Gemini client")
+        client = genai.Client(api_key=gemini_api_key)
+
+        # Create system instruction
+        system_instruction = """You are a persona generation assistant.
+        Create detailed personas based on interview transcripts in JSON format."""
 
         # Create prompt for persona generation
         prompt = f"""
@@ -95,9 +100,43 @@ async def test_gemini_direct():
         Return ONLY the JSON with no additional text, explanation, or markdown formatting.
         """
 
-        # Generate response
-        logger.info("Sending request to Gemini...")
-        response = model.generate_content(prompt)
+        # Generate response using client.aio.models.generate_content
+        logger.info("Sending request to Gemini using client.aio.models.generate_content...")
+
+        # Create a dictionary for the GenerateContentConfig fields
+        config_fields = {
+            "temperature": 0.0,
+            "top_p": 0.95,
+            "top_k": 1,
+            "max_output_tokens": 65536,
+            "response_mime_type": "application/json"
+        }
+
+        # Create Content objects with role="user" (Gemini API only accepts "user" and "model" roles)
+        system_content = types.Content(parts=[{"text": "System instruction: " + system_instruction}], role="user")
+        user_content = types.Content(parts=[{"text": prompt}], role="user")
+        contents = [system_content, user_content]
+
+        # Create safety settings
+        safety_settings = [
+            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+        ]
+
+        # Do NOT add safety settings to the config
+        # Safety settings are not supported in GenerationConfig
+
+        # Create the final GenerateContentConfig object
+        # Remove automatic_function_calling as it's causing validation errors
+        generation_config = types.GenerateContentConfig(**config_fields)
+
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash-preview-04-17",
+            contents=contents,
+            config=generation_config
+        )
 
         logger.info("Received response")
         # Print the response text for debugging

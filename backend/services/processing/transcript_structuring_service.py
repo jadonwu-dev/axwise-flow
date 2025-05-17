@@ -7,7 +7,10 @@ JSON format with speaker identification and role inference.
 
 import json
 import logging
+import re
 from typing import Dict, Any, List, Optional, Union
+
+from backend.utils.json.json_repair import repair_json, parse_json_safely, parse_json_array_safely
 
 from domain.interfaces.llm_unified import ILLMService
 from backend.services.llm.prompts.tasks.transcript_structuring import TranscriptStructuringPrompts

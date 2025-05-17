@@ -13,6 +13,7 @@ from infrastructure.config.settings import settings
 # Import the service classes to verify they can be instantiated
 from backend.services.llm.openai_service import OpenAIService
 from backend.services.llm.gemini_service import GeminiService
+from backend.services.llm.gemini_llm_service import GeminiLLMService
 
 # We'll use conditional import for the Anthropic service since it's just an example
 
@@ -41,11 +42,11 @@ def test_create_openai_service(minimal_config):
 def test_create_gemini_service(minimal_config):
     """Test that the factory can create a Gemini service."""
     service = LLMServiceFactory.create("gemini", minimal_config)
-    assert isinstance(service, GeminiService)
-    assert service.api_key == "test-api-key"
-    assert service.model == "test-model"
-    assert service.temperature == 0.5
-    assert service.max_tokens == 100
+    assert isinstance(service, GeminiLLMService)
+    assert service.service.api_key == "test-api-key"
+    assert service.service.default_model_name == "test-model"
+    assert service.service.default_temperature == 0.5
+    assert service.service.default_max_tokens == 100
 
 
 def test_case_insensitive_provider_name(minimal_config):

@@ -1,32 +1,32 @@
 import logging
 import json
-import os
 import asyncio
-import httpx
-import google.genai as genai
-from backend.utils.json.json_repair import repair_json
-import random
-from typing import Dict, Any, List, Optional, Union
-from domain.interfaces.llm_unified import ILLMService
-from pydantic import BaseModel, Field, ValidationError
+import os
+import sys
 import re
 import time
+import random
 from datetime import datetime
+from typing import Dict, Any, List, Union, Optional, AsyncGenerator
 
-from backend.schemas import Theme, Pattern, Insight
-from backend.utils.json.json_parser import (
-    parse_llm_json_response,
-    normalize_persona_response,
+import httpx
+import google.genai as genai
+from google.genai.types import GenerateContentConfig, SafetySetting, HarmCategory, Content
+from pydantic import BaseModel, Field, ValidationError
+
+from backend.utils.json.json_repair import repair_json, parse_json_safely, parse_json_array_safely
+from domain.interfaces.llm_unified import ILLMService
+
+from backend.schemas import Theme
+from backend.services.llm.prompts.gemini_prompts import GeminiPrompts
+from backend.services.llm.exceptions import LLMAPIError, LLMResponseParseError, LLMProcessingError, LLMServiceError # Added LLMProcessingError, LLMServiceError
+from infrastructure.constants.llm_constants import (
+    GEMINI_MODEL_NAME, GEMINI_TEMPERATURE, GEMINI_MAX_TOKENS,
+    GEMINI_TOP_P, GEMINI_TOP_K, ENV_GEMINI_API_KEY,
+    GEMINI_SAFETY_SETTINGS_BLOCK_NONE # Assuming this constant exists for safety settings
 )
 
-from backend.services.llm.exceptions import LLMAPIError, LLMResponseParseError
-
 logger = logging.getLogger(__name__)
-
-
-# Note: We're using the prompt template to guide the model's output format
-# rather than a schema, as the Gemini API has limitations with complex schemas
-
 
 class GeminiService:
     """
@@ -34,341 +34,566 @@ class GeminiService:
     """
 
     def __init__(self, config: Dict[str, Any]):
-        """
-        Initialize the Gemini service with configuration.
-
-        Args:
-            config (Dict[str, Any]): Configuration for the Gemini service
-        """
-        # Import constants for LLM configuration
-        from infrastructure.constants.llm_constants import (
-            GEMINI_MODEL_NAME, GEMINI_TEMPERATURE, GEMINI_MAX_TOKENS,
-            GEMINI_TOP_P, GEMINI_TOP_K, ENV_GEMINI_API_KEY
-        )
-
-        # Try to get API key from config, then from environment if not in config
-        self.api_key = config.get("api_key")
+        self.default_model_name = config.get("model", GEMINI_MODEL_NAME)
+        self.default_temperature = config.get("temperature", GEMINI_TEMPERATURE)
+        self.default_max_tokens = config.get("max_tokens", GEMINI_MAX_TOKENS)
+        self.default_top_p = config.get("top_p", GEMINI_TOP_P)
+        self.api_key = config.get("api_key") or os.getenv(ENV_GEMINI_API_KEY)
         if not self.api_key:
-            # Try to load directly from environment
-            env_key = os.getenv(ENV_GEMINI_API_KEY)
-            if env_key:
-                logger.info(f"Loading Gemini API key directly from environment variable {ENV_GEMINI_API_KEY}")
-                self.api_key = env_key
-                # Update the config for consistency
-                config["api_key"] = env_key
-            else:
-                logger.error("No Gemini API key found in config or environment")
+            logger.error("Gemini API key is not configured. Set GEMINI_API_KEY environment variable or provide in config.")
+            raise ValueError("Gemini API key not found.")
 
-        self.model = config.get("model", GEMINI_MODEL_NAME)
-        self.temperature = config.get("temperature", GEMINI_TEMPERATURE)
-        self.max_tokens = config.get("max_tokens", GEMINI_MAX_TOKENS)
-        self.top_p = config.get("top_p", GEMINI_TOP_P)
-        self.top_k = GEMINI_TOP_K  # Force top_k to 1 for deterministic results
-
-        # Override any environment settings that might cause vague results
-        if "top_k" in config and config.get("top_k") > 1:
-            logger.warning(f"Overriding top_k from {config.get('top_k')} to {GEMINI_TOP_K} for deterministic results")
-
-        # Initialize Gemini client with the new google.genai package
-        if not self.api_key:
-            logger.error("Cannot initialize Gemini client: No API key available")
-            raise ValueError("Gemini API key is required")
-
-        self.client = genai.Client(api_key=self.api_key)
-
-        # Store generation config for later use
-        self.generation_config = {
-            "temperature": self.temperature,
-            "max_output_tokens": self.max_tokens,
-            "top_p": self.top_p,
-            "top_k": self.top_k,
-        }
+        try:
+            # Initialize the client using the newer pattern from the Google Generative AI SDK migration guide
+            genai.configure(api_key=self.api_key)
+            self.client = genai
+            logger.info(f"Successfully initialized genai with configure() method.")
+        except AttributeError as e:
+            logger.error(f"Failed to initialize genai: 'google.genai' module may be missing 'configure' or related attributes. Error: {e}. This is critical.")
+            raise ValueError("Failed to initialize Gemini client due to AttributeError. Check google-genai library installation and version.") from e
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during genai initialization: {e}")
+            raise ValueError("Unexpected error initializing Gemini client.") from e
 
         logger.info(
-            f"Initialized Gemini service with model: {self.model} using google-genai package v{genai.version.__version__}"
+            f"GeminiService initialized with model: {self.default_model_name}, temp: {self.default_temperature}, max_tokens: {self.default_max_tokens}, top_p: {self.default_top_p}"
         )
 
     def _get_system_message(self, task: str, data: Dict[str, Any]) -> str:
-        """
-        Get system message based on task.
-
-        Args:
-            task: Task type
-            data: Request data
-
-        Returns:
-            System message string
-        """
-        # Import the prompt templates
-        from backend.services.llm.prompts.gemini_prompts import GeminiPrompts
-
-        # Use the GeminiPrompts class to get the system message
         return GeminiPrompts.get_system_message(task, data)
 
-    async def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze data using Gemini.
+    def _get_generation_config(self, task: str, data: Dict[str, Any]) -> GenerateContentConfig:
+        temperature = data.get("temperature", self.default_temperature)
+        max_tokens = data.get("max_tokens", self.default_max_tokens)
+        top_p = data.get("top_p", self.default_top_p)
+        # top_k can also be part of GenerateContentConfig if needed
 
-        Args:
-            data (Dict[str, Any]): The data to analyze, including 'task' and 'text' fields
+        config_params = {}
+        if temperature is not None:
+            config_params["temperature"] = temperature
+        if max_tokens is not None:
+            config_params["max_output_tokens"] = max_tokens # Note: API uses max_output_tokens
+        if top_p is not None:
+            config_params["top_p"] = top_p
+        # if top_k is not None:
+        #     config_params["top_k"] = top_k
 
-        Returns:
-            Dict[str, Any]: Analysis results
-        """
-        task = data.get("task", "")
-        text = data.get("text", "")
-        use_answer_only = data.get("use_answer_only", False)
+        # For tasks that might generate large responses, ensure we use the maximum possible tokens
+        if task in ["transcript_structuring", "theme_analysis"]:
+            config_params["max_output_tokens"] = 131072  # Doubled from 65536 to ensure complete responses
+            config_params["top_k"] = 1
+            config_params["top_p"] = 0.95
+            logger.info(f"Using enhanced config for {task}: max_tokens=131072, top_k=1, top_p=0.95")
+        elif task == "persona_formation":
+            # For persona_formation, use the specific configuration from the original implementation
+            config_params["max_output_tokens"] = 65536
+            config_params["top_k"] = 1
+            config_params["top_p"] = 0.95
+            logger.info(f"Using specific config for persona_formation: max_tokens=65536, top_k=1, top_p=0.95")
 
-        if not text:
-            logger.warning("Empty text provided for analysis")
-            return {"error": "No text provided"}
+        # Remove automatic_function_calling as it's causing validation errors
 
-        if use_answer_only:
-            logger.info(
-                "Running {} on answer-only text length: {}".format(task, len(text))
-            )
-        else:
-            logger.info("Running {} on text length: {}".format(task, len(text)))
+        return GenerateContentConfig(**config_params)
+
+    async def _call_llm_api(
+        self,
+        model_name: str,
+        contents: Union[str, List[Union[str, Content]]],
+        generation_config: Optional[GenerateContentConfig] = None,
+        system_instruction_text: Optional[str] = None
+    ) -> genai.types.GenerateContentResponse:
+        """Makes the actual asynchronous API call to Gemini using client.aio.models.generate_content()."""
+        logger.info(f"Attempting to call Gemini API with model: {model_name}")
+
+        # Process the main content
+        final_contents = contents
+
+        # Create a dictionary for the GenerateContentConfig fields
+        config_fields = {}
+
+        # Add generation parameters if provided
+        if generation_config:
+            # Extract fields from the existing generation_config
+            if hasattr(generation_config, "model_dump"):
+                # For Pydantic v2+
+                config_fields.update(generation_config.model_dump(exclude_none=True))
+            elif hasattr(generation_config, "dict"):
+                # For Pydantic v1
+                config_fields.update(generation_config.dict(exclude_none=True))
+            else:
+                # Fallback for non-Pydantic objects
+                for attr in dir(generation_config):
+                    if not attr.startswith('_') and not callable(getattr(generation_config, attr)):
+                        value = getattr(generation_config, attr)
+                        if value is not None:
+                            config_fields[attr] = value
+
+        # Process the main content and include system instruction if provided
+        if system_instruction_text:
+            logger.debug(f"Using system instruction (first 200 chars): {system_instruction_text[:200]}...")
+            # Create Content objects with role="user" (Gemini API only accepts "user" and "model" roles)
+            if isinstance(final_contents, str):
+                # Convert string content to a list of Content objects
+                user_content = Content(parts=[{"text": final_contents}], role="user")
+                system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
+                final_contents = [system_content, user_content]
+            elif isinstance(final_contents, list):
+                # Add system instruction as the first item with proper role
+                system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
+                final_contents = [system_content] + final_contents
+
+        # Create safety settings
+        # Use string values for safety settings as shown in the documentation
+        safety_settings = [
+            SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+            SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+            SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+            SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+        ]
+
+        # Create the final GenerateContentConfig object with only valid fields
+        try:
+            # Do NOT add safety_settings to the config
+            # Remove automatic_function_calling as it's causing validation errors
+            final_config = GenerateContentConfig(**config_fields)
+            logger.debug(f"Created GenerateContentConfig with fields: {config_fields}")
+        except Exception as e:
+            logger.error(f"Error creating GenerateContentConfig: {e}")
+            # Fallback to empty config if creation fails
+            final_config = None
+
+        logger.debug(
+            f"Gemini API call - Model: {model_name}, "
+            f"Contents type: {type(final_contents)}, "
+            f"System Instruction present: {bool(system_instruction_text)}, "
+            f"Config: {final_config}"
+        )
 
         try:
-            # Prepare system message based on task
-            system_message = self._get_system_message(task, data)
-
-            # Prepare generation config
-            # Determine if this is a JSON-expecting task
-            json_tasks = [
-                "theme_analysis",
-                "pattern_recognition",
-                "sentiment_analysis",
-                "persona_formation",
-                "insight_generation",
-                "theme_analysis_enhanced",
-                "transcript_structuring",
-            ]
-            is_json_task = task in json_tasks
-
-            # Select the appropriate model based on task
-            model_to_use = "models/gemini-2.5-flash-preview-04-17"  # Default model
-
-            # Always use Flash model for all tasks including persona formation
-            if task == "persona_formation":
-                # Ensure we're using the Flash model for persona formation
-                logger.info(f"Using Flash model {model_to_use} for persona_formation task")
-
-            logger.info(f"Using model {model_to_use} for task: {task}")
-
-            # Import constants for LLM configuration
-            from infrastructure.constants.llm_constants import (
-                GEMINI_MAX_TOKENS, GEMINI_TOP_P, GEMINI_TOP_K
+            # Use client.aio.models.generate_content with the correct parameter structure
+            response = await self.client.aio.models.generate_content(
+                model=model_name,
+                contents=final_contents,
+                config=final_config
             )
+            return response
+        except Exception as e:
+            logger.error(f"Error calling client.aio.models.generate_content for model '{model_name}': {e}", exc_info=True)
+            if not isinstance(e, (LLMAPIError, LLMProcessingError, LLMResponseParseError, LLMServiceError)):
+                raise LLMAPIError(f"Gemini API call (non-streaming) failed for model '{model_name}': {e}") from e
+            raise
 
-            # Use the temperature from config for all tasks
-            config_params = {
-                "temperature": self.temperature,
-                "max_output_tokens": GEMINI_MAX_TOKENS,  # Always use maximum tokens
-                "top_p": GEMINI_TOP_P,
-                "top_k": GEMINI_TOP_K,  # Force top_k to 1 for deterministic results
-            }
+    async def _generate_text_stream_with_retry(
+        self,
+        model_name: str,
+        contents: Union[str, List[Union[str, Content]]],
+        generation_config: Optional[GenerateContentConfig] = None,
+        system_instruction_text: Optional[str] = None,
+        max_retries: int = 3,
+        initial_delay: float = 1.0,
+        backoff_factor: float = 2.0
+    ) -> AsyncGenerator[str, None]:
+        """Generates text stream using the Gemini API with retry logic."""
+        delay = initial_delay
+        last_exception = None
 
-            logger.debug(
-                f"Generation Config for '{task}': temp={self.temperature}, max_tokens={GEMINI_MAX_TOKENS}, top_p={GEMINI_TOP_P}, top_k={GEMINI_TOP_K}"
-            )
-
-            # For insight_generation, the system_message is already the complete prompt
-            if task == "insight_generation":
-                # Use the system message directly since it's the complete prompt
-                logger.debug(
-                    "Generating content for task '{}' with config: {}".format(
-                        task, config_params
-                    )
-                )
-                # Use the new API structure for the google-genai package
-                response = await self.client.aio.models.generate_content(
-                    model=model_to_use, contents=system_message, config=config_params
-                )
-
-                # For insight generation, return a structured result
-                result_text = response.text
-                logger.debug(
-                    "Raw response for task {}:\n{}".format(task, result_text[:500]) # Log raw response
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    f"Attempt {attempt + 1}/{max_retries} - Streaming from model: {model_name}, "
+                    f"system_instruction: {bool(system_instruction_text)}"
                 )
 
+                # Process the main content
+                final_contents = contents
+
+                # Create a dictionary for the GenerateContentConfig fields
+                config_fields = {}
+
+                # Add generation parameters if provided
+                if generation_config:
+                    # Extract fields from the existing generation_config
+                    if hasattr(generation_config, "model_dump"):
+                        # For Pydantic v2+
+                        config_fields.update(generation_config.model_dump(exclude_none=True))
+                    elif hasattr(generation_config, "dict"):
+                        # For Pydantic v1
+                        config_fields.update(generation_config.dict(exclude_none=True))
+                    else:
+                        # Fallback for non-Pydantic objects
+                        for attr in dir(generation_config):
+                            if not attr.startswith('_') and not callable(getattr(generation_config, attr)):
+                                value = getattr(generation_config, attr)
+                                if value is not None:
+                                    config_fields[attr] = value
+
+                # Process the main content and include system instruction if provided
+                if system_instruction_text:
+                    logger.debug(f"Using system instruction (first 200 chars): {system_instruction_text[:200]}...")
+                    # Create Content objects with role="user" (Gemini API only accepts "user" and "model" roles)
+                    if isinstance(final_contents, str):
+                        # Convert string content to a list of Content objects
+                        user_content = Content(parts=[{"text": final_contents}], role="user")
+                        system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
+                        final_contents = [system_content, user_content]
+                    elif isinstance(final_contents, list):
+                        # Add system instruction as the first item with proper role
+                        system_content = Content(parts=[{"text": "System instruction: " + system_instruction_text}], role="user")
+                        final_contents = [system_content] + final_contents
+
+                # Create safety settings
+                # Use string values for safety settings as shown in the documentation
+                safety_settings = [
+                    SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                    SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                    SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                    SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                ]
+
+                # Create the final GenerateContentConfig object with only valid fields
                 try:
-                    result = json.loads(result_text)
-                except json.JSONDecodeError:
-                    # Try to repair the JSON
-                    try:
-                        repaired_json = repair_json(result_text)
-                        result = json.loads(repaired_json)
-                        logger.info("Successfully parsed insight JSON after repair.")
-                    except json.JSONDecodeError:
-                        # Return a default structure if parsing fails
-                        result = {
-                            "insights": [
-                                {
-                                    "topic": "Data Analysis",
-                                    "observation": "Analysis completed but results could not be structured properly.",
-                                    "evidence": [
-                                        "Processing completed with non-structured output."
-                                    ],
-                                }
-                            ],
-                            "metadata": {
-                                "quality_score": 0.5,
-                                "confidence_scores": {
-                                    "themes": 0.6,
-                                    "patterns": 0.6,
-                                    "sentiment": 0.6,
-                                },
-                            },
-                        }
+                    # Do NOT add safety_settings to the config
+                    # Remove automatic_function_calling as it's causing validation errors
+                    final_config = GenerateContentConfig(**config_fields)
+                    logger.debug(f"Created GenerateContentConfig with fields: {config_fields}")
+                except Exception as e:
+                    logger.error(f"Error creating GenerateContentConfig: {e}")
+                    # Fallback to empty config if creation fails
+                    final_config = None
 
-                return result
-            else:
-                # Generate content for other tasks (Original call structure)
                 logger.debug(
-                    "Generating content for task '{}' with config: {}".format(
-                        task, config_params
-                    )
-                )
-                # Use the new API structure for the google-genai package
-                # Check if we should enforce JSON output
-                enforce_json = data.get("enforce_json", False)
-
-                # Check if we should enforce JSON output
-                if enforce_json or task in json_tasks:
-                    # Add response_mime_type to config_params to enforce JSON output
-                    config_params["response_mime_type"] = "application/json"
-
-                    # Set temperature to 0 for deterministic output when generating structured data
-                    config_params["temperature"] = 0.0
-
-                    # For persona_formation, ensure we use the maximum possible tokens
-                    if task == "persona_formation":
-                        config_params["max_output_tokens"] = 65536
-                        config_params["top_k"] = 1
-                        config_params["top_p"] = 0.95
-                        logger.info(f"Using enhanced config for persona_formation: max_tokens=65536, top_k=1, top_p=0.95")
-
-                    logger.info(f"Using response_mime_type='application/json' and temperature=0.0 for task '{task}' to enforce structured output")
-                elif task == "text_generation":
-                    # For text_generation, explicitly DO NOT use response_mime_type
-                    # This ensures we get plain text, not JSON
-                    if "response_mime_type" in config_params:
-                        del config_params["response_mime_type"]
-
-                    # Use the temperature provided in the request or the default
-                    config_params["temperature"] = data.get("temperature", self.temperature)
-
-                    logger.info(f"Using plain text output for task '{task}' with temperature={config_params['temperature']}")
-
-                # Make the API call
-                response = await self.client.aio.models.generate_content(
-                    model=model_to_use,
-                    contents=[system_message, text],
-                    config=config_params
+                    f"Calling client.aio.models.generate_content_stream for model='{model_name}' with "
+                    f"Contents type: {type(final_contents)}, "
+                    f"System Instruction present: {bool(system_instruction_text)}, "
+                    f"Config: {final_config}"
                 )
 
-                # Handle response based on whether JSON was enforced/expected
-                if config_params.get("response_mime_type") == "application/json":
-                    actual_response_text = ""
+                async for chunk in await self.client.aio.models.generate_content_stream(
+                    model=model_name, # Note: parameter is 'model', not 'model_name'
+                    contents=final_contents,
+                    config=final_config
+                ):
+                    yield chunk.text
+
+                return # Successful stream completion for this attempt
+
+            except StopAsyncIteration:
+                logger.info(f"Stream for model {model_name} ended via StopAsyncIteration (likely empty or filtered).")
+                return
+            except LLMAPIError as e:
+                last_exception = e
+                logger.warning(f"LLM API stream failed on attempt {attempt + 1}/{max_retries} for model {model_name}: {e}. Retrying in {delay:.2f}s...")
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+            except Exception as e:
+                last_exception = e
+                logger.error(f"Unexpected error on attempt {attempt + 1}/{max_retries} during streaming for model {model_name}: {e}", exc_info=True)
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+
+        logger.error(f"Failed to generate text stream after {max_retries} retries for model {model_name}.")
+        if last_exception:
+            raise last_exception
+        raise LLMServiceError(f"Failed to generate text stream after {max_retries} retries for model {model_name}.")
+
+    async def _generate_text_with_retry(
+        self,
+        model_name: str,
+        prompt_parts: List[Any],
+        generation_config: Optional[GenerateContentConfig] = None,
+        max_retries: int = 3,
+        initial_delay: float = 1.0,
+        backoff_factor: float = 2.0,
+        system_instruction_text: Optional[str] = None
+    ) -> genai.types.GenerateContentResponse:
+        """Generates text using the Gemini API with retry logic."""
+        delay = initial_delay
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                # Ensure prompt_parts are correctly formatted
+                current_prompt_parts = []
+                for part_item in prompt_parts:
+                    if isinstance(part_item, str):
+                        current_prompt_parts.append(part_item)
+                    elif isinstance(part_item, Content):
+                        current_prompt_parts.append(part_item)
+                    else:
+                        current_prompt_parts.append(str(part_item))
+
+                logger.debug(
+                    f"Attempt {attempt + 1}/{max_retries} - Calling _call_llm_api with model: {model_name}, "
+                    f"system_instruction: {bool(system_instruction_text)}"
+                )
+                # Directly await the async _call_llm_api method
+                response = await self._call_llm_api(
+                    model_name=model_name,
+                    contents=current_prompt_parts,
+                    generation_config=generation_config,
+                    system_instruction_text=system_instruction_text
+                )
+                return response
+            except LLMAPIError as e: # Catch specific API errors for retry
+                last_exception = e
+                logger.warning(f"LLM API call failed on attempt {attempt + 1}/{max_retries}: {e}. Retrying in {delay:.2f}s...")
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+            except Exception as e: # Catch other unexpected errors
+                last_exception = e
+                logger.error(f"Unexpected error on attempt {attempt + 1}/{max_retries} while generating text: {e}", exc_info=True)
+                # Depending on policy, you might want to break or retry for some unexpected errors too
+                # For now, we'll retry on generic exceptions as well, but this could be refined.
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+
+        logger.error(f"Failed to generate text after {max_retries} retries.")
+        if last_exception:
+            raise last_exception # Re-raise the last caught exception
+        # Fallback if no specific exception was caught but retries exhausted (should not happen if loop completes)
+        raise LLMServiceError(f"Failed to generate text after {max_retries} retries for model {model_name}.")
+
+    async def analyze(self, text: str, task: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        data = data or {}
+        system_message_content = self._get_system_message(task, data)
+        user_message_content = text
+
+        # Construct prompt parts. For Gemini, we're using the client.aio.models.generate_content() pattern.
+        # The 'contents' parameter can be a string, a list of strings, or Content objects.
+        # The SDK will handle converting these to the appropriate format.
+        # For system instructions, we're including them in the GenerateContentConfig object.
+        # The `GenerationConfig` object handles temperature, max_tokens, system_instruction, safety_settings, etc.
+        # All these parameters are bundled into a single config object passed to generate_content().
+
+        # Define JSON tasks
+        json_tasks = ["transcript_structuring", "persona_formation", "theme_analysis", "insight_generation", "pattern_analysis"]
+        is_json_task = task in json_tasks
+
+        # Get base generation config
+        current_generation_config = self._get_generation_config(task, data)
+
+        # Extract config parameters for modification
+        config_params = {}
+        if hasattr(current_generation_config, "model_dump"):
+            # For Pydantic v2+
+            config_params.update(current_generation_config.model_dump(exclude_none=True))
+        elif hasattr(current_generation_config, "dict"):
+            # For Pydantic v1
+            config_params.update(current_generation_config.dict(exclude_none=True))
+        else:
+            # Fallback for non-Pydantic objects
+            for attr in dir(current_generation_config):
+                if not attr.startswith('_') and not callable(getattr(current_generation_config, attr)):
+                    value = getattr(current_generation_config, attr)
+                    if value is not None:
+                        config_params[attr] = value
+
+        # Check if we should enforce JSON output
+        enforce_json = data.get("enforce_json", False)
+
+        # Prepare response mime type and schema
+        response_mime_type = data.get("output_format") if data.get("output_format") == "application/json" else None
+        response_schema = data.get("response_schema", None)
+
+        # Check if we should enforce JSON output
+        if enforce_json or is_json_task:
+            # Add response_mime_type to config_params to enforce JSON output
+            config_params["response_mime_type"] = "application/json"
+            response_mime_type = "application/json"
+
+            # Set temperature to 0 for deterministic output when generating structured data
+            config_params["temperature"] = 0.0
+
+            # For persona_formation, ensure we use the maximum possible tokens (already set in _get_generation_config)
+            # This is just a double-check to ensure consistency with the original implementation
+            if task == "persona_formation" and config_params.get("max_output_tokens") != 65536:
+                logger.warning(f"Overriding max_output_tokens for persona_formation to 65536 (was {config_params.get('max_output_tokens')})")
+                config_params["max_output_tokens"] = 65536
+                config_params["top_k"] = 1
+                config_params["top_p"] = 0.95
+
+            logger.info(f"Using response_mime_type='application/json' and temperature=0.0 for task '{task}' to enforce structured output")
+        elif task == "text_generation":
+            # For text_generation, explicitly DO NOT use response_mime_type
+            # This ensures we get plain text, not JSON
+            if "response_mime_type" in config_params:
+                del config_params["response_mime_type"]
+            response_mime_type = None
+
+            # Use the temperature provided in the request or the default
+            config_params["temperature"] = data.get("temperature", self.default_temperature)
+
+            logger.info(f"Using plain text output for task '{task}' with temperature={config_params['temperature']}")
+
+        # Create the final GenerateContentConfig object
+        try:
+            current_generation_config = GenerateContentConfig(**config_params)
+            logger.debug(f"Created GenerateContentConfig with fields: {config_params}")
+        except Exception as e:
+            logger.error(f"Error creating GenerateContentConfig: {e}")
+            # Fallback to original config if creation fails
+            logger.warning(f"Using original generation config due to error")
+
+        prompt_parts: List[Union[str, Content]] = [user_message_content]
+
+        # Log generation details
+        logger.info(f"Generating content for task '{task}' with config: {config_params}")
+
+        # Prepare request options for schema if provided
+        current_request_options = {}
+        if response_schema:
+            # Assuming response_schema from data is compatible (dict or genai.types.Schema)
+            current_request_options['response_schema'] = response_schema
+
+        final_request_options = current_request_options if current_request_options else None
+
+        logger.debug(
+            f"Analyzing text for task: {task}, "
+            # f"Data: {data}, " # Avoid logging potentially large data object directly
+            f"System message present: {bool(system_message_content)}, "
+            f"Mime_type: {response_mime_type}, Schema present: {bool(response_schema)}, "
+            f"Request_options: {final_request_options}"
+        )
+
+        try:
+            response = await self._generate_text_with_retry(
+                model_name=self.default_model_name, # Added keyword arg for clarity
+                prompt_parts=prompt_parts,
+                generation_config=current_generation_config,
+                system_instruction_text=system_message_content
+            )
+
+            # Try to extract text from the response
+            try:
+                text_response = response.text
+            except Exception as e_text:
+                logger.warning(f"[{task}] Could not get response.text: {e_text}. Trying to extract from candidates...")
+                try:
+                    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                        text_response = response.candidates[0].content.parts[0].text
+                        logger.info(f"[{task}] Successfully extracted text from response.candidates[0].content.parts[0].text")
+                    else:
+                        logger.error(f"[{task}] No valid content in response candidates after response.text failed.")
+                        return {"error": f"Failed to extract text from Gemini response for {task}. Details: {e_text}"}
+                except Exception as e_parts:
+                    logger.error(f"[{task}] Failed to extract text from response candidates: {e_parts}", exc_info=True)
+                    return {"error": f"Failed to extract text from Gemini response for {task}. Details: {e_parts}"}
+
+            # Log the raw response for debugging
+            logger.info(f"Raw response for task '{task}' (first 500 chars): {text_response[:500]}")
+
+            # Special handling for transcript_structuring task
+            if task == "transcript_structuring":
+                # Log a concise preview of the raw response for transcript_structuring
+                logger.info(f"GeminiService.analyze: RAW response for transcript_structuring (first 500 chars): {text_response[:500]}")
+                # Log a snippet around the known error character if it's likely present
+                error_char_index = 22972  # From previous logs
+                if len(text_response) > error_char_index + 100:  # Ensure text is long enough
+                    snippet_start = max(0, error_char_index - 100)
+                    snippet_end = error_char_index + 100
+                    logger.info(f"GeminiService.analyze: RAW transcript_structuring snippet around char {error_char_index}: ...{text_response[snippet_start:snippet_end]}...")
+                else:
+                    logger.info(f"GeminiService.analyze: RAW transcript_structuring response too short for detailed error snippet (len: {len(text_response)}).")
+
+            # Check if response is empty or very short
+            if not text_response or len(text_response.strip()) < 10:
+                logger.error(f"Empty or very short response received for task '{task}'. Response: '{text_response}'")
+                return {
+                    "error": f"Empty or very short response received for task '{task}'",
+                    "type": task
+                }
+
+            # If JSON output was expected, attempt to repair if it looks truncated.
+            # The 'response_obj.parsed' attribute could also be used if available and a schema was provided,
+            # but for simplicity and consistency, we'll rely on 'response_obj.text' and repair logic here.
+            # Downstream 'analyze' method will handle json.loads().
+            if response_mime_type == "application/json":
+                if not text_response.strip().endswith("}") and not text_response.strip().endswith("]"):
+                    logger.warning(f"LLM response for task '{task}' (JSON expected) might be truncated. Attempting repair.")
                     try:
-                        # Extract text from the first candidate's first content part
-                        actual_response_text = response.candidates[0].content.parts[0].text
+                        text_response = repair_json(text_response)
+                        logger.info(f"Successfully repaired JSON response for task '{task}'.")
+                    except Exception as repair_e:
+                        logger.error(f"Failed to repair JSON for task '{task}': {repair_e}. Original text: {text_response[:500]}")
+                        # Fallback to original text if repair fails, error will be caught by json.loads in analyze
 
-                        if task == "transcript_structuring":
-                            # Log a concise preview of the raw response for transcript_structuring
-                            logger.info(f"GeminiService.analyze: RAW response for transcript_structuring (mime type enforced, from candidate part, first 500 chars): {actual_response_text[:500]}")
-                            # Log a snippet around the known error character if it's likely present
-                            error_char_index = 22972 # From previous logs
-                            if len(actual_response_text) > error_char_index + 100: # Ensure text is long enough
-                                snippet_start = max(0, error_char_index - 100)
-                                snippet_end = error_char_index + 100
-                                logger.info(f"GeminiService.analyze: RAW transcript_structuring snippet around char {error_char_index}: ...{actual_response_text[snippet_start:snippet_end]}...")
-                            else:
-                                logger.info(f"GeminiService.analyze: RAW transcript_structuring response too short for detailed error snippet (len: {len(actual_response_text)}).")
+            if response_mime_type == "application/json":
+                try:
+                    parsed_response = json.loads(text_response)
+                    # Log the parsed response structure
+                    logger.info(f"Successfully parsed JSON response for task '{task}'. Keys: {list(parsed_response.keys()) if isinstance(parsed_response, dict) else 'array with ' + str(len(parsed_response)) + ' items'}")
 
-                        result = json.loads(actual_response_text)
-                        logger.info(f"[{task}] GeminiService successfully parsed JSON directly from candidate part.")
+                    # Check if the parsed JSON is an error object from the LLM
+                    if isinstance(parsed_response, dict) and "error" in parsed_response:
+                        llm_error_message = parsed_response.get("error", "LLM returned a JSON error object.")
+                        if isinstance(llm_error_message, dict) and "message" in llm_error_message:
+                            llm_error_message = llm_error_message.get("message", str(llm_error_message))
+                        elif not isinstance(llm_error_message, str):
+                            llm_error_message = str(llm_error_message)
 
-                        # Check if the parsed JSON is an error object from the LLM
+                        logger.error(f"[{task}] LLM returned a JSON error object: {llm_error_message}")
+                        raise LLMAPIError(f"LLM reported an error for task '{task}': {llm_error_message}")
+
+                    result = parsed_response
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode JSON response for task '{task}': {e}. Response: {text_response}")
+                    logger.warning(f"[{task}] JSON parsing failed. Trying repair...")
+                    try:
+                        repaired = repair_json(text_response)
+                        result = json.loads(repaired)
+                        logger.info(f"[{task}] Successfully parsed JSON after repair.")
+
+                        # Check if the parsed repaired JSON is an error object from the LLM
                         if isinstance(result, dict) and "error" in result:
-                            llm_error_message = result.get("error", "LLM returned a JSON error object.")
+                            llm_error_message = result.get("error", "LLM returned a JSON error object after repair.")
                             if isinstance(llm_error_message, dict) and "message" in llm_error_message:
                                 llm_error_message = llm_error_message.get("message", str(llm_error_message))
                             elif not isinstance(llm_error_message, str):
                                 llm_error_message = str(llm_error_message)
 
-                            logger.error(f"[{task}] LLM returned a JSON error object: {llm_error_message}")
-                            raise LLMAPIError(f"LLM reported an error for task '{task}': {llm_error_message}")
+                            logger.error(f"[{task}] LLM returned a JSON error object after repair: {llm_error_message}")
+                            raise LLMAPIError(f"LLM reported an error for task '{task}' (after repair): {llm_error_message}")
+                    except json.JSONDecodeError as e2:
+                        logger.error(f"[{task}] Failed to parse JSON even after repair: {e2}")
 
-                        return result
-                    except json.JSONDecodeError as e:
-                        # Attempt 2: Use the JSON repair utility
-                        try:
-                            # Repair the JSON string
-                            repaired_json = repair_json(actual_response_text)
-                            logger.debug(
-                                f"[{task}] Repaired JSON: {repaired_json[:200]}..."
-                            )
-
-                            # Try to parse the repaired JSON
-                            result = json.loads(repaired_json)
-                            logger.info(f"[{task}] Successfully parsed JSON after repair.")
-
-                            # Check if the parsed repaired JSON is an error object from the LLM
-                            if isinstance(result, dict) and "error" in result:
-                                llm_error_message = result.get("error", "LLM returned a JSON error object after repair.")
-                                if isinstance(llm_error_message, dict) and "message" in llm_error_message:
-                                    llm_error_message = llm_error_message.get("message", str(llm_error_message))
-                                elif not isinstance(llm_error_message, str):
-                                    llm_error_message = str(llm_error_message)
-
-                                logger.error(f"[{task}] LLM returned a JSON error object after repair: {llm_error_message}")
-                                raise LLMAPIError(f"LLM reported an error for task '{task}' (after repair): {llm_error_message}")
-
-                            return result
-                        except json.JSONDecodeError as e2:
-                            logger.error(
-                                f"[{task}] GeminiService failed to parse JSON from candidate part even after repair: {e2}"
-                            )
-                            error_message = f"Failed to parse JSON from candidate part for task '{task}' even after repair. Detail: {e2}. Raw preview: {actual_response_text[:200]}"
-                            raise LLMResponseParseError(error_message)
-                        except Exception as e_generic:
-                            logger.error(
-                                f"[{task}] Unexpected error during JSON repair: {e_generic}"
-                            )
-                            # Skip this theme due to unexpected error
-
-                # Fallback to text if not JSON mime type, or if candidate access failed previously (though less likely to reach here)
-                try:
-                    result_text = response.text
-                except Exception as e_text:
-                    logger.warning(f"[{task}] GeminiService: Could not get response.text: {e_text}. Trying parts...")
-                    try:
-                        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                            result_text = response.candidates[0].content.parts[0].text
+                        # Special handling for insights task
+                        if task == "insight_generation":
+                            logger.warning(f"[{task}] Using default insights structure due to JSON parsing failure")
+                            # Return a default structure if parsing fails
+                            return {
+                                "insights": [
+                                    {
+                                        "topic": "Data Analysis",
+                                        "observation": "Analysis completed but results could not be structured properly.",
+                                        "evidence": [
+                                            "Processing completed with non-structured output."
+                                        ],
+                                    }
+                                ],
+                                "metadata": {
+                                    "quality_score": 0.5,
+                                    "confidence_scores": {
+                                        "themes": 0.6,
+                                        "patterns": 0.6,
+                                        "sentiment": 0.6,
+                                    },
+                                },
+                            }
                         else:
-                            logger.error(f"[{task}] GeminiService: No valid content in response parts after response.text failed.")
-                            return {"error": f"Failed to extract text from Gemini response for {task}. Details: {e_text}"}
-                    except Exception as e_parts_fallback:
-                        logger.error(f"[{task}] GeminiService: Failed to extract text from response parts: {e_parts_fallback}", exc_info=True)
-                        return {"error": f"Failed to extract text from Gemini response for {task}. Details: {e_parts_fallback}"}
-
-                # If we are here, it means response_mime_type was not 'application/json' OR initial extraction for JSON failed before parsing
-                # and we fell through to the non-JSON response handling part.
+                            # Return a structured error response instead of raising an exception
+                            return {
+                                "error": f"Failed to decode JSON response for task '{task}' even after repair: {e2}",
+                                "type": task
+                            }
+            else:
+                # If we are here, it means response_mime_type was not 'application/json'
                 # However, the task might still have been intended to be a JSON task.
-
-                # Log the raw text received when not strictly handling as JSON (or if JSON path failed early)
-                logger.debug(
-                    "Raw response text (non-JSON path or early JSON path fail) for task {}:\n{}".format(task, result_text[:500]) # Log first 500 chars
-                )
+                logger.debug(f"Raw response text (non-JSON path) for task {task}:\n{text_response[:500]}")
 
                 # If it was an expected JSON task, but we are in the non-JSON path, attempt parsing.
-                if is_json_task:  # is_json_task was defined earlier
+                if is_json_task:
                     logger.info(f"[{task}] Attempting JSON parse for an expected JSON task in non-JSON response path.")
                     try:
-                        result = json.loads(result_text)
+                        result = json.loads(text_response)
                         logger.info(f"[{task}] Successfully parsed JSON in non-JSON path.")
 
                         # Check if the parsed JSON is an error object from the LLM
@@ -386,7 +611,7 @@ class GeminiService:
                     except json.JSONDecodeError as e_non_json_path:
                         logger.warning(f"[{task}] JSON parsing failed in non-JSON path: {e_non_json_path}. Trying repair...")
                         try:
-                            repaired = repair_json(result_text)
+                            repaired = repair_json(text_response)
                             result = json.loads(repaired)
                             logger.info(f"[{task}] Successfully parsed JSON in non-JSON path after repair.")
 
@@ -404,15 +629,26 @@ class GeminiService:
                             return result
                         except json.JSONDecodeError as e2_non_json_path:
                             logger.error(f"[{task}] Failed to parse JSON in non-JSON path even after repair: {e2_non_json_path}")
-                            error_message = f"All parsing attempts failed in non-JSON path for task '{task}'. Detail: {e2_non_json_path}. Raw preview: {result_text[:200]}"
+                            error_message = f"All parsing attempts failed in non-JSON path for task '{task}'. Detail: {e2_non_json_path}. Raw preview: {text_response[:200]}"
                             raise LLMResponseParseError(error_message)
                 else:
-                    # For non-JSON tasks, just return the text if we reached here
+                    # For non-JSON tasks, just return the text
                     logger.info(f"[{task}] Returning raw text for non-JSON task in non-JSON path.")
-                    return {"text": result_text}
+                    result = {"text": text_response}
 
             # Post-process results if needed
-            if task == "theme_analysis":
+            if task == "pattern_recognition":
+                # For pattern recognition, ensure we have a proper structure
+                if isinstance(result, list):
+                    result = {"patterns": result}
+
+                # If patterns are missing or empty, return an empty patterns array
+                # without attempting to generate fallback patterns
+                if "patterns" not in result or not result["patterns"]:
+                    logger.warning(f"Pattern recognition returned no patterns, returning empty array")
+                    result = {"patterns": []}
+
+            elif task == "theme_analysis":
                 # If response is a list of themes directly (not wrapped in an object)
                 if isinstance(result, list):
                     result = {"themes": result}
@@ -476,9 +712,7 @@ class GeminiService:
                         # Calculate reliability based on number of statements and their length
                         statements = theme.get("statements", [])
                         if len(statements) >= 4:
-                            theme["reliability"] = (
-                                0.85  # Well-supported with many statements
-                            )
+                            theme["reliability"] = 0.85  # Well-supported with many statements
                         elif len(statements) >= 2:
                             theme["reliability"] = 0.7  # Moderately supported
                         else:
@@ -539,7 +773,10 @@ class GeminiService:
                     result = {"themes": []}  # Return empty list if structure is wrong
 
             return result
+
+        except (LLMAPIError, LLMProcessingError, LLMServiceError) as e:
+            logger.error(f"Error in GeminiService.analyze for task '{task}': {e}")
+            raise
         except Exception as e:
-            logger.error(f"Error in Gemini API call for task '{task}': {str(e)}", exc_info=True)
-            error_message = f"General error in Gemini API call for task '{task}': {str(e)}"
-            raise LLMAPIError(error_message) from e
+            logger.error(f"Unexpected error in GeminiService.analyze for task '{task}': {e}", exc_info=True)
+            raise LLMServiceError(f"An unexpected error occurred in GeminiService for task '{task}': {e}") from e

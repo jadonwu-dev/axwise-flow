@@ -96,6 +96,20 @@ class PatternRecognitionPrompts:
           ]
         }}
 
+        CRITICAL REQUIREMENTS:
+        1. EVERY pattern MUST have a clear, descriptive name (never "Uncategorized" or generic labels)
+        2. EVERY pattern MUST be assigned to one of these specific categories:
+           - Workflow (sequences of actions to accomplish goals)
+           - Coping Strategy (ways users overcome obstacles)
+           - Decision Process (how users make choices)
+           - Workaround (alternative approaches when standard methods fail)
+           - Habit (repeated behaviors users exhibit)
+           - Collaboration (how users work with others)
+           - Communication (how users share information)
+        3. EVERY pattern MUST have a detailed description that explains the behavior
+        4. NEVER leave any field empty or with placeholder text like "No description available"
+        5. Use UNIQUE evidence for each pattern - never reuse the same quotes across patterns
+
         IMPORTANT:
         - Emphasize VERBS and ACTION words in your pattern descriptions
         - Each pattern should describe WHAT USERS DO, not just what they think or say
@@ -162,6 +176,20 @@ class PatternRecognitionPrompts:
             ...
           ]
         }
+
+        CRITICAL REQUIREMENTS:
+        1. EVERY pattern MUST have a clear, descriptive name (never "Uncategorized" or generic labels)
+        2. EVERY pattern MUST be assigned to one of these specific categories:
+           - Workflow (sequences of actions to accomplish goals)
+           - Coping Strategy (ways users overcome obstacles)
+           - Decision Process (how users make choices)
+           - Workaround (alternative approaches when standard methods fail)
+           - Habit (repeated behaviors users exhibit)
+           - Collaboration (how users work with others)
+           - Communication (how users share information)
+        3. EVERY pattern MUST have a detailed description that explains the behavior
+        4. NEVER leave any field empty or with placeholder text like "No description available"
+        5. Use UNIQUE evidence for each pattern - never reuse the same quotes across patterns
 
         IMPORTANT:
         - Emphasize VERBS and ACTION words in your pattern descriptions

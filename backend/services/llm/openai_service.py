@@ -126,228 +126,9 @@ class OpenAIService:
 
             # Post-process results if needed
             if task == "theme_analysis":
-                # If response is a list of themes directly (not wrapped in an object)
-                if isinstance(result, list):
-                    result = {"themes": result}
-
-                # Ensure proper themes array
-                if "themes" not in result:
-                    result["themes"] = []
-
-                # Ensure each theme has required fields
-                for theme in result["themes"]:
-                    # Ensure required fields with default values
-                    if "sentiment" not in theme:
-                        theme["sentiment"] = 0.0  # neutral
-                    if "frequency" not in theme:
-                        theme["frequency"] = 0.5  # medium
-
-                    # Handle statements/examples for backward compatibility
-                    if "statements" not in theme:
-                        if "examples" in theme:
-                            # Copy examples to statements (preferred field)
-                            theme["statements"] = theme["examples"]
-                        else:
-                            theme["statements"] = []
-
-                    # Ensure examples exists for backward compatibility
-                    if "examples" not in theme:
-                        theme["examples"] = theme["statements"]
-
-                    # Ensure keywords exists
-                    if "keywords" not in theme:
-                        theme["keywords"] = []
-
-                    # Ensure definition exists
-                    if "definition" not in theme:
-                        theme["definition"] = f"Theme related to {theme['name']}"
-
-                    # Ensure codes field exists
-                    if "codes" not in theme:
-                        # Generate codes based on keywords and theme name
-                        theme["codes"] = []
-                        if "keywords" in theme and len(theme["keywords"]) > 0:
-                            # Convert first two keywords to codes
-                            for keyword in theme["keywords"][:2]:
-                                code = keyword.upper().replace(" ", "_")
-                                if code not in theme["codes"]:
-                                    theme["codes"].append(code)
-
-                        # Add a code based on sentiment if not enough codes
-                        if len(theme["codes"]) < 2 and "sentiment" in theme:
-                            sentiment = theme["sentiment"]
-                            if sentiment >= 0.3:
-                                theme["codes"].append("POSITIVE_ASPECT")
-                            elif sentiment <= -0.3:
-                                theme["codes"].append("PAIN_POINT")
-                            else:
-                                theme["codes"].append("NEUTRAL_OBSERVATION")
-
-                    # Ensure reliability field exists
-                    if "reliability" not in theme:
-                        # Calculate reliability based on number of statements and their length
-                        statements = theme.get("statements", [])
-                        if len(statements) >= 4:
-                            theme["reliability"] = (
-                                0.85  # Well-supported with many statements
-                            )
-                        elif len(statements) >= 2:
-                            theme["reliability"] = 0.7  # Moderately supported
-                        else:
-                            theme["reliability"] = 0.5  # Minimally supported
-
-                    # Add process field if not present
-                    if "process" not in theme:
-                        theme["process"] = "basic"
-
-                # Validate themes against Pydantic model
-                validated_themes_list = []
-                if (
-                    isinstance(result, dict)
-                    and "themes" in result
-                    and isinstance(result["themes"], list)
-                ):
-                    for theme_data in result["themes"]:
-                        try:
-                            # Validate each theme dictionary against the Pydantic model
-                            validated_theme = Theme(**theme_data)
-                            # Append the validated data (as dict) to the list
-                            validated_themes_list.append(validated_theme.model_dump())
-                            logger.debug(
-                                f"Successfully validated theme: {theme_data.get('name', 'Unnamed')}"
-                            )
-                        except ValidationError as e:
-                            logger.warning(
-                                f"Theme validation failed for theme '{theme_data.get('name', 'Unnamed')}': {e}. Skipping this theme."
-                            )
-                            # Invalid themes are skipped to ensure data integrity downstream
-                        except Exception as general_e:
-                            logger.error(
-                                f"Unexpected error during theme validation for '{theme_data.get('name', 'Unnamed')}': {general_e}",
-                                exc_info=True,
-                            )
-                            # Skip this theme due to unexpected error
-
-                    # Replace the original themes list with the validated list
-                    result["themes"] = validated_themes_list
-                    logger.info(
-                        f"Validated {len(validated_themes_list)} themes successfully for task: {task}"
-                    )
-                    logger.debug(
-                        f"Validated theme result: {json.dumps(result, indent=2)}"
-                    )
-                else:
-                    logger.warning(
-                        f"LLM response for theme_analysis was not in the expected format (dict with 'themes' list). Raw response: {result}"
-                    )
-                    result = {"themes": []}  # Return empty list if structure is wrong
-
+                return self._post_process_theme_analysis(result, task)
             elif task == "pattern_recognition":
-                # Ensure proper patterns array
-                if "patterns" not in result:
-                    result["patterns"] = []
-
-                # Ensure each pattern has required fields
-                for pattern in result["patterns"]:
-                    # Ensure required fields with default values
-                    if "name" not in pattern and "category" in pattern:
-                        pattern["name"] = pattern[
-                            "category"
-                        ]  # Use category as name if missing
-                    elif "name" not in pattern and "description" in pattern:
-                        # Extract name from description (first few words)
-                        desc_words = pattern["description"].split()
-                        pattern["name"] = (
-                            " ".join(desc_words[:3]) + "..."
-                            if len(desc_words) > 3
-                            else pattern["description"]
-                        )
-
-                    # Convert sentiment from 0-1 to -1 to 1 scale if needed
-                    if (
-                        "sentiment" in pattern
-                        and pattern["sentiment"] is not None
-                        and 0 <= pattern["sentiment"] <= 1
-                    ):
-                        pattern["sentiment"] = (pattern["sentiment"] - 0.5) * 2
-                    elif "sentiment" not in pattern:
-                        pattern["sentiment"] = 0.0  # neutral
-
-                    if "frequency" not in pattern:
-                        pattern["frequency"] = 0.5  # medium
-
-                    # Ensure evidence field exists
-                    if "evidence" not in pattern:
-                        pattern["evidence"] = []
-
-                    # Ensure impact field exists
-                    if "impact" not in pattern:
-                        if "sentiment" in pattern:
-                            sentiment = pattern["sentiment"]
-                            if sentiment >= 0.3:
-                                pattern["impact"] = (
-                                    "Positive impact on user experience and workflow efficiency"
-                                )
-                            elif sentiment <= -0.3:
-                                pattern["impact"] = (
-                                    "Negative impact on productivity and user satisfaction"
-                                )
-                            else:
-                                pattern["impact"] = (
-                                    "Neutral impact on overall processes"
-                                )
-
-                    # Ensure suggested_actions field exists
-                    if "suggested_actions" not in pattern:
-                        pattern["suggested_actions"] = [
-                            "Conduct further research on this pattern",
-                            "Consider addressing in future updates",
-                        ]
-
-                # Validate patterns against Pydantic model
-                validated_patterns_list = []
-                if (
-                    isinstance(result, dict)
-                    and "patterns" in result
-                    and isinstance(result["patterns"], list)
-                ):
-                    for pattern_data in result["patterns"]:
-                        try:
-                            # Validate each pattern dictionary against the Pydantic model
-                            validated_pattern = Pattern(**pattern_data)
-                            # Append the validated data (as dict) to the list
-                            validated_patterns_list.append(
-                                validated_pattern.model_dump()
-                            )
-                            logger.debug(
-                                f"Successfully validated pattern: {pattern_data.get('name', 'Unnamed')}"
-                            )
-                        except ValidationError as e:
-                            logger.warning(
-                                f"Pattern validation failed for pattern '{pattern_data.get('name', 'Unnamed')}': {e}. Skipping this pattern."
-                            )
-                            # Invalid patterns are skipped to ensure data integrity downstream
-                        except Exception as general_e:
-                            logger.error(
-                                f"Unexpected error during pattern validation for '{pattern_data.get('name', 'Unnamed')}': {general_e}",
-                                exc_info=True,
-                            )
-                            # Skip this pattern due to unexpected error
-
-                    # Replace the original patterns list with the validated list
-                    result["patterns"] = validated_patterns_list
-                    logger.info(
-                        f"Validated {len(validated_patterns_list)} patterns successfully for task: {task}"
-                    )
-                    logger.debug(
-                        f"Validated pattern result: {json.dumps(result, indent=2)}"
-                    )
-                else:
-                    logger.warning(
-                        f"LLM response for pattern_recognition was not in the expected format (dict with 'patterns' list). Raw response: {result}"
-                    )
-                    result = {"patterns": []}  # Return empty list if structure is wrong
-
+                return self._post_process_pattern_recognition(result, task)
             elif task == "sentiment_analysis":
                 # Ensure sentiment has proper structure with supporting statements
                 if "sentiment" in result:
@@ -1216,6 +997,220 @@ class OpenAIService:
               }
             }
             """
+
+    def _post_process_theme_analysis(self, result: Union[Dict, List], task: str) -> Dict[str, Any]:
+        """Post-processes the result for theme_analysis task, including validation."""
+        if not isinstance(result, (dict, list)):
+            logger.warning(f"Task '{task}' expected dict or list for post-processing, got {type(result)}. Value: {str(result)[:200]}")
+            return {"themes": [], "error": f"Invalid data type for theme analysis: {type(result)}"}
+
+        if isinstance(result, list):
+            themes_to_process = result
+            result_dict = {"themes": themes_to_process}
+        elif isinstance(result, dict) and "themes" in result and isinstance(result["themes"], list):
+            themes_to_process = result["themes"]
+            result_dict = result
+        elif isinstance(result, dict) and "themes" not in result:
+            logger.warning(f"Task '{task}' response dictionary is missing 'themes' key. Assuming no themes. Content: {str(result)[:200]}")
+            themes_to_process = []
+            result_dict = {"themes": themes_to_process} # Initialize result_dict with themes key
+        else:
+            logger.error(f"Task '{task}' response is not a list of themes nor a dict containing a 'themes' list. Content: {str(result)[:200]}")
+            return {"themes": [], "error": "Malformed theme analysis response structure."}
+
+        processed_themes_for_validation = []
+        for theme_data in themes_to_process:
+            if not isinstance(theme_data, dict):
+                logger.warning(f"Skipping non-dictionary item in themes list for task '{task}': {str(theme_data)[:100]}")
+                continue
+            
+            current_theme = theme_data.copy() # Work on a copy
+            current_theme.setdefault("sentiment", 0.0)  # neutral
+            current_theme.setdefault("frequency", 0.5)  # medium
+
+            if "statements" not in current_theme:
+                current_theme["statements"] = current_theme.get("examples", [])
+            current_theme.setdefault("examples", current_theme["statements"])
+
+            current_theme.setdefault("keywords", [])
+            current_theme.setdefault("definition", f"Theme related to {current_theme.get('name', 'Unnamed Theme')}")
+
+            if "codes" not in current_theme or not current_theme["codes"]:
+                current_theme["codes"] = []
+                keywords_for_codes = current_theme.get("keywords", [])
+                if keywords_for_codes:
+                    for keyword in keywords_for_codes[:2]:
+                        code = str(keyword).upper().replace(" ", "_")
+                        if code not in current_theme["codes"]:
+                            current_theme["codes"].append(code)
+                
+                if len(current_theme["codes"]) < 2:
+                    sentiment_for_code = current_theme.get("sentiment", 0.0)
+                    if sentiment_for_code >= 0.3:
+                        current_theme["codes"].append("POSITIVE_ASPECT")
+                    elif sentiment_for_code <= -0.3:
+                        current_theme["codes"].append("PAIN_POINT")
+                    else:
+                        current_theme["codes"].append("NEUTRAL_OBSERVATION")
+            
+            current_theme.setdefault("reliability", 0.5)
+            if "statements" in current_theme and len(current_theme["statements"]) > 0:
+                if len(current_theme["statements"]) >= 4:
+                    current_theme["reliability"] = 0.85
+                elif len(current_theme["statements"]) >= 2:
+                    current_theme["reliability"] = 0.7
+            
+            processed_themes_for_validation.append(current_theme)
+
+        validated_themes_list = []
+        for theme_to_validate in processed_themes_for_validation:
+            try:
+                validated_theme_obj = Theme(**theme_to_validate)
+                validated_themes_list.append(validated_theme_obj.model_dump())
+                logger.debug(f"Successfully validated theme: {theme_to_validate.get('name', 'Unnamed')}")
+            except ValidationError as e:
+                logger.warning(f"Theme validation failed for theme '{theme_to_validate.get('name', 'Unnamed')}': {e}. Skipping this theme.")
+            except Exception as general_e:
+                logger.error(f"Unexpected error during theme validation for '{theme_to_validate.get('name', 'Unnamed')}': {general_e}", exc_info=True)
+        
+        result_dict["themes"] = validated_themes_list
+        logger.info(f"Validated {len(validated_themes_list)} themes successfully for task: {task}")
+        return result_dict
+
+    def _post_process_pattern_recognition(self, result: Union[Dict, List], task: str) -> Dict[str, Any]:
+        """Post-processes the result for pattern_recognition task, including validation."""
+        if not isinstance(result, (dict, list)):
+            logger.warning(f"Task '{task}' expected dict or list for post-processing, got {type(result)}. Value: {str(result)[:200]}")
+            return {"patterns": [], "error": f"Invalid data type for pattern recognition: {type(result)}"}
+
+        if isinstance(result, list):
+            patterns_to_process = result
+            result_dict = {"patterns": patterns_to_process}
+        elif isinstance(result, dict) and "patterns" in result and isinstance(result["patterns"], list):
+            patterns_to_process = result["patterns"]
+            result_dict = result # Keep other potential keys in result
+        elif isinstance(result, dict) and "patterns" not in result:
+            logger.warning(f"Task '{task}' response dictionary is missing 'patterns' key. Assuming no patterns. Content: {str(result)[:200]}")
+            patterns_to_process = []
+            result_dict = {"patterns": patterns_to_process}
+        else:
+            logger.error(f"Task '{task}' response is not a list of patterns nor a dict containing a 'patterns' list. Content: {str(result)[:200]}")
+            return {"patterns": [], "error": "Malformed pattern recognition response structure."}
+
+        processed_patterns_for_validation = []
+        for pattern_data in patterns_to_process:
+            if not isinstance(pattern_data, dict):
+                logger.warning(f"Skipping non-dictionary item in patterns list for task '{task}': {str(pattern_data)[:100]}")
+                continue
+
+            current_pattern = pattern_data.copy()
+
+            if "name" not in current_pattern and "category" in current_pattern:
+                current_pattern["name"] = current_pattern["category"]
+            elif "name" not in current_pattern and "description" in current_pattern:
+                desc_words = str(current_pattern["description"]).split()
+                current_pattern["name"] = (" ".join(desc_words[:3]) + "..." if len(desc_words) > 3 else current_pattern["description"])
+            current_pattern.setdefault("name", "Unnamed Pattern")
+
+            current_sentiment = current_pattern.get("sentiment")
+            if current_sentiment is not None and isinstance(current_sentiment, (int, float)) and 0 <= current_sentiment <= 1:
+                current_pattern["sentiment"] = (current_sentiment - 0.5) * 2
+            elif "sentiment" not in current_pattern:
+                current_pattern["sentiment"] = 0.0
+
+            current_pattern.setdefault("frequency", 0.5)
+            current_pattern.setdefault("evidence", [])
+            
+            if "impact" not in current_pattern:
+                sentiment_val = current_pattern.get("sentiment", 0.0)
+                if sentiment_val >= 0.3:
+                    current_pattern["impact"] = "Positive impact on user experience and workflow efficiency"
+                elif sentiment_val <= -0.3:
+                    current_pattern["impact"] = "Negative impact on productivity and user satisfaction"
+                else:
+                    current_pattern["impact"] = "Neutral impact on overall processes"
+            
+            current_pattern.setdefault("suggested_actions", [])
+            current_pattern.setdefault("reliability", 0.5)
+            if len(current_pattern.get("evidence", [])) >= 3:
+                current_pattern["reliability"] = 0.8
+            elif len(current_pattern.get("evidence", [])) >= 1:
+                current_pattern["reliability"] = 0.65
+
+            current_pattern.setdefault("definition", f"Pattern related to {current_pattern.get('name', 'Unnamed Pattern')}")
+            current_pattern.setdefault("related_themes", []) # Assuming Pattern schema might have this
+
+            processed_patterns_for_validation.append(current_pattern)
+
+        validated_patterns_list = []
+        for pattern_to_validate in processed_patterns_for_validation:
+            try:
+                validated_pattern_obj = Pattern(**pattern_to_validate)
+                validated_patterns_list.append(validated_pattern_obj.model_dump())
+                logger.debug(f"Successfully validated pattern: {pattern_to_validate.get('name', 'Unnamed')}")
+            except ValidationError as e:
+                logger.warning(f"Pattern validation failed for pattern '{pattern_to_validate.get('name', 'Unnamed')}': {e}. Skipping this pattern.")
+            except Exception as general_e:
+                logger.error(f"Unexpected error during pattern validation for '{pattern_to_validate.get('name', 'Unnamed')}': {general_e}", exc_info=True)
+
+        result_dict["patterns"] = validated_patterns_list
+        logger.info(f"Validated {len(validated_patterns_list)} patterns successfully for task: {task}")
+        return result_dict
+
+    def _post_process_insight_generation(self, result: Union[Dict, List], task: str) -> Dict[str, Any]:
+        """Post-processes the result for insight_generation task, including validation."""
+        if not isinstance(result, (dict, list)):
+            logger.warning(f"Task '{task}' expected dict or list for post-processing, got {type(result)}. Value: {str(result)[:200]}")
+            return {"insights": [], "error": f"Invalid data type for insight generation: {type(result)}"}
+
+        if isinstance(result, list):
+            insights_to_process = result
+            result_dict = {"insights": insights_to_process}
+        elif isinstance(result, dict) and "insights" in result and isinstance(result["insights"], list):
+            insights_to_process = result["insights"]
+            result_dict = result # Keep other potential keys
+        elif isinstance(result, dict) and "insights" not in result:
+            logger.warning(f"Task '{task}' response dictionary is missing 'insights' key. Assuming no insights. Content: {str(result)[:200]}")
+            insights_to_process = []
+            result_dict = {"insights": insights_to_process}
+        else:
+            logger.error(f"Task '{task}' response is not a list of insights nor a dict containing an 'insights' list. Content: {str(result)[:200]}")
+            return {"insights": [], "error": "Malformed insight generation response structure."}
+
+        processed_insights_for_validation = []
+        for insight_data in insights_to_process:
+            if not isinstance(insight_data, dict):
+                logger.warning(f"Skipping non-dictionary item in insights list for task '{task}': {str(insight_data)[:100]}")
+                continue
+
+            current_insight = insight_data.copy()
+            current_insight.setdefault("title", "Untitled Insight")
+            current_insight.setdefault("description", "No description provided.")
+            current_insight.setdefault("evidence", [])
+            current_insight.setdefault("recommendations", [])
+            current_insight.setdefault("impact", "medium") 
+            current_insight.setdefault("confidence", 0.5) 
+            current_insight.setdefault("related_patterns", [])
+            current_insight.setdefault("related_themes", [])
+            current_insight.setdefault("category", "General")
+
+            processed_insights_for_validation.append(current_insight)
+
+        validated_insights_list = []
+        for insight_to_validate in processed_insights_for_validation:
+            try:
+                validated_insight_obj = Insight(**insight_to_validate)
+                validated_insights_list.append(validated_insight_obj.model_dump())
+                logger.debug(f"Successfully validated insight: {insight_to_validate.get('title', 'Untitled')}")
+            except ValidationError as e:
+                logger.warning(f"Insight validation failed for insight '{insight_to_validate.get('title', 'Untitled')}': {e}. Skipping this insight.")
+            except Exception as general_e:
+                logger.error(f"Unexpected error during insight validation for '{insight_to_validate.get('title', 'Untitled')}': {general_e}", exc_info=True)
+        
+        result_dict["insights"] = validated_insights_list
+        logger.info(f"Validated {len(validated_insights_list)} insights successfully for task: {task}")
+        return result_dict
+
 
     async def analyze_themes_enhanced(self, data):
         """

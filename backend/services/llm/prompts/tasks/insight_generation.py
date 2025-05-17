@@ -135,8 +135,15 @@ class InsightGenerationPrompts:
         }}
 
         IMPORTANT GUIDELINES:
+        - AVOID REDUNDANCY: Ensure each insight covers a distinct topic with no overlap or duplication between insights
+        - DISTINCT TOPICS: Each insight must focus on a completely different aspect of user experience or need
+        - BALANCED PRIORITIES: Distribute priorities evenly - approximately 20% High, 50% Medium, and 30% Low
+        - UNIQUE EVIDENCE: Use different evidence quotes for each insight - never reuse the same quote across multiple insights
+        - SPECIFIC CRITERIA FOR PRIORITIES:
+          * High: Critical issues directly impacting core user workflows with strong evidence
+          * Medium: Important issues affecting user experience but with workarounds available
+          * Low: Minor issues or opportunities for future improvement
         - Ensure insights are specific and actionable, not generic observations
-        - Base priority on both impact and urgency (High = immediate action needed, Medium = important but not urgent, Low = consider for future)
         - Recommendations should be concrete, implementable, and appropriate for the {industry.upper()} industry
         - Implications should clearly explain why the insight matters to users or organizations in the {industry.upper()} sector
         - Use direct quotes from the text as evidence whenever possible
@@ -192,8 +199,15 @@ class InsightGenerationPrompts:
         }}
 
         IMPORTANT GUIDELINES:
+        - AVOID REDUNDANCY: Ensure each insight covers a distinct topic with no overlap or duplication between insights
+        - DISTINCT TOPICS: Each insight must focus on a completely different aspect of user experience or need
+        - BALANCED PRIORITIES: Distribute priorities evenly - approximately 20% High, 50% Medium, and 30% Low
+        - UNIQUE EVIDENCE: Use different evidence quotes for each insight - never reuse the same quote across multiple insights
+        - SPECIFIC CRITERIA FOR PRIORITIES:
+          * High: Critical issues directly impacting core user workflows with strong evidence
+          * Medium: Important issues affecting user experience but with workarounds available
+          * Low: Minor issues or opportunities for future improvement
         - Ensure insights are specific and actionable, not generic observations
-        - Base priority on both impact and urgency (High = immediate action needed, Medium = important but not urgent, Low = consider for future)
         - Recommendations should be concrete and implementable
         - Implications should clearly explain why the insight matters to users or the business
         - Use direct quotes from the text as evidence whenever possible

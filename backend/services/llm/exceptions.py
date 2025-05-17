@@ -9,3 +9,8 @@ class LLMAPIError(LLMServiceError):
 class LLMResponseParseError(LLMServiceError):
     """Exception for errors when parsing LLM responses."""
     pass
+
+
+class LLMProcessingError(LLMServiceError):
+    """Exception for errors during LLM response processing."""
+    pass
