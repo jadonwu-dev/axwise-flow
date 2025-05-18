@@ -115,12 +115,12 @@ class PersonaFormationPrompts:
           "archetype": "Persona Category",
           "description": "Brief overview of the persona",
           "demographics": {{
-            "value": "Age, experience, etc.",
+            "value": "Comprehensive demographic information including gender, age range, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression",
             "confidence": 0.8,
             "evidence": ["Quote 1", "Quote 2"]
           }},
           "role_context": {{
-            "value": "Organizational context and team structure",
+            "value": "Detailed organizational context including specific company names, team structure, industry position, and reporting relationships",
             "confidence": 0.7,
             "evidence": ["Quote 1", "Quote 2"]
           }},
@@ -255,12 +255,12 @@ class PersonaFormationPrompts:
           "archetype": "Persona Category",
           "description": "Brief overview of the persona",
           "demographics": {{
-            "value": "Age, experience, etc.",
+            "value": "Comprehensive demographic information including gender, age range, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression",
             "confidence": 0.8,
             "evidence": ["Quote 1", "Quote 2"]
           }},
           "role_context": {{
-            "value": "Organizational context and team structure",
+            "value": "Detailed organizational context including specific company names, team structure, industry position, and reporting relationships",
             "confidence": 0.7,
             "evidence": ["Quote 1", "Quote 2"]
           }},

@@ -11,7 +11,10 @@ from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field, asdict
 import logging
 import re
+import json
 from datetime import datetime
+from backend.services.processing.demographic_extractor import DemographicExtractor
+from backend.services.processing.pattern_categorizer import PatternCategorizer
 from pydantic import ValidationError
 
 # Import Pydantic schema for validation
@@ -112,6 +115,8 @@ class PersonaBuilder:
     def __init__(self):
         """Initialize the persona builder."""
         logger.info("Initialized PersonaBuilder")
+        self.demographic_extractor = DemographicExtractor()
+        self.pattern_categorizer = PatternCategorizer()
 
     def build_persona_from_attributes(
         self, attributes: Dict[str, Any], name_override: str = "", role: str = "Participant"
@@ -226,45 +231,15 @@ class PersonaBuilder:
                         processed_trait["evidence"] = key_quotes_list[:2] if key_quotes_list else []
 
                     # Special processing for demographics field
-                    if field_name == "demographics" and "value" in processed_trait:
-                        # Enhance demographics value with more structured information
-                        demo_value = processed_trait["value"]
-                        if demo_value:
-                            # Extract demographic information from evidence if available
-                            demo_evidence = processed_trait.get("evidence", [])
-                            gender_terms = ["male", "female", "man", "woman", "non-binary", "they", "she", "he"]
-                            experience_terms = ["senior", "junior", "mid", "lead", "manager", "director", "executive", "entry"]
+                    if field_name == "demographics":
+                        # Get all evidence from other fields for context
+                        all_evidence = []
+                        for other_field, other_data in processed_traits.items():
+                            if isinstance(other_data, dict) and "evidence" in other_data:
+                                all_evidence.extend(other_data.get("evidence", []))
 
-                            # Try to extract gender and experience level from evidence
-                            gender = ""
-                            experience = ""
-                            for evidence_item in demo_evidence:
-                                evidence_lower = evidence_item.lower()
-                                # Check for gender terms
-                                for term in gender_terms:
-                                    if term in evidence_lower:
-                                        gender = term.capitalize()
-                                        break
-                                # Check for experience terms
-                                for term in experience_terms:
-                                    if term in evidence_lower:
-                                        experience = term.capitalize()
-                                        break
-
-                            # Format demographics in a more structured way
-                            structured_demo = []
-                            if gender:
-                                structured_demo.append(f"Gender: {gender}")
-                            if experience:
-                                structured_demo.append(f"Experience Level: {experience}")
-
-                            # Add any other demographic information from the original value
-                            if demo_value and not any(item in demo_value for item in structured_demo):
-                                structured_demo.append(f"Profile: {demo_value}")
-
-                            # Update the value with the structured format
-                            if structured_demo:
-                                processed_trait["value"] = " | ".join(structured_demo)
+                        # Use the demographic extractor to enhance the demographics field
+                        processed_trait = self.demographic_extractor.extract_demographics(processed_trait, all_evidence)
 
                     processed_traits[field_name] = processed_trait
                     logger.debug(f"Field {field_name} already in trait format")
@@ -366,6 +341,30 @@ class PersonaBuilder:
 
             # Use structured patterns if available, otherwise use original patterns
             patterns = structured_patterns if structured_patterns else patterns
+
+            # Categorize patterns and make them more actionable
+            if patterns:
+                logger.info(f"Categorizing {len(patterns)} patterns")
+
+                # First categorize the patterns
+                categorized_patterns = self.pattern_categorizer.categorize_patterns(patterns)
+
+                # Store the original patterns for reference
+                original_patterns = patterns.copy()
+
+                # Format patterns as JSON for structured data
+                json_patterns = self.pattern_categorizer.format_patterns_as_json(categorized_patterns)
+
+                # Then format them for display
+                formatted_patterns = self.pattern_categorizer.format_patterns_for_display(categorized_patterns)
+
+                # Use the formatted patterns
+                patterns = formatted_patterns
+
+                logger.info(f"Categorized {len(patterns)} patterns into {len(set([p.split(':')[0].split('(')[0].strip() for p in patterns]))} categories")
+
+                # Store the JSON patterns in the attributes for later use
+                attributes["patterns_json"] = json_patterns
 
             evidence = attributes.get("evidence", [])
             if isinstance(evidence, str):
@@ -514,13 +513,95 @@ class PersonaBuilder:
                     persona.confidence = sum(valid_confidences) / len(valid_confidences)
                     logger.info(f"Calculated average confidence from traits: {persona.confidence}")
 
+            # Fix key_quotes field if it's improperly formatted
+            if hasattr(persona, "key_quotes") and persona.key_quotes:
+                logger.info("Fixing key_quotes field in persona")
+
+                # Extract current key_quotes data
+                key_quotes_value = ""
+                key_quotes_confidence = 0.7
+                key_quotes_evidence = []
+
+                if hasattr(persona.key_quotes, "value"):
+                    key_quotes_value = persona.key_quotes.value
+                if hasattr(persona.key_quotes, "confidence"):
+                    key_quotes_confidence = persona.key_quotes.confidence
+                if hasattr(persona.key_quotes, "evidence"):
+                    key_quotes_evidence = persona.key_quotes.evidence
+
+                # Fix key_quotes data
+                key_quotes_data = self._fix_key_quotes({
+                    "value": key_quotes_value,
+                    "confidence": key_quotes_confidence,
+                    "evidence": key_quotes_evidence
+                })
+
+                logger.info(f"Fixed key_quotes: value={key_quotes_data['value'][:50]}..., evidence count={len(key_quotes_data['evidence'])}")
+
+                # Update the key_quotes field
+                if hasattr(persona, "key_quotes"):
+                    if hasattr(persona.key_quotes, "value"):
+                        persona.key_quotes.value = key_quotes_data["value"]
+                    if hasattr(persona.key_quotes, "confidence"):
+                        persona.key_quotes.confidence = key_quotes_data["confidence"]
+                    if hasattr(persona.key_quotes, "evidence"):
+                        persona.key_quotes.evidence = key_quotes_data["evidence"]
+
+                    logger.info(f"Updated key_quotes field in persona: evidence count={len(persona.key_quotes.evidence) if hasattr(persona.key_quotes, 'evidence') else 0}")
+
+            # Enhance demographics with role context information
+            if hasattr(persona, "demographics") and hasattr(persona, "role_context"):
+                logger.info("Enhancing demographics with role context information")
+
+                # Extract current demographics and role_context data
+                demographics_data = {
+                    "value": persona.demographics.value if hasattr(persona.demographics, "value") else "",
+                    "confidence": persona.demographics.confidence if hasattr(persona.demographics, "confidence") else 0.7,
+                    "evidence": persona.demographics.evidence if hasattr(persona.demographics, "evidence") else []
+                }
+
+                role_context_data = {
+                    "value": persona.role_context.value if hasattr(persona.role_context, "value") else "",
+                    "confidence": persona.role_context.confidence if hasattr(persona.role_context, "confidence") else 0.7,
+                    "evidence": persona.role_context.evidence if hasattr(persona.role_context, "evidence") else []
+                }
+
+                # Enhance demographics with role context
+                enhanced_demographics = self._enhance_demographics_with_role_context(demographics_data, role_context_data)
+
+                logger.info(f"Enhanced demographics: value={enhanced_demographics['value'][:50]}..., evidence count={len(enhanced_demographics['evidence'])}")
+
+                # Update the demographics field
+                if hasattr(persona, "demographics"):
+                    if hasattr(persona.demographics, "value"):
+                        persona.demographics.value = enhanced_demographics["value"]
+                    if hasattr(persona.demographics, "confidence"):
+                        persona.demographics.confidence = enhanced_demographics["confidence"]
+                    if hasattr(persona.demographics, "evidence"):
+                        persona.demographics.evidence = enhanced_demographics["evidence"]
+
+                    logger.info(f"Updated demographics field in persona: evidence count={len(persona.demographics.evidence) if hasattr(persona.demographics, 'evidence') else 0}")
+
             # Ensure we have at least some evidence
             if not persona.evidence or len(persona.evidence) < 3 or all(e.startswith("Fallback") for e in persona.evidence):
+                logger.info("Enhancing evidence field in persona")
+
                 # Collect evidence from traits
                 all_evidence = []
+                evidence_sources = {}  # Track which field each evidence came from
 
                 # Prioritize certain fields for evidence collection
-                priority_fields = ["key_quotes", "pain_points", "skills_and_expertise", "goals_and_motivations", "challenges_and_frustrations"]
+                priority_fields = [
+                    "key_quotes",
+                    "pain_points",
+                    "skills_and_expertise",
+                    "goals_and_motivations",
+                    "challenges_and_frustrations",
+                    "workflow_and_environment",
+                    "tools_used",
+                    "collaboration_style",
+                    "analysis_approach"
+                ]
 
                 # First collect from priority fields
                 for field_name in priority_fields:
@@ -529,7 +610,11 @@ class PersonaBuilder:
                         if trait and trait.evidence:
                             # Get the most representative evidence from this trait
                             best_evidence = sorted(trait.evidence, key=len, reverse=True)[:2]  # Take up to 2 longest pieces of evidence
-                            all_evidence.extend(best_evidence)
+                            for evidence in best_evidence:
+                                all_evidence.append(evidence)
+                                evidence_sources[evidence] = field_name
+
+                            logger.info(f"Collected {len(best_evidence)} evidence items from {field_name}")
 
                 # Then collect from other fields if needed
                 if len(all_evidence) < 5:
@@ -539,7 +624,11 @@ class PersonaBuilder:
                             if trait and trait.evidence:
                                 # Get one piece of evidence from each non-priority field
                                 best_evidence = sorted(trait.evidence, key=len, reverse=True)[:1]
-                                all_evidence.extend(best_evidence)
+                                for evidence in best_evidence:
+                                    all_evidence.append(evidence)
+                                    evidence_sources[evidence] = field_name
+
+                                logger.info(f"Collected {len(best_evidence)} evidence items from {field_name}")
 
                                 # Stop if we have enough evidence
                                 if len(all_evidence) >= 10:
@@ -551,18 +640,47 @@ class PersonaBuilder:
                     if e and e not in unique_evidence and len(e) > 20:  # Only include substantial evidence
                         unique_evidence.append(e)
 
+                logger.info(f"Collected {len(unique_evidence)} unique evidence items")
+
                 # Use the collected evidence
                 if unique_evidence:
-                    persona.evidence = unique_evidence[:10]  # Limit to 10 pieces of evidence
+                    # Limit to 10 pieces of evidence
+                    selected_evidence = unique_evidence[:10]
 
                     # Add descriptive labels to evidence for better context
                     labeled_evidence = []
-                    for i, e in enumerate(persona.evidence):
-                        if i < len(priority_fields) and i < len(persona.evidence):
-                            field = priority_fields[i].replace("_", " ").title()
-                            labeled_evidence.append(f"{field}: {e}")
-                        else:
-                            labeled_evidence.append(e)
+
+                    # Define descriptive labels for each field
+                    field_labels = {
+                        "key_quotes": "Key Quote",
+                        "pain_points": "Pain Point",
+                        "skills_and_expertise": "Skill/Expertise",
+                        "goals_and_motivations": "Goal/Motivation",
+                        "challenges_and_frustrations": "Challenge/Frustration",
+                        "workflow_and_environment": "Workflow/Environment",
+                        "tools_used": "Tool Usage",
+                        "collaboration_style": "Collaboration Style",
+                        "analysis_approach": "Analysis Approach",
+                        "demographics": "Background",
+                        "role_context": "Role Context",
+                        "key_responsibilities": "Responsibility",
+                        "needs_and_desires": "Need/Desire",
+                        "technology_and_tools": "Technology/Tool",
+                        "attitude_towards_research": "Research Attitude",
+                        "attitude_towards_ai": "AI Attitude"
+                    }
+
+                    # Add labels to evidence
+                    for evidence in selected_evidence:
+                        field_name = evidence_sources.get(evidence, "general")
+                        label = field_labels.get(field_name, field_name.replace("_", " ").title())
+
+                        # Add a more specific label based on content if possible
+                        specific_label = self._get_specific_evidence_label(evidence, label)
+
+                        labeled_evidence.append(f"{specific_label}: {evidence}")
+
+                    logger.info(f"Created {len(labeled_evidence)} labeled evidence items")
 
                     persona.evidence = labeled_evidence
 
@@ -677,12 +795,229 @@ class PersonaBuilder:
             return []
 
         if isinstance(evidence, str):
+            # Check if the string looks like a JSON array
+            if evidence.startswith('[') and evidence.endswith(']'):
+                try:
+                    # Try to parse it as JSON
+                    import json
+                    parsed_evidence = json.loads(evidence.replace("'", '"'))
+                    if isinstance(parsed_evidence, list):
+                        return [str(e) for e in parsed_evidence if e]
+                except Exception as e:
+                    logger.warning(f"Failed to parse evidence string as JSON: {e}")
             return [evidence]
 
         if isinstance(evidence, list):
             return [str(e) for e in evidence if e]
 
         return []
+
+    def _fix_key_quotes(self, key_quotes_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Fix key quotes data that might be improperly formatted.
+
+        Args:
+            key_quotes_data: Key quotes data
+
+        Returns:
+            Fixed key quotes data
+        """
+        if not key_quotes_data:
+            return {"value": "", "confidence": 0.7, "evidence": []}
+
+        # Check if value is a JSON string
+        value = key_quotes_data.get("value", "")
+        evidence = key_quotes_data.get("evidence", [])
+        confidence = key_quotes_data.get("confidence", 0.7)
+
+        logger.info(f"Fixing key_quotes: value type={type(value)}, value={value[:100]}...")
+
+        # Handle JSON string in value field
+        if isinstance(value, str):
+            # Check if it looks like a JSON array
+            if (value.startswith('[') and value.endswith(']')) or (value.startswith('{') and value.endswith('}')):
+                try:
+                    # Try to parse it as JSON
+                    import json
+                    # Replace single quotes with double quotes for JSON parsing
+                    # Also handle escaped quotes
+                    json_value = value.replace("'", '"').replace('\\"', '"')
+                    parsed_value = json.loads(json_value)
+
+                    logger.info(f"Successfully parsed key_quotes JSON: {type(parsed_value)}")
+
+                    if isinstance(parsed_value, list) and parsed_value:
+                        # If evidence is empty but we have quotes in value, move them to evidence
+                        if not evidence or len(evidence) == 0:
+                            evidence = parsed_value
+                            logger.info(f"Moved {len(evidence)} quotes from value to evidence")
+                        # Set value to a descriptive summary
+                        value = "Key representative quotes that capture the persona's authentic voice and perspective"
+                    elif isinstance(parsed_value, dict) and "value" in parsed_value:
+                        # Handle nested structure
+                        nested_value = parsed_value.get("value")
+                        nested_evidence = parsed_value.get("evidence", [])
+
+                        if isinstance(nested_value, list) and nested_value:
+                            evidence = nested_value
+                            logger.info(f"Extracted {len(evidence)} quotes from nested value")
+                        elif isinstance(nested_evidence, list) and nested_evidence:
+                            evidence = nested_evidence
+                            logger.info(f"Extracted {len(evidence)} quotes from nested evidence")
+
+                        value = "Key representative quotes that capture the persona's authentic voice and perspective"
+                except Exception as e:
+                    logger.warning(f"Failed to parse key_quotes value as JSON: {e}")
+
+                    # Fallback: try to extract quotes using regex
+                    if not evidence or len(evidence) == 0:
+                        import re
+                        # Look for quoted strings
+                        quotes = re.findall(r'"([^"]*)"', value)
+                        if quotes:
+                            evidence = quotes
+                            logger.info(f"Extracted {len(evidence)} quotes using regex")
+                            value = "Key representative quotes that capture the persona's authentic voice and perspective"
+
+        # Ensure evidence is a list of strings
+        if evidence and isinstance(evidence, list):
+            # Clean up evidence items
+            cleaned_evidence = []
+            for item in evidence:
+                if item and isinstance(item, str):
+                    # Remove extra quotes and clean up
+                    clean_item = item.strip()
+                    if clean_item.startswith('"') and clean_item.endswith('"'):
+                        clean_item = clean_item[1:-1]
+                    if clean_item:
+                        cleaned_evidence.append(clean_item)
+
+            evidence = cleaned_evidence
+            logger.info(f"Cleaned up evidence, now have {len(evidence)} quotes")
+
+        # If we still don't have evidence but have a value, use the value as a single quote
+        if (not evidence or len(evidence) == 0) and value and value != "Key representative quotes that capture the persona's authentic voice and perspective":
+            evidence = [value]
+            value = "Key representative quotes that capture the persona's authentic voice and perspective"
+            logger.info("Used value as a single quote in evidence")
+
+        return {
+            "value": value,
+            "confidence": confidence,
+            "evidence": evidence
+        }
+
+    def _enhance_demographics_with_role_context(self, demographics: Dict[str, Any], role_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance demographics with information from role context.
+
+        Args:
+            demographics: Demographics data
+            role_context: Role context data
+
+        Returns:
+            Enhanced demographics data
+        """
+        # Get existing values
+        demo_value = demographics.get("value", "")
+        role_value = role_context.get("value", "")
+
+        # Combine evidence
+        combined_evidence = demographics.get("evidence", []) + role_context.get("evidence", [])
+        combined_evidence = list(set(combined_evidence))  # Remove duplicates
+
+        # Extract company and organizational information from role context
+        company_info = []
+        role_info = []
+
+        # Look for company mentions in role context
+        for company_pattern in ["company", "organization", "startup", "firm", "employer", "Volkswagen", "Google", "Microsoft", "Amazon", "Apple"]:
+            if company_pattern in role_value:
+                # Extract the sentence containing the company
+                sentences = role_value.split(". ")
+                for sentence in sentences:
+                    if company_pattern in sentence:
+                        company_info.append(sentence.strip())
+                        break
+
+        # Look for role mentions in role context
+        for role_pattern in ["role", "position", "job", "title", "responsibility", "designer", "developer", "manager", "director", "lead"]:
+            if role_pattern in role_value.lower():
+                # Extract the sentence containing the role
+                sentences = role_value.split(". ")
+                for sentence in sentences:
+                    if role_pattern in sentence.lower():
+                        role_info.append(sentence.strip())
+                        break
+
+        # Create enhanced value
+        enhanced_parts = []
+
+        # Start with original demographics
+        if demo_value:
+            enhanced_parts.append(demo_value)
+
+        # Add company information if not already in demographics
+        for info in company_info:
+            if info and not any(info.lower() in part.lower() for part in enhanced_parts):
+                enhanced_parts.append(info)
+
+        # Add role information if not already in demographics
+        for info in role_info:
+            if info and not any(info.lower() in part.lower() for part in enhanced_parts):
+                enhanced_parts.append(info)
+
+        # Join all parts
+        enhanced_value = " | ".join(enhanced_parts)
+
+        return {
+            "value": enhanced_value,
+            "confidence": max(demographics.get("confidence", 0.7), role_context.get("confidence", 0.7)),
+            "evidence": combined_evidence
+        }
+
+    def _get_specific_evidence_label(self, evidence: str, default_label: str) -> str:
+        """
+        Get a more specific label for evidence based on its content.
+
+        Args:
+            evidence: Evidence text
+            default_label: Default label to use if no specific label can be determined
+
+        Returns:
+            Specific label for the evidence
+        """
+        evidence_lower = evidence.lower()
+
+        # Define patterns for specific labels
+        label_patterns = {
+            "Career Background": ["background", "education", "degree", "graduated", "university", "college", "school"],
+            "Experience": ["experience", "years", "worked", "working", "job", "position", "role"],
+            "Skill": ["skill", "know how to", "able to", "capable of", "proficient", "expertise"],
+            "Tool Preference": ["prefer", "like", "use", "tool", "software", "platform", "application"],
+            "Challenge": ["challenge", "difficult", "hard", "struggle", "problem", "issue", "obstacle"],
+            "Frustration": ["frustrat", "annoy", "irritat", "bother", "upset", "disappoint"],
+            "Goal": ["goal", "aim", "objective", "target", "want to", "trying to", "hope to"],
+            "Motivation": ["motivat", "drive", "inspire", "passion", "interest", "excite"],
+            "Need": ["need", "require", "must have", "essential", "necessary", "important"],
+            "Desire": ["desire", "wish", "want", "would like", "prefer", "hope for"],
+            "Workflow": ["workflow", "process", "procedure", "approach", "method", "routine"],
+            "Collaboration": ["collaborat", "team", "work with", "together", "colleague", "partner"],
+            "Research Approach": ["research", "study", "investigate", "analyze", "examine", "explore"],
+            "Pain Point": ["pain", "frustrat", "annoy", "difficult", "challenge", "problem", "hate"],
+            "Quote": ["\"", "'", "said", "mentioned", "stated", "expressed"],
+            "Company": ["company", "organization", "startup", "firm", "employer", "corporation", "business"],
+            "Role": ["designer", "developer", "manager", "director", "lead", "specialist", "analyst", "consultant"]
+        }
+
+        # Check for matches
+        for label, patterns in label_patterns.items():
+            for pattern in patterns:
+                if pattern in evidence_lower:
+                    return label
+
+        # If no specific label found, use the default
+        return default_label
 
     def _get_string_value(self, value: Any, default: str = "") -> str:
         """
