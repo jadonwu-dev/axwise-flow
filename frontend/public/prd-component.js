@@ -1,7 +1,55 @@
 /**
  * PRD Component Script
  * This script is loaded in the iframe to render the PRD component
+ *
+ * Security improvements:
+ * - Added DOMPurify for HTML sanitization
+ * - Replaced unsafe innerHTML with safer DOM manipulation methods
+ * - Sanitized user-controlled data before rendering
  */
+
+// Import DOMPurify for HTML sanitization
+// This script should be loaded after DOMPurify in the HTML
+if (typeof DOMPurify === 'undefined') {
+  console.error('DOMPurify is not loaded. Please include it before this script.');
+}
+
+/**
+ * Safely set HTML content with sanitization
+ *
+ * @param {HTMLElement} element - The element to set content for
+ * @param {string} htmlContent - The HTML content to sanitize and set
+ */
+function setElementHTML(element, htmlContent) {
+  if (!element) return;
+
+  // Sanitize the HTML content using DOMPurify
+  if (typeof DOMPurify !== 'undefined') {
+    element.innerHTML = DOMPurify.sanitize(htmlContent);
+  } else {
+    // Fallback to textContent if DOMPurify is not available
+    element.textContent = htmlContent;
+  }
+}
+
+/**
+ * Safely create a labeled content element
+ *
+ * @param {string} label - The label text
+ * @param {string} content - The content text
+ * @returns {HTMLElement} - The created element
+ */
+function createLabeledContent(label, content) {
+  const element = document.createElement('p');
+
+  const strongElement = document.createElement('strong');
+  strongElement.textContent = label;
+
+  element.appendChild(strongElement);
+  element.appendChild(document.createTextNode(' ' + content));
+
+  return element;
+}
 
 // Initialize the PRD component
 window.initPRD = function(resultId) {
@@ -232,18 +280,40 @@ function generatePRD(resultId, prdType, forceRegenerate = false) {
 
       // Show error message
       const content = document.getElementById('prd-content');
-      content.innerHTML = `
-        <div style="padding: 20px; background-color: #ffebee; border-radius: 4px; margin-bottom: 20px;">
-          <h3 style="color: #c62828; margin-top: 0;">Error</h3>
-          <p>Failed to generate PRD. Please try again.</p>
-        </div>
-      `;
+
+      // Clear existing content
+      while (content.firstChild) {
+        content.removeChild(content.firstChild);
+      }
+
+      // Create error container with safe DOM manipulation
+      const errorContainer = document.createElement('div');
+      errorContainer.style.padding = '20px';
+      errorContainer.style.backgroundColor = '#ffebee';
+      errorContainer.style.borderRadius = '4px';
+      errorContainer.style.marginBottom = '20px';
+
+      const errorTitle = document.createElement('h3');
+      errorTitle.style.color = '#c62828';
+      errorTitle.style.marginTop = '0';
+      errorTitle.textContent = 'Error';
+
+      const errorMessage = document.createElement('p');
+      errorMessage.textContent = 'Failed to generate PRD. Please try again.';
+
+      // Append elements
+      errorContainer.appendChild(errorTitle);
+      errorContainer.appendChild(errorMessage);
+      content.appendChild(errorContainer);
     });
 }
 
 // Render the operational PRD
 function renderOperationalPRD(container, prd) {
-  container.innerHTML = '';
+  // Safely clear the container
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
 
   // Objectives
   const objectivesSection = document.createElement('div');
@@ -327,7 +397,10 @@ function renderOperationalPRD(container, prd) {
 
 // Render the technical PRD
 function renderTechnicalPRD(container, prd) {
-  container.innerHTML = '';
+  // Safely clear the container
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
 
   // Objectives
   const objectivesSection = document.createElement('div');
@@ -588,11 +661,11 @@ function renderSuccessMetrics(container, metrics, isTechnical = false) {
     metricTitle.textContent = metric.metric;
     metricTitle.style.marginBottom = '5px';
 
-    const metricTarget = document.createElement('p');
-    metricTarget.innerHTML = '<strong>Target:</strong> ' + metric.target;
+    // Create metric target with safe DOM manipulation
+    const metricTarget = createLabeledContent('Target:', metric.target);
 
-    const metricMethod = document.createElement('p');
-    metricMethod.innerHTML = '<strong>Measurement Method:</strong> ' + metric.measurement_method;
+    // Create metric method with safe DOM manipulation
+    const metricMethod = createLabeledContent('Measurement Method:', metric.measurement_method);
 
     metricItem.appendChild(metricTitle);
     metricItem.appendChild(metricTarget);
@@ -641,11 +714,14 @@ function renderArchitecture(container, architecture) {
     componentName.textContent = component.name;
     componentName.style.marginBottom = '5px';
 
-    const componentPurpose = document.createElement('p');
-    componentPurpose.innerHTML = '<strong>Purpose:</strong> ' + component.purpose;
+    // Create component purpose with safe DOM manipulation
+    const componentPurpose = createLabeledContent('Purpose:', component.purpose);
 
+    // Create interactions title with safe DOM manipulation
     const interactionsTitle = document.createElement('p');
-    interactionsTitle.innerHTML = '<strong>Interactions:</strong>';
+    const interactionsLabel = document.createElement('strong');
+    interactionsLabel.textContent = 'Interactions:';
+    interactionsTitle.appendChild(interactionsLabel);
 
     const interactionsList = document.createElement('ul');
     component.interactions.forEach(interaction => {
@@ -775,11 +851,11 @@ function renderTestingValidation(container, testing) {
     testTitle.textContent = test.test_type;
     testTitle.style.marginBottom = '5px';
 
-    const testDescription = document.createElement('p');
-    testDescription.innerHTML = '<strong>Description:</strong> ' + test.description;
+    // Create test description with safe DOM manipulation
+    const testDescription = createLabeledContent('Description:', test.description);
 
-    const testCriteria = document.createElement('p');
-    testCriteria.innerHTML = '<strong>Success Criteria:</strong> ' + test.success_criteria;
+    // Create test criteria with safe DOM manipulation
+    const testCriteria = createLabeledContent('Success Criteria:', test.success_criteria);
 
     testItem.appendChild(testTitle);
     testItem.appendChild(testDescription);

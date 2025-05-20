@@ -30,6 +30,23 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin'
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: `
+              default-src 'self';
+              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://grown-seasnail-35.clerk.accounts.dev https://clerk.grown-seasnail-35.accounts.dev https://*.googletagmanager.com;
+              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+              img-src 'self' data: https: blob:;
+              font-src 'self' https://fonts.gstatic.com;
+              connect-src 'self' ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'} https://grown-seasnail-35.clerk.accounts.dev https://clerk.grown-seasnail-35.accounts.dev https://*.googleapis.com;
+              frame-src 'self' https://grown-seasnail-35.clerk.accounts.dev https://clerk.grown-seasnail-35.accounts.dev;
+              object-src 'none';
+              base-uri 'self';
+              form-action 'self' https://grown-seasnail-35.clerk.accounts.dev https://clerk.grown-seasnail-35.accounts.dev;
+              frame-ancestors 'self';
+              upgrade-insecure-requests;
+            `.replace(/\s+/g, ' ').trim()
           }
         ],
       },

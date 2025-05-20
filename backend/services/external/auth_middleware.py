@@ -32,8 +32,20 @@ ENABLE_CLERK_...=***REMOVED***
     os.getenv("ENABLE_CLERK_VALIDATION", "false").lower() == "true"
 )
 
-# Development token prefix for easier identification
+# Development token prefix for easier identification - only used in development
 DEV_TOKEN_PREFIX = "dev_test_token_"
+
+# Environment detection
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
+# Force validation in production regardless of ENABLE_CLERK_VALIDATION setting
+if IS_PRODUCTION:
+    ENABLE_CLERK_...=***REMOVED***
+    logger.info("Production environment detected: Forcing Clerk JWT validation")
+else:
+    logger.warning(
+        f"Development environment detected: Clerk validation is {'enabled' if ENABLE_CLERK_VALIDATION else 'disabled'}"
+    )
 
 
 async def get_current_user(
@@ -67,8 +79,31 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Handle development token case
-    if (
+    # In production, always validate tokens with Clerk
+    if IS_PRODUCTION:
+        # Validate JWT token with Clerk
+        is_valid, payload = clerk_service.validate_token(token)
+
+        if not is_valid or not payload:
+            logger.warning("Authentication failed: Invalid token in production environment")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Extract user ID from JWT claim
+        user_id = payload.get("sub")
+
+        if not user_id:
+            logger.warning("Authentication failed: Token missing subject claim")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing user identifier",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    # Handle development token case - only in development
+    elif (
         token.startswith(DEV_TOKEN_PREFIX) or token == "DEV_TOKEN_REDACTED"
     ) and not ENABLE_CLERK_VALIDATION:
         # Extract user_id from the development token or use default

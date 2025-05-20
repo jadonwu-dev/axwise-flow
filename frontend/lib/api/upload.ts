@@ -7,7 +7,7 @@ import { UploadResponse } from './types';
 
 /**
  * Upload data to the API
- * 
+ *
  * @param file The file to upload
  * @param isTextFile Whether the file is a text file (default: false)
  * @returns A promise that resolves to the upload response
@@ -23,18 +23,24 @@ export async function uploadData(file: File, isTextFile: boolean = false): Promi
     });
 
     const formData = new FormData();
-    formData.append('file', file);
+
+    // Ensure the file is properly appended with the correct field name
+    // FastAPI expects the field name to match the parameter name in the endpoint
+    formData.append('file', file, file.name);
 
     // Convert boolean to string representation expected by the backend
     formData.append('is_free_text', String(isTextFile));
 
-    // Add additional data that might be required by the backend
-    formData.append('filename', file.name);
-    formData.append('content_type', file.type);
+    // Log the FormData contents for debugging
+    console.log('FormData entries:');
+    for (const pair of formData.entries()) {
+      console.log(`${pair[0]}: ${pair[1]}`);
+    }
 
+    // Important: Do NOT set Content-Type header for multipart/form-data
+    // The browser will automatically set the correct Content-Type with boundary
     const response = await apiCore.getClient().post<UploadResponse>('/api/data', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
         'Accept': 'application/json',
       },
       // Increase timeout significantly for potentially large files and initial processing
@@ -47,9 +53,28 @@ export async function uploadData(file: File, isTextFile: boolean = false): Promi
     console.error('Error uploading data:', error);
 
     // Enhanced error debugging
-    if (error?.response?.data?.detail) {
-      console.error('Server error details:', error.response.data.detail);
+    if (error?.response?.data) {
+      console.error('Server error response:', error.response.data);
+
+      if (error.response.data.detail) {
+        console.error('Server error details:', error.response.data.detail);
+
+        // If it's a validation error array, log each error
+        if (Array.isArray(error.response.data.detail)) {
+          error.response.data.detail.forEach((err: any, index: number) => {
+            console.error(`Validation error ${index + 1}:`, err);
+          });
+        }
+      }
     }
+
+    // Log request details that might be helpful
+    console.error('Request config:', {
+      url: error?.config?.url,
+      method: error?.config?.method,
+      headers: error?.config?.headers,
+      data: error?.config?.data
+    });
 
     // Handle different error types safely
     if (error && error.response) {

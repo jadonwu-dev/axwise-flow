@@ -12,6 +12,7 @@ export async function GET(
   const resultId = params.id;
 
   // Create HTML content with the PRD component
+  // Using the secure wrapper that includes DOMPurify for XSS protection
   const html = `
     <!DOCTYPE html>
     <html>
@@ -20,6 +21,13 @@ export async function GET(
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Product Requirements Document</title>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
+
+        <!-- Add DOMPurify for HTML sanitization -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"
+                integrity="sha512-H+rglffZ6f5gF7UJgvH4Naa+fGCgjrHKMgoFOGmcPTRwR6oILo5R+gtzNrpDp7iMV3udbymBVjkeZGNz1Em4rQ=="
+                crossorigin="anonymous"
+                referrerpolicy="no-referrer"></script>
+
         <style>
           body {
             font-family: 'Roboto', sans-serif;
@@ -41,7 +49,9 @@ export async function GET(
             script.onload = () => {
               // Initialize the PRD component
               if (window.initPRD) {
-                window.initPRD('${resultId}');
+                // Sanitize the resultId to prevent XSS
+                const sanitizedResultId = DOMPurify.sanitize('${resultId}');
+                window.initPRD(sanitizedResultId);
               }
             };
             document.body.appendChild(script);

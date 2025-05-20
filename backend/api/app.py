@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 import sys
 import os
+from slowapi.errors import RateLimitExceeded
 
 # Add the parent directory to the Python path
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -154,6 +155,95 @@ app.add_middleware(
     allow_headers=CORS_HEADERS,
 )
 
+# Configure rate limiting
+from backend.services.external.rate_limiter import configure_rate_limiter
+configure_rate_limiter(app)
+
+# Configure input validation
+from backend.services.external.input_validation import configure_input_validation
+configure_input_validation(app)
+
+# Import Firebase logging
+from backend.services.external.firebase_logging import firebase_logging, SecurityEventType
+
+# Configure security logging middleware
+@app.middleware("http")
+async def security_logging_middleware(request: Request, call_next):
+    """Log security-relevant API requests and errors"""
+    start_time = time.time()
+
+    # Extract request information
+    path = request.url.path
+    method = request.method
+    client_host = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+
+    # Get user ID if available
+    user_id = None
+    if hasattr(request.state, "user_id"):
+        user_id = request.state.user_id
+
+    try:
+        # Process the request
+        response = await call_next(request)
+
+        # Log security-relevant responses
+        status_code = response.status_code
+
+        # Log authentication failures
+        if path.startswith("/api/auth") and status_code in (401, 403):
+            firebase_logging.log_api_event(
+                SecurityEventType.API_UNAUTHORIZED_ACCESS,
+                endpoint=path,
+                request_method=method,
+                user_id=user_id,
+                ip_address=client_host,
+                user_agent=user_agent,
+                status_code=status_code
+            )
+
+        # Log rate limit exceeded
+        elif status_code == 429:
+            firebase_logging.log_api_event(
+                SecurityEventType.API_RATE_LIMIT_EXCEEDED,
+                endpoint=path,
+                request_method=method,
+                user_id=user_id,
+                ip_address=client_host,
+                user_agent=user_agent,
+                status_code=status_code
+            )
+
+        # Log access to sensitive endpoints
+        elif path.startswith(("/api/admin", "/api/users")) and status_code < 400:
+            firebase_logging.log_api_event(
+                SecurityEventType.SENSITIVE_DATA_ACCESS,
+                endpoint=path,
+                request_method=method,
+                user_id=user_id,
+                ip_address=client_host,
+                user_agent=user_agent,
+                status_code=status_code
+            )
+
+        return response
+
+    except Exception as exc:
+        # Log all exceptions
+        firebase_logging.log_error(
+            error=exc,
+            user_id=user_id,
+            resource=path,
+            metadata={
+                "method": method,
+                "ip_address": client_host,
+                "user_agent": user_agent
+            }
+        )
+
+        # Re-raise the exception
+        raise
+
 # Include routers
 app.include_router(priority_insights_router, prefix="/api/analysis")
 app.include_router(export_router)
@@ -239,26 +329,114 @@ def get_persona_service():
 )
 async def upload_data(
     request: Request,
-    file: UploadFile = File(
-        description="JSON file or text file containing interview data"
-    ),
-    is_free_text: bool = Form(
-        False, description="Whether the file contains free-text format (not JSON)"
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Handles interview data upload (JSON format or free-text format).
+
+    This implementation uses a direct approach to handle multipart/form-data
+    instead of relying on FastAPI's automatic parsing, which can sometimes
+    fail with certain file types or encodings.
     """
     start_time = time.time()
-    logger.info(
-        f"[UploadData - Start] User: {current_user.user_id}, Filename: {file.filename}, Size: {getattr(file, 'size', 'N/A')}, IsFreeText: {is_free_text}"
-    )  # Added size logging
+    logger.info(f"[UploadData - Start] User: {current_user.user_id}")
+
+    # Enhanced debugging for request details
+    content_type = request.headers.get("content-type", "")
+    logger.info(f"[UploadData - Request] Content-Type: {content_type}")
+    logger.info(f"[UploadData - Request] Headers: {dict(request.headers)}")
+
+    # Check if this is a multipart/form-data request
+    if not content_type.startswith("multipart/form-data"):
+        logger.error(f"[UploadData - Error] Invalid content type: {content_type}")
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported media type. Please use multipart/form-data."
+        )
+
     try:
+        # Manually parse the multipart form data
+        form = await request.form()
+        logger.info(f"[UploadData - Form] Keys: {list(form.keys())}")
+
+        # Detailed logging of form contents
+        for key in form:
+            value = form[key]
+            if isinstance(value, UploadFile):
+                logger.info(f"[UploadData - Form] Field: {key}, Type: UploadFile, Filename: {value.filename}, Content-Type: {value.content_type}")
+            else:
+                logger.info(f"[UploadData - Form] Field: {key}, Type: {type(value)}, Value: {value}")
+
+        # Extract file from form data
+        file = None
+        if "file" in form:
+            file = form["file"]
+            # Check if file has the necessary attributes instead of using isinstance
+            if not hasattr(file, 'filename') or not hasattr(file, 'read'):
+                logger.error(f"[UploadData - Error] 'file' field is not a valid file object: {type(file)}")
+                logger.error(f"[UploadData - Error] File attributes: {dir(file)}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid file upload. The 'file' field must contain a file."
+                )
+            logger.info(f"[UploadData - Success] Found valid file object in 'file' field: {file.filename}")
+        else:
+            # Try to find any file-like object in the form as a fallback
+            for key, value in form.items():
+                if hasattr(value, 'filename') and hasattr(value, 'read'):
+                    logger.info(f"[UploadData - Recovery] Found file in form with key: {key}")
+                    file = value
+                    break
+
+        # If we still don't have a file, return an error
+        if not file:
+            logger.error("[UploadData - Error] No file found in the request")
+            raise HTTPException(
+                status_code=400,
+                detail="No file uploaded. Please ensure you're sending a file in the 'file' field."
+            )
+
+        # Extract is_free_text parameter
+        is_free_text = False
+        if "is_free_text" in form:
+            is_free_text_value = form["is_free_text"]
+            # Convert string value to boolean
+            if isinstance(is_free_text_value, str):
+                is_free_text = is_free_text_value.lower() in ("true", "1", "yes", "y")
+            elif isinstance(is_free_text_value, bool):
+                is_free_text = is_free_text_value
+
+        logger.info(
+            f"[UploadData - Processing] Filename: {file.filename}, Size: {getattr(file, 'size', 'N/A')}, Content-Type: {file.content_type}, IsFreeText: {is_free_text}"
+        )
+
+        # Verify file content
+        try:
+            # Read a small sample of the file to verify it's not empty
+            file_sample = await file.read(1024)
+            await file.seek(0)  # Reset file position after reading sample
+
+            if not file_sample:
+                logger.error("[UploadData - Error] File is empty")
+                raise HTTPException(
+                    status_code=400,
+                    detail="The uploaded file is empty."
+                )
+
+            logger.info(f"[UploadData - File] Sample size: {len(file_sample)} bytes")
+
+            # Try to decode the sample as UTF-8 to check for encoding issues
+            try:
+                sample_text = file_sample.decode('utf-8')
+                logger.info(f"[UploadData - File] Sample decodes as UTF-8: {sample_text[:100]}...")
+            except UnicodeDecodeError:
+                logger.warning("[UploadData - File] Sample cannot be decoded as UTF-8, might be binary data")
+        except Exception as sample_error:
+            logger.error(f"[UploadData - Error] Failed to read file sample: {str(sample_error)}")
+
         # Use DataService to handle upload logic
         from backend.services.data_service import DataService
-
         data_service = DataService(db, current_user)
 
         # Process the upload
@@ -271,22 +449,19 @@ async def upload_data(
             data_id=result["data_id"],
         )
 
-    except HTTPException:
+    except HTTPException as http_ex:
         logger.warning(
-            f"[UploadData - HTTPException] User: {current_user.user_id}, Filename: {file.filename}, Duration: {time.time() - start_time:.4f}s"
+            f"[UploadData - HTTPException] User: {current_user.user_id}, Status: {http_ex.status_code}, Detail: {http_ex.detail}, Duration: {time.time() - start_time:.4f}s"
         )
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"Error uploading data: {str(e)}")
-        logger.error(
-            f"[UploadData - Error] User: {current_user.user_id}, Filename: {file.filename}, Duration: {time.time() - start_time:.4f}s"
-        )
+        logger.error(f"[UploadData - Error] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
         duration = time.time() - start_time
         logger.info(
-            f"[UploadData - End] User: {current_user.user_id}, Filename: {file.filename}, Duration: {duration:.4f}s"
+            f"[UploadData - End] User: {current_user.user_id}, Duration: {duration:.4f}s"
         )
 
 

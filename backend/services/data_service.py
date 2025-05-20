@@ -45,14 +45,49 @@ class DataService:
         Raises:
             HTTPException: For invalid file formats or other errors
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[DataService] Processing file upload: {file.filename}, is_free_text={is_free_text}")
+        logger.info(f"[DataService] File details - Content-Type: {file.content_type}, Headers: {file.headers}")
+
         try:
-            # Read file content
-            content = await file.read()
+            # Verify file is not None and has a filename
+            if not file or not hasattr(file, 'filename') or not file.filename:
+                logger.error("[DataService] Invalid file object")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid file object. Please ensure you're uploading a valid file."
+                )
+
+            # Read file content with error handling
+            try:
+                content = await file.read()
+                logger.info(f"[DataService] Successfully read file content, size: {len(content)} bytes")
+
+                # Check if file is empty
+                if not content:
+                    logger.error("[DataService] Empty file content")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="The uploaded file is empty."
+                    )
+            except Exception as read_error:
+                logger.error(f"[DataService] Error reading file content: {str(read_error)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to read file content: {str(read_error)}"
+                )
 
             # Determine input type based on file extension and is_free_text flag
-            file_extension = (
-                file.filename.split(".")[-1].lower() if "." in file.filename else ""
-            )
+            file_extension = ""
+            try:
+                if "." in file.filename:
+                    file_extension = file.filename.split(".")[-1].lower()
+                logger.info(f"[DataService] File extension: {file_extension}")
+            except Exception as ext_error:
+                logger.error(f"[DataService] Error extracting file extension: {str(ext_error)}")
+                # Continue with empty extension
 
             # Handle Excel files
             if file_extension in ["xlsx", "xls"]:
