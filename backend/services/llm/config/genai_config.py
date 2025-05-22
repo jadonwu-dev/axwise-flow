@@ -35,6 +35,7 @@ class TaskType(str, Enum):
     EVIDENCE_LINKING = "evidence_linking"
     TRAIT_FORMATTING = "trait_formatting"
     INDUSTRY_DETECTION = "industry_detection"
+    PRD_GENERATION = "prd_generation"
     UNKNOWN = "unknown_task"
 
 class ResponseFormat(str, Enum):
@@ -205,6 +206,7 @@ class GenAIConfigFactory:
             TaskType.INSIGHT_GENERATION,
             TaskType.PERSONA_FORMATION,
             TaskType.PATTERN_ENHANCEMENT,
+            TaskType.PRD_GENERATION,
         ]
 
         if task in json_tasks:
@@ -215,6 +217,11 @@ class GenAIConfigFactory:
         # Task-specific token limits and other parameters
         if task in [TaskType.TRANSCRIPT_STRUCTURING, TaskType.THEME_ANALYSIS, TaskType.THEME_ANALYSIS_ENHANCED]:
             config_params["max_output_tokens"] = 131072  # Doubled from 65536 for large responses
+            config_params["top_k"] = 1
+            config_params["top_p"] = 0.95
+            logger.info(f"Using enhanced config for {task}: max_tokens=131072, top_k=1, top_p=0.95")
+        elif task == TaskType.PRD_GENERATION:
+            config_params["max_output_tokens"] = 131072  # Use maximum token limit for PRD generation
             config_params["top_k"] = 1
             config_params["top_p"] = 0.95
             logger.info(f"Using enhanced config for {task}: max_tokens=131072, top_k=1, top_p=0.95")

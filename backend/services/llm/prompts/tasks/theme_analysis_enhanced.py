@@ -47,7 +47,10 @@ class ThemeAnalysisEnhancedPrompts:
         9.  **Sentiment Distribution**: An estimated breakdown of sentiment within the statements related to this theme (percentages as decimals summing to 1.0).
         10. **Hierarchical Codes**: (Optional but preferred) A structured representation of codes, potentially with sub-codes.
         11. **Reliability Metrics**: (Optional) More detailed reliability metrics if calculable (e.g., Cohen's Kappa estimate).
-        12. **Relationships**: (Optional) Connections to other identified themes (e.g., causal, correlational).
+        12. **Relationships**: (Optional) Connections to other identified themes. Only use these relationship types:
+            - "causal": One theme directly causes or influences another (e.g., "Technical Debt" causes "Delayed Feature Delivery")
+            - "correlational": Themes are related but without clear causation (e.g., "Remote Work" correlates with "Communication Challenges")
+            - "hierarchical": One theme is a subset or parent of another (e.g., "Data Security" is hierarchically related to "Compliance Requirements")
 
         Return your analysis ONLY as a valid JSON object adhering strictly to the following structure:
 
@@ -87,9 +90,21 @@ class ThemeAnalysisEnhancedPrompts:
               "relationships": [
                 {
                   "related_theme": "Another Theme Name",
-                  "relationship_type": "causal | correlational | hierarchical",
+                  "relationship_type": "causal",
                   "strength": 0.XX,
-                  "description": "Explanation of the relationship."
+                  "description": "Explanation of how this theme causes or influences the related theme."
+                },
+                {
+                  "related_theme": "Yet Another Theme Name",
+                  "relationship_type": "correlational",
+                  "strength": 0.XX,
+                  "description": "Explanation of how this theme correlates with the related theme."
+                },
+                {
+                  "related_theme": "One More Theme Name",
+                  "relationship_type": "hierarchical",
+                  "strength": 0.XX,
+                  "description": "Explanation of how this theme is hierarchically related to the other theme."
                 }
               ]
             }
@@ -101,6 +116,7 @@ class ThemeAnalysisEnhancedPrompts:
         - Ensure all strings within the JSON are properly escaped.
         - Adhere strictly to the specified field names and data types.
         - Provide accurate scores and representative evidence based *only* on the provided text.
+        - For "relationship_type" in theme relationships, ONLY use one of these three values: "causal", "correlational", or "hierarchical". Do NOT use any other values like "addresses", "mitigates", etc.
         - All numeric values must be valid JSON numbers (e.g., 0.75, not "0.75").
         - All arrays must have proper comma separation between elements.
         - All object properties must have proper comma separation.

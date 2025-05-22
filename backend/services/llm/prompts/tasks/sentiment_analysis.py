@@ -53,11 +53,13 @@ class SentimentAnalysisPrompts:
 
         CRITICAL INSTRUCTIONS:
         - You MUST find a comprehensive set of statements across all three sentiment categories
-        - You MUST include at least 15-20 statements for EACH sentiment category
+        - You MUST include at least 15-20 statements for EACH sentiment category (positive, neutral, and negative)
         - You MUST use EXACT quotes from the text - never paraphrase or summarize
         - You MUST ensure your sentiment breakdown is realistic and evidence-based
         - You MUST focus on the interviewee's statements, not the interviewer's questions
         - You MUST be thorough and exhaustive in finding all relevant sentiment statements
+        - You MUST include the "sentimentStatements" field in your JSON response with all three categories (positive, neutral, negative)
+        - Even if the text is predominantly negative, you MUST find any existing positive and neutral statements
 
         Key Instructions:
         1. An overall sentiment score between 0 (negative) and 1 (positive)
@@ -140,7 +142,9 @@ class SentimentAnalysisPrompts:
         - Each statement should be meaningful and express complete thoughts
         - Filter out all noise using the rules above
         - Extract statements from interviewee responses, not interviewer questions
-        - DO NOT leave any category empty - find at least as many statements as you can for each sentiment category for each sentiment type
+        - DO NOT leave any category empty - find at least 10 statements for each sentiment category (positive, neutral, negative)
+        - The "sentimentStatements" field MUST be included in your JSON response with all three categories
+        - If the text has very few positive or neutral statements, include ALL of them, even if they're fewer than 10
         - Ensure your JSON is valid and properly formatted
         - DO NOT wrap your response in markdown code blocks (```json) - return ONLY the raw JSON object
         """
@@ -158,11 +162,13 @@ class SentimentAnalysisPrompts:
 
         CRITICAL INSTRUCTIONS:
         - You MUST find a comprehensive set of statements across all three sentiment categories
-        - You MUST include at least 15-20 statements for EACH sentiment category
+        - You MUST include at least 15-20 statements for EACH sentiment category (positive, neutral, and negative)
         - You MUST use EXACT quotes from the text - never paraphrase or summarize
         - You MUST ensure your sentiment breakdown is realistic and evidence-based
         - You MUST focus on the interviewee's statements, not the interviewer's questions
         - You MUST be thorough and exhaustive in finding all relevant sentiment statements
+        - You MUST include the "sentimentStatements" field in your JSON response with all three categories (positive, neutral, negative)
+        - Even if the text is predominantly negative, you MUST find any existing positive and neutral statements
 
         Industry-Agnostic Guidelines:
         1. This analysis should work equally well for any professional domain: healthcare, tech, finance, military, education, hospitality, manufacturing, etc.
@@ -252,7 +258,9 @@ class SentimentAnalysisPrompts:
         - Each statement should be meaningful and express complete thoughts
         - Filter out all noise using the rules above
         - Extract statements from interviewee responses, not interviewer questions
-        - DO NOT leave any category empty - find at least 10 examples for each sentiment type
+        - DO NOT leave any category empty - find at least 10 statements for each sentiment category (positive, neutral, negative)
+        - The "sentimentStatements" field MUST be included in your JSON response with all three categories
+        - If the text has very few positive or neutral statements, include ALL of them, even if they're fewer than 10
         - Ensure your JSON is valid and properly formatted
         - DO NOT wrap your response in markdown code blocks (```json) - return ONLY the raw JSON object
         """
