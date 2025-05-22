@@ -45,30 +45,30 @@ export function Header(): JSX.Element {
           </Link>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="hidden md:flex items-center space-x-6">
-          <Link
-            href="/unified-dashboard"
-            className="text-sm font-medium transition-colors hover:text-primary"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/pricing"
-            className="text-sm font-medium transition-colors hover:text-primary"
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/contact.html"
-            className="text-sm font-medium transition-colors hover:text-primary"
-          >
-            Contact Us
-          </Link>
-        </nav>
-
-        {/* Right side: User profile and theme toggle */}
+        {/* Right side: Navigation, User profile and theme toggle */}
         <div className="flex items-center space-x-4">
+          {/* Navigation Links */}
+          <nav className="hidden md:flex items-center space-x-6">
+            <Link
+              href="/unified-dashboard"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/contact.html"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+            >
+              Contact Us
+            </Link>
+          </nav>
+
           <UserProfile />
 
           <SignedIn>
@@ -89,8 +89,8 @@ export function Header(): JSX.Element {
             onClick={toggleTheme}
             aria-label="Toggle theme"
           >
-            <Sun className="h-5 w-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" data-testid="sun-icon" /> {/* Add testid */}
-            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" data-testid="moon-icon" /> {/* Add testid */}
+            <Sun className="h-5 w-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" data-testid="sun-icon" />
+            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" data-testid="moon-icon" />
           </button>
         </div>
       </div>

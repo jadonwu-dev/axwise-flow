@@ -320,11 +320,13 @@
                     <text x="55" y="50" font-family="Arial, sans-serif" font-size="10" font-weight="normal" text-anchor="start" fill="#a0a3bd" textLength="170" lengthAdjust="spacingAndGlyphs">Your AI Co-Pilot for Product Development</text>
                 </svg>
             </a>
-            <nav class="hidden md:flex items-center space-x-6">
-                <a href="/unified-dashboard" class="text-sm font-medium transition-colors hover:text-primary">Dashboard</a>
-                <a href="/pricing" class="text-sm font-medium transition-colors hover:text-primary">Pricing</a>
-                <a href="/contact.html" class="text-sm font-medium transition-colors hover:text-primary">Contact Us</a>
-            </nav>
+            <div class="flex items-center space-x-4">
+                <nav class="hidden md:flex items-center space-x-6">
+                    <a href="/unified-dashboard" class="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary">Dashboard</a>
+                    <a href="/pricing" class="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary">Pricing</a>
+                    <a href="/contact.html" class="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary">Contact Us</a>
+                </nav>
+            </div>
         </div>
     </header>
 
@@ -361,12 +363,16 @@
             color: var(--dark-color);
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.3s ease;
+            transition: all 0.3s ease;
             font-size: 0.875rem; /* text-sm */
         }
 
         header nav a:hover {
             color: var(--primary-color);
+        }
+
+        .text-foreground {
+            color: var(--dark-color);
         }
 
         /* Responsive navigation */
