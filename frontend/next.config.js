@@ -1,22 +1,40 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  // Removed 'output: export' to enable SSR with Firebase
+  // swcMinify is deprecated in Next.js 15, removed it
+
+  // Environment variables
   env: {
     NEXT_PUBLIC_...=***REMOVED*** || 'http://localhost:8000',
   },
+
+  // Image domains configuration
   images: {
-    domains: [
-      'axwise-73425.firebaseapp.com',
-      'axwise-73425.firebasestorage.app',
-      'axwise-flow--axwise-73425.europe-west4.hosted.app'
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'axwise-73425.firebaseapp.com'
+      },
+      {
+        protocol: 'https',
+        hostname: 'axwise-73425.firebasestorage.app'
+      },
+      {
+        protocol: 'https',
+        hostname: 'axwise-flow--axwise-73425.europe-west4.hosted.app'
+      }
     ],
   },
 
-  // Enable server actions for SSR
+  // Enable server actions for SSR with proper configuration
   experimental: {
-    serverActions: true,
+    serverActions: {
+      allowedOrigins: [
+        'axwise-flow--axwise-73425.europe-west4.hosted.app',
+        'localhost:3000'
+      ],
+      bodySizeLimit: '2mb'
+    },
   },
 
   // Disable TypeScript type checking during build for development
