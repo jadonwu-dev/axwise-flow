@@ -58,6 +58,15 @@ const nextConfig = {
   // Properly handle middleware for Firebase App Hosting
   poweredByHeader: false,
   generateEtags: false,
+
+  // Custom webpack configuration to ensure middleware manifest is in the right place
+  webpack: (config, { isServer }) => {
+    // This helps ensure middleware files are properly generated
+    if (isServer) {
+      config.optimization.moduleIds = 'named';
+    }
+    return config;
+  },
 }
 
 module.exports = nextConfig
