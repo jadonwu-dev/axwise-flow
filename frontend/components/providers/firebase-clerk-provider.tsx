@@ -1,10 +1,11 @@
 'use client';
 
 import { createContext, useContext, ReactNode, useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth as useClerkAuth } from '@clerk/nextjs';
 import { User as FirebaseUser } from 'firebase/auth';
 import { useSyncClerkWithFirebase } from '@/lib/firebase-auth';
 import { generateFirebaseToken } from '@/lib/firebase-functions';
+import { createSafeAuthHook, isSSG } from '@/lib/clerk-config';
 
 // Define the context type
 interface FirebaseClerkContextType {
@@ -32,14 +33,19 @@ interface FirebaseClerkProviderProps {
  * This component provides Firebase authentication state to the application
  * It synchronizes the authentication state between Clerk and Firebase
  */
+// Create a safe version of the Clerk useAuth hook
+const useSafeAuth = createSafeAuthHook(useClerkAuth);
+
 export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps): JSX.Element {
-  const { isSignedIn, userId, getToken } = useAuth();
+  // Use our safe auth hook that handles static site generation
+  const { isSignedIn, userId, getToken } = useSafeAuth();
   const [tokenError, setTokenError] = useState<Error | null>(null);
 
   // Function to get a Firebase token from Clerk
   const getFirebaseToken = async (): Promise<string | null> => {
     try {
-      if (!isSignedIn || !userId) {
+      // Skip token generation during static site generation
+      if (isSSG || !isSignedIn || !userId) {
         return null;
       }
 
@@ -58,8 +64,11 @@ export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps):
       const firebaseToken = await generateFirebaseToken(userId);
       return firebaseToken;
     } catch (error) {
-      console.error('Error getting Firebase token:', error);
-      setTokenError(error instanceof Error ? error : new Error(String(error)));
+      // Don't set error during static site generation
+      if (!isSSG) {
+        console.error('Error getting Firebase token:', error);
+        setTokenError(error instanceof Error ? error : new Error(String(error)));
+      }
       return null;
     }
   };
@@ -67,7 +76,7 @@ export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps):
   // Use the custom hook to sync Clerk and Firebase auth
   const { firebaseUser, loading, error } = useSyncClerkWithFirebase(
     getFirebaseToken,
-    !!isSignedIn
+    !!isSignedIn && !isSSG
   );
 
   // Combine errors
@@ -75,11 +84,11 @@ export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps):
 
   // Provide the auth state to the application
   return (
-    <FirebaseClerkContext.Provider 
-      value={{ 
-        firebaseUser, 
-        isLoading: loading, 
-        error: combinedError 
+    <FirebaseClerkContext.Provider
+      value={{
+        firebaseUser,
+        isLoading: loading,
+        error: combinedError
       }}
     >
       {children}

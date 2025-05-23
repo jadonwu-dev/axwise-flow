@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/providers/theme-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { ClerkProvider } from '@clerk/nextjs';
 import { FirebaseClerkProvider } from '@/components/providers/firebase-clerk-provider';
+import { isClerkConfigured, getClerkProviderConfig } from '@/lib/clerk-config';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -17,10 +18,6 @@ interface ProvidersProps {
  *
  */
 export function Providers({ children }: ProvidersProps): JSX.Element {
-  // Check if Clerk keys are available
-  const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const isClerkConfigured = clerkPublishableKey && clerkPublishableKey !== 'your_clerk_publishable_key_here';
-
   // If Clerk is not configured, render without ClerkProvider
   if (!isClerkConfigured) {
     console.warn('Clerk authentication is not configured. Running in development mode without authentication.');
@@ -38,10 +35,13 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
     );
   }
 
+  // Get Clerk configuration
+  const clerkConfig = getClerkProviderConfig();
+
   // If Clerk is configured, use ClerkProvider with FirebaseClerkProvider
   return (
     <ClerkProvider
-      publishableKey={clerkPublishableKey}
+      {...clerkConfig}
     >
       <FirebaseClerkProvider>
         <ThemeProvider
