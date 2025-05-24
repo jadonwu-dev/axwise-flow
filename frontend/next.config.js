@@ -1,3 +1,5 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -65,6 +67,18 @@ const nextConfig = {
     if (isServer) {
       config.optimization.moduleIds = 'named';
     }
+
+    // Add path resolution for Firebase App Hosting compatibility
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname),
+      '@/components': path.resolve(__dirname, 'components'),
+      '@/lib': path.resolve(__dirname, 'lib'),
+      '@/styles': path.resolve(__dirname, 'styles'),
+      '@/types': path.resolve(__dirname, 'types'),
+      '@/utils': path.resolve(__dirname, 'utils'),
+    };
+
     return config;
   },
 }
