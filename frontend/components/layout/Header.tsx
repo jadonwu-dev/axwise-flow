@@ -34,13 +34,13 @@ export function Header(): JSX.Element {
         <div className="flex items-center">
           <Link href="/" className="flex items-center">
             <LogoHorizontal
-              width={150}
-              height={40}
+              width={225}
+              height={60}
               className="dark:hidden"
             />
             <LogoDark
-              width={150}
-              height={40}
+              width={225}
+              height={60}
               className="hidden dark:block"
             />
           </Link>
