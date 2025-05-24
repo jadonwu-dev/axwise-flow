@@ -11,28 +11,52 @@ import {
 import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 import { apiClient } from '@/lib/apiClient';
+import { isClerkConfigured } from '@/lib/clerk-config';
+import Link from 'next/link';
 
 export function UserProfile() {
+  // Development mode fallback when Clerk is not configured
+  if (!isClerkConfigured) {
+    return (
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-yellow-600 dark:text-yellow-400">
+            Dev Mode
+          </span>
+          <Link href="/sign-in">
+            <Button variant="outline" size="sm">
+              Sign In
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { isSignedIn, user, isLoaded } = useUser();
   const { session } = useSession();
 
-  // Set the auth token when the user is signed in
+  // Set or clear the auth token based on sign-in status
   useEffect(() => {
-    const setAuthToken = async () => {
+    const manageAuthToken = async () => {
       if (isSignedIn && isLoaded && session) {
         try {
           const token = await session.getToken();
           if (token) {
-            // Set auth token for API calls
+            console.log('Auth token set');
             apiClient.setAuthToken(token);
           }
         } catch (error) {
           console.error('Error getting token:', error);
         }
+      } else if (isLoaded && !isSignedIn) {
+        // Clear auth token when user is signed out
+        console.log('Auth token cleared');
+        apiClient.clearAuthToken();
       }
     };
 
-    setAuthToken();
+    manageAuthToken();
   }, [isSignedIn, isLoaded, session]);
 
   return (

@@ -18,23 +18,42 @@ interface ProvidersProps {
 export function Providers({ children }: ProvidersProps): JSX.Element {
   // Get Clerk configuration
   const clerkConfig = getClerkProviderConfig();
+  const isClerkConfigured = clerkConfig.publishableKey &&
+    clerkConfig.publishableKey !== '' &&
+    !clerkConfig.publishableKey.includes('placeholder');
 
-  // Always render ClerkProvider with proper configuration
+  // Conditionally render ClerkProvider based on configuration
+  if (isClerkConfigured) {
+    return (
+      <ClerkProvider {...clerkConfig}>
+        <FirebaseClerkProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ToastProvider defaultPosition="top-right" defaultDuration={5000}>
+              {children}
+            </ToastProvider>
+          </ThemeProvider>
+        </FirebaseClerkProvider>
+      </ClerkProvider>
+    );
+  }
+
+  // Fallback without Clerk for development
   return (
-    <ClerkProvider {...clerkConfig}>
-      <FirebaseClerkProvider>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <ToastProvider defaultPosition="top-right" defaultDuration={5000}>
-            {children}
-          </ToastProvider>
-        </ThemeProvider>
-      </FirebaseClerkProvider>
-    </ClerkProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <ToastProvider defaultPosition="top-right" defaultDuration={5000}>
+        {children}
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

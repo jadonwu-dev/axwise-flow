@@ -14,6 +14,7 @@
 import {
   getAuthToken,
   setAuthToken,
+  clearAuthToken,
   uploadData,
   analyzeData,
   checkAnalysisStatus,
@@ -75,6 +76,13 @@ class ApiClient {
    */
   setAuthToken(token: string): void {
     setAuthToken(token);
+  }
+
+  /**
+   * Clear the authentication token for API requests
+   */
+  clearAuthToken(): void {
+    clearAuthToken();
   }
 
   /**
