@@ -26,6 +26,13 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error('Authentication error:', error, errorInfo);
+    console.error('Environment check:', {
+      hasPublishableKey: !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      hasSecretKey: !!process.env.CLERK_SECRET_KEY,
+      domain: process.env.NEXT_PUBLIC_CLERK_DOMAIN,
+      signInUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
+      signUpUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL
+    });
   }
 
   handleRetry = () => {
@@ -65,8 +72,8 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => window.location.href = '/'}
                 className="w-full"
               >

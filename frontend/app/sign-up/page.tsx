@@ -27,6 +27,8 @@ export default function SignUpPage(): JSX.Element { // Add return type
                 routing="path"
                 path="/sign-up"
                 signInUrl="/sign-in"
+                redirectUrl="/unified-dashboard"
+                afterSignUpUrl="/unified-dashboard"
                 appearance={{
                   elements: {
                     card: 'shadow-xl border-gray-200 dark:border-gray-800',

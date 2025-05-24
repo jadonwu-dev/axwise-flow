@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/unified-dashboard(.*)',
+  '/unified-dashboard',
   '/results(.*)',
   '/analysis(.*)',
   '/settings(.*)',
@@ -35,6 +36,9 @@ export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     await auth.protect();
   }
+
+  // For any other routes not explicitly defined, allow them but log for debugging
+  console.log(`[Middleware] Unmatched route: ${req.nextUrl.pathname}`);
 });
 
 // Use Clerk's recommended matcher configuration
