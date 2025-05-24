@@ -1,11 +1,10 @@
 'use client';
 
-import { createContext, useContext, ReactNode, useEffect, useState } from 'react';
+import { createContext, useContext, ReactNode } from 'react';
 import { useAuth as useClerkAuth } from '@clerk/nextjs';
 import { User as FirebaseUser } from 'firebase/auth';
 import { useSyncClerkWithFirebase } from '@/lib/firebase-auth';
 import { generateFirebaseToken } from '@/lib/firebase-functions';
-import { createSafeAuthHook, isSSG } from '@/lib/clerk-config';
 
 // Define the context type
 interface FirebaseClerkContextType {
@@ -30,45 +29,25 @@ interface FirebaseClerkProviderProps {
 
 /**
  * Firebase-Clerk Provider component
- * This component provides Firebase authentication state to the application
- * It synchronizes the authentication state between Clerk and Firebase
+ * Simplified implementation for Firebase App Hosting
+ * Synchronizes authentication state between Clerk and Firebase
  */
-// Create a safe version of the Clerk useAuth hook
-const useSafeAuth = createSafeAuthHook(useClerkAuth);
-
 export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps): JSX.Element {
-  // Use our safe auth hook that handles static site generation
-  const { isSignedIn, userId, getToken } = useSafeAuth();
-  const [tokenError, setTokenError] = useState<Error | null>(null);
+  // Use Clerk's standard auth hook
+  const { isSignedIn, userId, getToken } = useClerkAuth();
 
-  // Function to get a Firebase token from Clerk
+  // Simplified token generation function
   const getFirebaseToken = async (): Promise<string | null> => {
+    if (!isSignedIn || !userId) {
+      return null;
+    }
+
     try {
-      // Skip token generation during static site generation
-      if (isSSG || !isSignedIn || !userId) {
-        return null;
-      }
-
-      // First try to get a token directly from Clerk
-      try {
-        // Check if Clerk has a Firebase template
-        const clerkToken = await getToken({ template: 'firebase' });
-        if (clerkToken) {
-          return clerkToken;
-        }
-      } catch (clerkError) {
-        console.log('No Firebase template in Clerk, using Cloud Function instead');
-      }
-
-      // If Clerk doesn't have a Firebase template, use our Cloud Function
+      // Use Cloud Function to generate Firebase token
       const firebaseToken = await generateFirebaseToken(userId);
       return firebaseToken;
     } catch (error) {
-      // Don't set error during static site generation
-      if (!isSSG) {
-        console.error('Error getting Firebase token:', error);
-        setTokenError(error instanceof Error ? error : new Error(String(error)));
-      }
+      console.error('Error getting Firebase token:', error);
       return null;
     }
   };
@@ -76,11 +55,8 @@ export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps):
   // Use the custom hook to sync Clerk and Firebase auth
   const { firebaseUser, loading, error } = useSyncClerkWithFirebase(
     getFirebaseToken,
-    !!isSignedIn && !isSSG
+    !!isSignedIn
   );
-
-  // Combine errors
-  const combinedError = error || tokenError;
 
   // Provide the auth state to the application
   return (
@@ -88,7 +64,7 @@ export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps):
       value={{
         firebaseUser,
         isLoading: loading,
-        error: combinedError
+        error
       }}
     >
       {children}

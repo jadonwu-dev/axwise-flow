@@ -9,7 +9,6 @@ import {
   getIdToken
 } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { isSSG } from './clerk-config';
 
 /**
  * Firebase Authentication utility functions
@@ -121,15 +120,7 @@ export function useSyncClerkWithFirebase(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Skip synchronization during static site generation
-
   useEffect(() => {
-    // Skip effect during static site generation
-    if (isSSG) {
-      setLoading(false);
-      return () => {};
-    }
-
     let unsubscribe: () => void;
 
     async function syncAuth() {
@@ -144,10 +135,7 @@ export function useSyncClerkWithFirebase(
               await signInWithCustomToken(auth, token);
             } catch (signInError) {
               console.error('Error signing in with custom token:', signInError);
-              // Don't set error state for sign-in errors during static site generation
-              if (process.env.NODE_ENV !== 'production' || !navigator.userAgent.includes('Firebase')) {
-                setError(signInError instanceof Error ? signInError : new Error(String(signInError)));
-              }
+              setError(signInError instanceof Error ? signInError : new Error(String(signInError)));
             }
           }
         } else if (!isClerkSignedIn && firebaseUser) {
@@ -160,10 +148,7 @@ export function useSyncClerkWithFirebase(
         }
       } catch (err) {
         console.error('Error syncing auth:', err);
-        // Don't set error state during static site generation
-        if (process.env.NODE_ENV !== 'production' || !navigator.userAgent.includes('Firebase')) {
-          setError(err instanceof Error ? err : new Error(String(err)));
-        }
+        setError(err instanceof Error ? err : new Error(String(err)));
       }
     }
 
@@ -177,10 +162,7 @@ export function useSyncClerkWithFirebase(
         },
         (err) => {
           console.error('Firebase auth state change error:', err);
-          // Don't set error state during static site generation
-          if (process.env.NODE_ENV !== 'production' || !navigator.userAgent.includes('Firebase')) {
-            setError(err);
-          }
+          setError(err);
           setLoading(false);
         }
       );
