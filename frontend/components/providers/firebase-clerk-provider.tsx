@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useAuth as useClerkAuth } from '@clerk/nextjs';
 import { User as FirebaseUser } from 'firebase/auth';
 import { useSyncClerkWithFirebase } from '@/lib/firebase-auth';
@@ -29,44 +29,19 @@ interface FirebaseClerkProviderProps {
 
 /**
  * Firebase-Clerk Provider component
- * Simplified implementation for Firebase App Hosting
- * Synchronizes authentication state between Clerk and Firebase
+ * Simplified implementation - temporarily disabled Firebase integration
+ * to focus on getting Clerk authentication working first
  */
 export function FirebaseClerkProvider({ children }: FirebaseClerkProviderProps): JSX.Element {
-  // Use Clerk's standard auth hook
-  const { isSignedIn, userId, getToken } = useClerkAuth();
-
-  // Simplified token generation function
-  const getFirebaseToken = async (): Promise<string | null> => {
-    if (!isSignedIn || !userId) {
-      return null;
-    }
-
-    try {
-      // Use Cloud Function to generate Firebase token
-      const firebaseToken = await generateFirebaseToken(userId);
-      return firebaseToken;
-    } catch (error) {
-      console.error('Error getting Firebase token:', error);
-      return null;
-    }
+  // Provide a simple context without Firebase integration for now
+  const authState: FirebaseClerkContextType = {
+    firebaseUser: null,
+    isLoading: false,
+    error: null
   };
 
-  // Use the custom hook to sync Clerk and Firebase auth
-  const { firebaseUser, loading, error } = useSyncClerkWithFirebase(
-    getFirebaseToken,
-    !!isSignedIn
-  );
-
-  // Provide the auth state to the application
   return (
-    <FirebaseClerkContext.Provider
-      value={{
-        firebaseUser,
-        isLoading: loading,
-        error
-      }}
-    >
+    <FirebaseClerkContext.Provider value={authState}>
       {children}
     </FirebaseClerkContext.Provider>
   );

@@ -20,8 +20,8 @@ class ClerkService:
 
     def __init__(self):
         """Initialize the Clerk service."""
-        # Use production JWKS URL for axwise.de domain
-        self.jwks_url = os.getenv("CLERK_JWKS_URL", "https://clerk.axwise.de/.well-known/jwks.json")
+        # Use environment-specific JWKS URL (dev: distinct-rattler-76, prod: clerk.axwise.de)
+        self.jwks_url = os.getenv("CLERK_JWKS_URL", "https://distinct-rattler-76.clerk.accounts.dev/.well-known/jwks.json")
         self.CLERK_...=***REMOVED***"CLERK_API_URL", "https://api.clerk.com")
         self.CLERK_...=***REMOVED***"CLERK_SECRET_KEY", "")
         self.jwks = None

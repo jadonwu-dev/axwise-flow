@@ -4,7 +4,7 @@ import { type ReactNode } from 'react';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { ClerkProvider } from '@clerk/nextjs';
-import { FirebaseClerkProvider } from '@/components/providers/firebase-clerk-provider';
+
 import { getClerkProviderConfig } from '@/lib/clerk-config';
 
 interface ProvidersProps {
@@ -20,29 +20,35 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
   const clerkConfig = getClerkProviderConfig();
   const isClerkConfigured = clerkConfig.publishableKey &&
     clerkConfig.publishableKey !== '' &&
-    !clerkConfig.publishableKey.includes('placeholder');
+    !clerkConfig.publishableKey.includes('placeholder') &&
+    !clerkConfig.publishableKey.includes('disabled');
 
-  // Conditionally render ClerkProvider based on configuration
+  console.log('Clerk Configuration:', {
+    publishableKey: clerkConfig.publishableKey,
+    isConfigured: isClerkConfigured,
+    environment: process.env.NODE_ENV
+  });
+
+  // Always render ClerkProvider if we have a valid publishable key
   if (isClerkConfigured) {
     return (
       <ClerkProvider {...clerkConfig}>
-        <FirebaseClerkProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ToastProvider defaultPosition="top-right" defaultDuration={5000}>
-              {children}
-            </ToastProvider>
-          </ThemeProvider>
-        </FirebaseClerkProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ToastProvider defaultPosition="top-right" defaultDuration={5000}>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
       </ClerkProvider>
     );
   }
 
-  // Fallback without Clerk for development
+  // Fallback without Clerk (should not happen in development with proper config)
+  console.warn('Clerk not configured - falling back to no authentication');
   return (
     <ThemeProvider
       attribute="class"
