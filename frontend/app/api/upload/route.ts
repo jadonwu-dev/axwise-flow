@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
 
     console.log('🔄 [UPLOAD] Backend URL:', backendUrl);
     console.log('🔄 [UPLOAD] Token available:', token ? 'Yes' : 'No');
+    console.log('🔄 [UPLOAD] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
+    console.log('🔄 [UPLOAD] User ID:', userId);
 
     // Forward the request to the Python backend
     const formData = await request.formData();
