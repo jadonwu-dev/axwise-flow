@@ -1,14 +1,26 @@
-import { redirect } from 'next/navigation';
-
 /**
  * Onepager Presentation Page
- * 
- * This page redirects to the static HTML presentation in the public directory.
- * The presentation is served as a static asset for better performance and compatibility.
+ *
+ * This page serves the onepager presentation content directly as an iframe
+ * to ensure compatibility with Firebase App Hosting.
  */
 export default function OnepagerPresentationPage() {
-  // Redirect to the static HTML file
-  redirect('/onepager-presentation/index.html');
+  return (
+    <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0 }}>
+      <iframe
+        src="/api/static/onepager-presentation"
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          margin: 0,
+          padding: 0,
+        }}
+        title="AxWise Onepager Presentation"
+        allowFullScreen
+      />
+    </div>
+  );
 }
 
 /**

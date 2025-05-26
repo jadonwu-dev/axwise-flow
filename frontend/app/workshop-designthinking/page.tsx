@@ -1,14 +1,26 @@
-import { redirect } from 'next/navigation';
-
 /**
  * Design Thinking Workshop Page
- * 
- * This page redirects to the static HTML workshop content in the public directory.
- * The workshop is served as a static asset for better performance and compatibility.
+ *
+ * This page serves the workshop content directly as an iframe
+ * to ensure compatibility with Firebase App Hosting.
  */
 export default function WorkshopDesignThinkingPage() {
-  // Redirect to the static HTML file
-  redirect('/workshop-designthinking/index.html');
+  return (
+    <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0 }}>
+      <iframe
+        src="/api/static/workshop-designthinking"
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          margin: 0,
+          padding: 0,
+        }}
+        title="Design Thinking & User Research Workshop"
+        allowFullScreen
+      />
+    </div>
+  );
 }
 
 /**
