@@ -11,7 +11,13 @@ export default function OnepagerPresentationPage() {
       <header className="bg-gradient-to-br from-purple-500 to-pink-500 text-white py-16">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <div className="mb-6">
-            <div className="text-4xl font-bold text-white mb-6">AxWise</div>
+            <div className="flex items-center justify-center mb-6">
+              <svg className="w-12 h-12 mr-3" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z" fill="white"/>
+                <circle cx="12" cy="12" r="3" fill="rgba(255,255,255,0.3)"/>
+              </svg>
+              <div className="text-4xl font-bold text-white">AxWise</div>
+            </div>
           </div>
           <h2 className="text-2xl md:text-3xl font-semibold mb-4">
             Focus on building products, not analyzing what users said
@@ -746,7 +752,13 @@ export default function OnepagerPresentationPage() {
       <footer className="py-8 bg-gray-900 text-white">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <div className="mb-4">
-            <div className="text-2xl font-bold text-white">AxWise</div>
+            <div className="flex items-center justify-center">
+              <svg className="w-8 h-8 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z" fill="white"/>
+                <circle cx="12" cy="12" r="3" fill="rgba(255,255,255,0.3)"/>
+              </svg>
+              <div className="text-2xl font-bold text-white">AxWise</div>
+            </div>
           </div>
           <p className="text-gray-400">© 2025 AxWise. All rights reserved.</p>
         </div>
