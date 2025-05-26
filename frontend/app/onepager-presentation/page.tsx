@@ -1,5 +1,3 @@
-import Image from 'next/image';
-
 /**
  * AxWise Onepager Presentation
  *
@@ -13,13 +11,7 @@ export default function OnepagerPresentationPage() {
       <header className="bg-gradient-to-br from-purple-500 to-pink-500 text-white py-16">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <div className="mb-6">
-            <Image
-              src="/onepager-presentation/logo.svg"
-              alt="AxWise Logo"
-              width={200}
-              height={60}
-              className="mx-auto mb-6"
-            />
+            <div className="text-4xl font-bold text-white mb-6">AxWise</div>
           </div>
           <h2 className="text-2xl md:text-3xl font-semibold mb-4">
             Focus on building products, not analyzing what users said
@@ -186,19 +178,22 @@ export default function OnepagerPresentationPage() {
           <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">See AxWise in Action</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              'Screenshot 2025-04-11 121717.png',
-              'Screenshot 2025-04-28 191354.png',
-              'Screenshot 2025-04-28 193211.png',
-              'Screenshot 2025-04-28 194706.png'
-            ].map((screenshot, index) => (
-              <div key={index} className="rounded-lg overflow-hidden shadow-lg">
-                <Image
-                  src={`/onepager-presentation/img/${screenshot}`}
-                  alt={`AxWise Interface Screenshot ${index + 1}`}
-                  width={300}
-                  height={200}
-                  className="w-full h-auto"
-                />
+              'Dashboard Overview',
+              'Analysis Results',
+              'Insight Generation',
+              'Task Creation'
+            ].map((title, index) => (
+              <div key={index} className="rounded-lg overflow-hidden shadow-lg bg-gradient-to-br from-purple-100 to-pink-100">
+                <div className="w-full h-48 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                      </svg>
+                    </div>
+                    <p className="text-purple-800 font-medium">{title}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -302,14 +297,10 @@ export default function OnepagerPresentationPage() {
               }
             ].map((member, index) => (
               <div key={index} className="text-center">
-                <div className="w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden">
-                  <Image
-                    src={`/onepager-presentation/img/${member.image}`}
-                    alt={member.name}
-                    width={128}
-                    height={128}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+                  <div className="text-white text-2xl font-bold">
+                    {member.name.split(' ')[0].charAt(0)}{member.name.split(' ')[1]?.charAt(0) || ''}
+                  </div>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">{member.name}</h3>
                 <p className="text-sm text-gray-600">{member.bio}</p>
@@ -755,13 +746,7 @@ export default function OnepagerPresentationPage() {
       <footer className="py-8 bg-gray-900 text-white">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <div className="mb-4">
-            <Image
-              src="/onepager-presentation/logo-footer.svg"
-              alt="AxWise Logo"
-              width={120}
-              height={40}
-              className="mx-auto"
-            />
+            <div className="text-2xl font-bold text-white">AxWise</div>
           </div>
           <p className="text-gray-400">© 2025 AxWise. All rights reserved.</p>
         </div>
