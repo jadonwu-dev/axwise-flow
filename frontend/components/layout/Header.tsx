@@ -57,6 +57,12 @@ export function Header(): JSX.Element {
               Dashboard
             </Link>
             <Link
+              href="/onepager-presentation/index.html"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+            >
+              Presentation
+            </Link>
+            <Link
               href="/pricing"
               className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
             >
@@ -108,6 +114,13 @@ export function Header(): JSX.Element {
               onClick={closeMobileMenu}
             >
               Dashboard
+            </Link>
+            <Link
+              href="/onepager-presentation/index.html"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+              onClick={closeMobileMenu}
+            >
+              Presentation
             </Link>
             <Link
               href="/pricing"

@@ -10,6 +10,9 @@ const isPublicRoute = createRouteMatcher([
   '/privacy-policy',
   '/terms-of-service',
   '/pricing',
+  '/roadmap',
+  '/onepager-presentation(.*)',
+  '/workshop-designthinking(.*)',
   '/api/webhook(.*)', // Allow webhooks
 ]);
 

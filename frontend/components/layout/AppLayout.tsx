@@ -1,6 +1,7 @@
 'use client';
 
 import { type PropsWithChildren, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Header from './Header';
 import Footer from './Footer';
 import { initializeAuth } from '@/lib/authUtils';
@@ -17,6 +18,8 @@ interface AppLayoutProps extends PropsWithChildren {
  * Provides consistent layout structure and theme support
  */
 export function AppLayout({ children, className = '' }: AppLayoutProps): JSX.Element {
+  const pathname = usePathname();
+
   // Initialize authentication on component mount
   useEffect(() => {
     initializeAuth().catch(error => {
@@ -24,10 +27,13 @@ export function AppLayout({ children, className = '' }: AppLayoutProps): JSX.Ele
     });
   }, []);
 
+  // Check if this is the marketing landing page (homepage)
+  const isMarketingPage = pathname === '/';
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className={`container mx-auto px-4 py-8 flex-grow ${className}`}>
+      <main className={`flex-grow ${isMarketingPage ? '' : 'container mx-auto px-4 py-8'} ${className}`}>
         {children}
       </main>
       <Footer />
