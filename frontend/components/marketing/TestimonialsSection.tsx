@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Star, Quote } from 'lucide-react';
+import { ConstructorUniversityLogo } from '@/components/icons/ConstructorUniversityLogo';
 
 export const TestimonialsSection = () => {
   const testimonials = [
@@ -131,10 +132,10 @@ export const TestimonialsSection = () => {
             {/* Constructor University Partnership */}
             <div className="mb-8">
               <div className="flex items-center justify-center gap-4 mb-4">
-                <img
-                  src="/constructor-university-logo.svg"
-                  alt="Constructor University"
+                <ConstructorUniversityLogo
                   className="h-12 w-auto"
+                  height={48}
+                  width={160}
                 />
               </div>
               <Badge variant="default" className="text-sm px-4 py-2 mb-4 bg-primary text-primary-foreground">

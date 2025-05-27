@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Lock, Eye, Server, FileCheck, Users } from 'lucide-react';
+import { ComplianceBadges } from '@/components/ui/ComplianceBadges';
 
 export const SecuritySection = () => {
   const securityFeatures = [
@@ -43,13 +44,7 @@ export const SecuritySection = () => {
     }
   ];
 
-  const certifications = [
-    { name: "SOC 2 Type II", status: "Certified" },
-    { name: "ISO 27001", status: "In Progress" },
-    { name: "GDPR", status: "Compliant" },
-    { name: "CCPA", status: "Compliant" },
-    { name: "HIPAA", status: "Available" }
-  ];
+  // Certifications are now handled by the ComplianceBadges component
 
   const dataHandling = [
     {
@@ -88,7 +83,7 @@ export const SecuritySection = () => {
             <span className="text-primary">Enterprise-Grade</span> Security You Can Trust
           </h2>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-            Your user research data is sensitive. We protect it with the same level of security 
+            Your user research data is sensitive. We protect it with the same level of security
             used by banks and healthcare organizations.
           </p>
         </div>
@@ -131,19 +126,11 @@ export const SecuritySection = () => {
         {/* Certifications */}
         <div className="bg-card rounded-2xl p-8 border border-primary/20 mb-16">
           <h3 className="text-2xl font-bold text-center mb-8">Certifications & Compliance</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-            {certifications.map((cert, index) => (
-              <div key={index} className="text-center p-4 rounded-lg bg-muted/50">
-                <h4 className="font-semibold mb-2">{cert.name}</h4>
-                <Badge 
-                  variant={cert.status === 'Certified' || cert.status === 'Compliant' ? 'default' : 'secondary'}
-                  className="text-xs"
-                >
-                  {cert.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
+          <ComplianceBadges
+            layout="horizontal"
+            size="lg"
+            showTitle={false}
+          />
         </div>
 
         {/* Trust Statement */}
@@ -154,7 +141,7 @@ export const SecuritySection = () => {
               Your Data, Your Control
             </h3>
             <p className="text-lg text-muted-foreground mb-6 max-w-2xl mx-auto">
-              We believe privacy is a fundamental right. That's why we've built AxWise 
+              We believe privacy is a fundamental right. That's why we've built AxWise
               with privacy-by-design principles and give you complete control over your data.
             </p>
             <div className="flex flex-wrap justify-center gap-4">

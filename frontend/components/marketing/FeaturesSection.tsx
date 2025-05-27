@@ -39,7 +39,7 @@ export const FeaturesSection = () => {
       icon: Shield,
       title: "Enterprise Security",
       description: "Bank-grade security to protect your sensitive research data",
-      benefits: ["End-to-end encryption", "SOC 2 compliance", "Data residency"]
+      benefits: ["End-to-end encryption", "SOC 2 in progress", "Data residency"]
     }
   ];
 
@@ -52,7 +52,7 @@ export const FeaturesSection = () => {
             Everything You Need to <span className="text-primary">Transform</span> Research into Results
           </h2>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-            AxWise combines powerful AI with intuitive design to make user research analysis 
+            AxWise combines powerful AI with intuitive design to make user research analysis
             faster, deeper, and more actionable than ever before.
           </p>
         </div>
