@@ -6,15 +6,6 @@ import { Star, Quote } from 'lucide-react';
 export const TestimonialsSection = () => {
   const testimonials = [
     {
-      name: "Krists",
-      role: "Senior Product Manager",
-      company: "VMware/Volkswagen",
-      avatar: "KR",
-      rating: 5,
-      quote: "AxWise transformed how we handle user research at scale. The AI-powered insights help us identify patterns across interviews that would take our team weeks to discover manually.",
-      highlight: "Weeks → Hours"
-    },
-    {
       name: "Denis",
       role: "Product Designer",
       company: "Alibaba",
