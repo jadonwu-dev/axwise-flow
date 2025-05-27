@@ -134,7 +134,7 @@ export const TestimonialsSection = () => {
                 <img
                   src="/constructor-university-logo.svg"
                   alt="Constructor University"
-                  className="h-12 w-auto dark:invert"
+                  className="h-12 w-auto"
                 />
               </div>
               <Badge variant="default" className="text-sm px-4 py-2 mb-4 bg-primary text-primary-foreground">
