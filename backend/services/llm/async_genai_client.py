@@ -334,22 +334,77 @@ class AsyncGenAIClient:
                     # If it's already a dict or other serializable type
                     return response.parsed
 
+            # Debug the response structure first
+            logger.info(f"Response type: {type(response)}")
+            logger.info(f"Response has text: {hasattr(response, 'text')}")
+            logger.info(f"Response has candidates: {hasattr(response, 'candidates')}")
+
+            # Check for safety filters or other blocking
+            if hasattr(response, 'candidates') and response.candidates:
+                for i, candidate in enumerate(response.candidates):
+                    logger.info(f"Candidate {i}: finish_reason={getattr(candidate, 'finish_reason', 'unknown')}")
+                    if hasattr(candidate, 'safety_ratings'):
+                        logger.info(f"Candidate {i} safety ratings: {candidate.safety_ratings}")
+
+            # Check if response was blocked
+            if hasattr(response, 'prompt_feedback'):
+                logger.info(f"Prompt feedback: {response.prompt_feedback}")
+
             # Extract text from response
+            text_response = None
             try:
                 text_response = response.text
+                logger.info(f"Successfully extracted text using response.text: '{text_response}' (length: {len(text_response) if text_response else 0})")
             except Exception as e:
-                # Fallback method if .text property fails
-                logger.warning(f"Could not get response.text: {e}. Trying to extract from candidates...")
+                logger.warning(f"Could not get response.text: {e}")
+                logger.warning(f"Exception type: {type(e)}, Exception details: {str(e)}")
+
+            # If text_response is None or empty, try alternative methods
+            if not text_response:
+                logger.warning(f"response.text returned None or empty, trying alternative extraction methods...")
                 try:
-                    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                        text_response = response.candidates[0].content.parts[0].text
-                        logger.info(f"Successfully extracted text from response.candidates[0].content.parts[0].text")
+                    # Method 1: Try candidates
+                    if hasattr(response, 'candidates') and response.candidates:
+                        logger.info(f"Found {len(response.candidates)} candidates")
+                        candidate = response.candidates[0]
+                        logger.info(f"Candidate type: {type(candidate)}")
+                        logger.info(f"Candidate attributes: {dir(candidate)}")
+
+                        if hasattr(candidate, 'content') and candidate.content:
+                            logger.info(f"Candidate content type: {type(candidate.content)}")
+                            logger.info(f"Candidate content attributes: {dir(candidate.content)}")
+
+                            if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                                logger.info(f"Found {len(candidate.content.parts)} parts")
+                                part = candidate.content.parts[0]
+                                logger.info(f"Part type: {type(part)}")
+                                logger.info(f"Part attributes: {dir(part)}")
+
+                                if hasattr(part, 'text'):
+                                    text_response = part.text
+                                    logger.info(f"Successfully extracted text from parts[0].text: '{text_response}' (length: {len(text_response) if text_response else 0})")
+                                else:
+                                    logger.error(f"Part has no text attribute")
+                            else:
+                                logger.error(f"Content has no parts or parts is empty")
+                        else:
+                            logger.error(f"Candidate has no content or content is empty")
                     else:
-                        logger.error(f"No valid content in response candidates after response.text failed.")
-                        raise LLMResponseParseError(f"Failed to extract text from response: {str(e)}")
+                        logger.error(f"Response has no candidates or candidates is empty")
+
+                    # Method 2: Try to convert response to string
+                    if not text_response:
+                        logger.warning(f"Trying to convert response to string...")
+                        text_response = str(response)
+                        logger.info(f"Response as string: '{text_response}' (length: {len(text_response)})")
+
                 except Exception as nested_e:
-                    logger.error(f"Failed to extract text from candidates: {str(nested_e)}")
-                    raise LLMResponseParseError(f"Failed to extract text from response: {str(e)} -> {str(nested_e)}")
+                    logger.error(f"Failed to extract text using alternative methods: {str(nested_e)}")
+
+            # Final check
+            if not text_response:
+                logger.error(f"All text extraction methods failed. Response: {response}")
+                raise LLMResponseParseError(f"Failed to extract any text from response")
 
             # Check if response is empty or very short
             # Special case for industry detection which can return just the industry name
@@ -357,7 +412,7 @@ class AsyncGenAIClient:
                 if not text_response:
                     logger.error(f"Empty response received for task '{task}'")
                     raise LLMResponseParseError(f"Empty response received for task '{task}'")
-            elif not text_response or len(text_response.strip()) < 10:
+            elif not text_response or len(text_response.strip()) < 2:  # More lenient for text generation
                 logger.error(f"Empty or very short response received for task '{task}'. Response: '{text_response}'")
                 raise LLMResponseParseError(f"Empty or very short response received for task '{task}'")
 

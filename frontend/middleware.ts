@@ -13,7 +13,10 @@ const isPublicRoute = createRouteMatcher([
   '/roadmap',
   '/onepager-presentation(.*)',
   '/workshop-designthinking(.*)',
+  '/customer-research(.*)', // Allow customer research feature
+  '/research-dashboard(.*)', // Allow research dashboard
   '/api/webhook(.*)', // Allow webhooks
+  '/api/research(.*)', // Allow research API routes
 ]);
 
 // Define protected routes that require authentication

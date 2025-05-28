@@ -15,6 +15,7 @@ from .tasks.transcript_structuring import TranscriptStructuringPrompts
 from .tasks.evidence_linking import EvidenceLinkingPrompts
 from .tasks.trait_formatting import TraitFormattingPrompts
 from .tasks.prd_generation import PRDGenerationPrompts
+from .tasks.customer_research import CustomerResearchPrompts
 
 class GeminiPrompts:
     """
@@ -36,6 +37,7 @@ class GeminiPrompts:
         "evidence_linking": EvidenceLinkingPrompts.get_prompt,
         "trait_formatting": TraitFormattingPrompts.get_prompt,
         "prd_generation": PRDGenerationPrompts.get_prompt,
+        "customer_research_questions": CustomerResearchPrompts.get_prompt,
     }
 
     DEFAULT_PROMPT = "Analyze the following text."

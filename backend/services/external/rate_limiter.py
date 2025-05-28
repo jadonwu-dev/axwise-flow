@@ -95,6 +95,10 @@ ENDPOINT_LIMITS: Dict[str, str] = {
     # Health check - very permissive
     "/health": "120/minute",
     "/api/health": "120/minute",
+
+    # Customer research endpoints - moderate limits
+    "/api/research/chat": "30/minute",
+    "/api/research/generate-questions": "20/minute",
 }
 
 def get_path_key(request: Request) -> str:

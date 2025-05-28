@@ -68,6 +68,20 @@ export function Header(): JSX.Element {
             </Link>
 
             <Link
+              href="/customer-research"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+              onClick={() => {
+                try {
+                  trackNavigation('Research Helper', pathname, '/customer-research', ButtonLocation.HEADER);
+                } catch (error) {
+                  console.warn('Analytics tracking failed:', error);
+                }
+              }}
+            >
+              Research Helper
+            </Link>
+
+            <Link
               href="/pricing"
               className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
               onClick={() => {
@@ -140,6 +154,21 @@ export function Header(): JSX.Element {
               }}
             >
               Dashboard
+            </Link>
+
+            <Link
+              href="/customer-research"
+              className="text-sm font-medium text-foreground no-underline transition-all duration-300 ease-in-out hover:text-primary"
+              onClick={() => {
+                try {
+                  trackNavigation('Research Helper', pathname, '/customer-research', ButtonLocation.MOBILE_MENU);
+                } catch (error) {
+                  console.warn('Analytics tracking failed:', error);
+                }
+                closeMobileMenu();
+              }}
+            >
+              Research Helper
             </Link>
 
             <Link

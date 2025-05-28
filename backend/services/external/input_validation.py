@@ -199,7 +199,9 @@ def configure_input_validation(app):
         """Validate and sanitize input data"""
         # Skip validation for certain paths
         path = request.url.path
-        if path.startswith(("/docs", "/redoc", "/openapi.json", "/static")) or path == "/api/data":
+        if (path.startswith(("/docs", "/redoc", "/openapi.json", "/static")) or
+            path == "/api/data" or
+            path.startswith("/api/research")):  # Skip validation for research endpoints
             logger.info(f"Skipping input validation for path: {path}")
             return await call_next(request)
 
