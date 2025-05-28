@@ -56,9 +56,9 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
 
   const getStatusBadge = (session: ResearchSession) => {
     if (session.status === 'completed') {
-      return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+      return <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">Completed</Badge>;
     } else if (session.questions_generated) {
-      return <Badge className="bg-blue-100 text-blue-800">Questions Ready</Badge>;
+      return <Badge className="bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400">Questions Ready</Badge>;
     } else {
       return <Badge variant="secondary">In Progress</Badge>;
     }
@@ -80,7 +80,7 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-2 border-gray-200 bg-white hover:bg-gray-50"
+            className="h-8 gap-2"
           >
             <History className="h-4 w-4" />
             Sessions
@@ -101,7 +101,7 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
             </div>
 
             {sessions.length === 0 ? (
-              <div className="text-center py-6 text-gray-500">
+              <div className="text-center py-6 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No research sessions yet</p>
                 <p className="text-xs">Start a conversation to create your first session</p>
@@ -113,8 +113,8 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
                     key={session.session_id}
                     className={`p-3 cursor-pointer transition-colors ${
                       session.session_id === currentSessionId
-                        ? 'border-blue-200 bg-blue-50'
-                        : 'hover:bg-gray-50'
+                        ? 'border-primary bg-primary/5'
+                        : 'hover:bg-muted/50'
                     }`}
                     onClick={() => {
                       if (onLoadSession && session.session_id !== currentSessionId) {
@@ -131,14 +131,14 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
                           </p>
                           <div className="flex items-center gap-2 mt-1">
                             {getStatusBadge(session)}
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                               {session.message_count} messages
                             </span>
                           </div>
                         </div>
                         <div className="flex gap-1 ml-2">
                           {session.session_id === currentSessionId && (
-                            <Badge variant="outline" className="text-xs border-blue-500 text-blue-700">
+                            <Badge variant="outline" className="text-xs border-primary text-primary">
                               Current
                             </Badge>
                           )}
@@ -158,7 +158,7 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {formatDate(session.created_at)}
@@ -172,7 +172,7 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
             )}
 
             <div className="border-t pt-3">
-              <div className="text-xs text-gray-600 space-y-1">
+              <div className="text-xs text-muted-foreground space-y-1">
                 <p>💡 <strong>Tip:</strong> Sessions are automatically saved as you chat</p>
                 <p>🔄 Click a session to continue where you left off</p>
               </div>

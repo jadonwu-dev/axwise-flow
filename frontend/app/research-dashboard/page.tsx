@@ -95,11 +95,11 @@ export default function ResearchDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 max-w-7xl">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold">Research Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage and review customer research sessions</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Research Dashboard</h1>
+          <p className="text-muted-foreground mt-2">Manage and review customer research sessions</p>
           <Button
             onClick={() => window.location.href = '/customer-research'}
             className="mt-4"
@@ -108,7 +108,7 @@ export default function ResearchDashboard() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
           {/* Sessions List */}
           <div className="xl:col-span-2">
             <Card className="h-fit">
@@ -123,7 +123,7 @@ export default function ResearchDashboard() {
                   {sessions.map((session) => (
                     <Card
                       key={session.session_id}
-                      className="p-4 hover:bg-gray-50 transition-colors cursor-pointer border-l-4 border-l-blue-500"
+                      className="p-3 lg:p-4 hover:bg-muted/50 transition-colors cursor-pointer border-l-4 border-l-primary"
                       onClick={() => viewSession(session.session_id)}
                     >
                       <div className="flex items-start justify-between">
@@ -143,13 +143,13 @@ export default function ResearchDashboard() {
                               {session.status}
                             </Badge>
                             {session.questions_generated && (
-                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
+                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
                                 Questions Generated
                               </Badge>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {new Date(session.created_at).toLocaleDateString()}
@@ -187,9 +187,9 @@ export default function ResearchDashboard() {
                   ))}
 
                   {sessions.length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
+                    <div className="text-center py-12 text-muted-foreground">
                       <div className="mb-4">
-                        <Target className="h-12 w-12 mx-auto text-gray-300" />
+                        <Target className="h-12 w-12 mx-auto text-muted-foreground/50" />
                       </div>
                       <h3 className="text-lg font-medium mb-2">No research sessions found</h3>
                       <p className="text-sm mb-4">Start your first customer research session</p>
@@ -227,22 +227,22 @@ export default function ResearchDashboard() {
 
                     <div className="space-y-3">
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Business Idea</h5>
-                        <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                        <h5 className="text-sm font-medium text-foreground mb-1">Business Idea</h5>
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
                           {selectedSession.business_idea || 'Not specified'}
                         </p>
                       </div>
 
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Target Customer</h5>
-                        <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                        <h5 className="text-sm font-medium text-foreground mb-1">Target Customer</h5>
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
                           {selectedSession.target_customer || 'Not specified'}
                         </p>
                       </div>
 
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Problem</h5>
-                        <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                        <h5 className="text-sm font-medium text-foreground mb-1">Problem</h5>
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
                           {selectedSession.problem || 'Not specified'}
                         </p>
                       </div>
@@ -256,10 +256,10 @@ export default function ResearchDashboard() {
                     </div>
 
                     <div>
-                      <h5 className="text-sm font-medium text-gray-700 mb-2">
+                      <h5 className="text-sm font-medium text-foreground mb-2">
                         Messages ({selectedSession.messages?.length || 0})
                       </h5>
-                      <ScrollArea className="h-40 border rounded p-3 bg-gray-50">
+                      <ScrollArea className="h-40 border rounded p-3 bg-muted">
                         {selectedSession.messages && selectedSession.messages.length > 0 ? (
                           selectedSession.messages.map((msg: any, idx: number) => (
                             <div key={idx} className="mb-3 last:mb-0">
@@ -267,17 +267,17 @@ export default function ResearchDashboard() {
                                 <Badge variant={msg.role === 'user' ? 'default' : 'secondary'} className="text-xs">
                                   {msg.role === 'user' ? 'User' : 'AI'}
                                 </Badge>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-muted-foreground">
                                   {new Date(msg.timestamp).toLocaleTimeString()}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-700 pl-2 border-l-2 border-gray-200">
+                              <p className="text-sm text-foreground pl-2 border-l-2 border-border">
                                 {msg.content}
                               </p>
                             </div>
                           ))
                         ) : (
-                          <div className="text-center py-4 text-gray-500 text-sm">
+                          <div className="text-center py-4 text-muted-foreground text-sm">
                             No messages found
                           </div>
                         )}
@@ -286,23 +286,23 @@ export default function ResearchDashboard() {
 
                     {selectedSession.research_questions && (
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">Generated Questions</h5>
+                        <h5 className="text-sm font-medium text-foreground mb-2">Generated Questions</h5>
                         <div className="space-y-2 text-sm">
-                          <div className="flex justify-between items-center p-2 bg-green-50 rounded">
-                            <span className="font-medium text-green-800">Problem Discovery</span>
-                            <Badge variant="outline" className="text-green-700">
+                          <div className="flex justify-between items-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                            <span className="font-medium text-green-800 dark:text-green-400">Problem Discovery</span>
+                            <Badge variant="outline" className="text-green-700 dark:text-green-400">
                               {selectedSession.research_questions.problemDiscovery?.length || 0}
                             </Badge>
                           </div>
-                          <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                            <span className="font-medium text-blue-800">Solution Validation</span>
-                            <Badge variant="outline" className="text-blue-700">
+                          <div className="flex justify-between items-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                            <span className="font-medium text-blue-800 dark:text-blue-400">Solution Validation</span>
+                            <Badge variant="outline" className="text-blue-700 dark:text-blue-400">
                               {selectedSession.research_questions.solutionValidation?.length || 0}
                             </Badge>
                           </div>
-                          <div className="flex justify-between items-center p-2 bg-purple-50 rounded">
-                            <span className="font-medium text-purple-800">Follow-up</span>
-                            <Badge variant="outline" className="text-purple-700">
+                          <div className="flex justify-between items-center p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
+                            <span className="font-medium text-purple-800 dark:text-purple-400">Follow-up</span>
+                            <Badge variant="outline" className="text-purple-700 dark:text-purple-400">
                               {selectedSession.research_questions.followUp?.length || 0}
                             </Badge>
                           </div>
@@ -311,8 +311,8 @@ export default function ResearchDashboard() {
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-gray-500">
-                    <Eye className="h-8 w-8 mx-auto mb-3 text-gray-300" />
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Eye className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
                     <p className="text-sm">Click on a session to view details</p>
                   </div>
                 )}

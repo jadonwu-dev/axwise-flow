@@ -62,40 +62,40 @@ export function ContextPanel({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Target className="h-5 w-5 text-blue-600" />
+            <Target className="h-5 w-5 text-primary" />
             Research Progress
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Completion</span>
+              <span className="text-sm text-muted-foreground">Completion</span>
               <span className="text-sm font-medium">{completionPercentage}%</span>
             </div>
             <Progress value={completionPercentage} className="h-2" />
 
             <div className="space-y-2 mt-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className={`h-4 w-4 ${context.businessIdea ? 'text-green-600' : 'text-gray-300'}`} />
-                <span className={`text-sm ${context.businessIdea ? 'text-green-600' : 'text-gray-500'}`}>
+                <CheckCircle className={`h-4 w-4 ${context.businessIdea ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                <span className={`text-sm ${context.businessIdea ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                   Business idea defined
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className={`h-4 w-4 ${context.targetCustomer ? 'text-green-600' : 'text-gray-300'}`} />
-                <span className={`text-sm ${context.targetCustomer ? 'text-green-600' : 'text-gray-500'}`}>
+                <CheckCircle className={`h-4 w-4 ${context.targetCustomer ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                <span className={`text-sm ${context.targetCustomer ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                   Potential Target customer identified
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className={`h-4 w-4 ${context.problem ? 'text-green-600' : 'text-gray-300'}`} />
-                <span className={`text-sm ${context.problem ? 'text-green-600' : 'text-gray-500'}`}>
+                <CheckCircle className={`h-4 w-4 ${context.problem ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                <span className={`text-sm ${context.problem ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                   Problem understood
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className={`h-4 w-4 ${context.questionsGenerated ? 'text-green-600' : 'text-gray-300'}`} />
-                <span className={`text-sm ${context.questionsGenerated ? 'text-green-600' : 'text-gray-500'}`}>
+                <CheckCircle className={`h-4 w-4 ${context.questionsGenerated ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                <span className={`text-sm ${context.questionsGenerated ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                   Questions generated
                 </span>
               </div>
@@ -108,68 +108,68 @@ export function ContextPanel({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-yellow-600" />
+            <Lightbulb className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
             Your Research Context
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={`h-4 w-4 ${context.businessIdea ? 'text-green-600' : 'text-gray-300'}`} />
-              <Badge variant="outline" className={context.businessIdea ? 'border-green-600 text-green-600' : ''}>
+              <CheckCircle className={`h-4 w-4 ${context.businessIdea ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+              <Badge variant="outline" className={context.businessIdea ? 'border-green-600 dark:border-green-400 text-green-600 dark:text-green-400' : ''}>
                 Business idea defined
               </Badge>
             </div>
             {context.businessIdea && (
-              <p className="text-sm text-gray-700 ml-6">{context.businessIdea}</p>
+              <p className="text-sm text-muted-foreground ml-6">{context.businessIdea}</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={`h-4 w-4 ${context.targetCustomer ? 'text-green-600' : 'text-gray-300'}`} />
-              <Badge variant="outline" className={context.targetCustomer ? 'border-green-600 text-green-600' : ''}>
+              <CheckCircle className={`h-4 w-4 ${context.targetCustomer ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+              <Badge variant="outline" className={context.targetCustomer ? 'border-green-600 dark:border-green-400 text-green-600 dark:text-green-400' : ''}>
                 Potential Target customer identified
               </Badge>
             </div>
             {context.targetCustomer && (
-              <p className="text-sm text-gray-700 ml-6">{context.targetCustomer}</p>
+              <p className="text-sm text-muted-foreground ml-6">{context.targetCustomer}</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={`h-4 w-4 ${context.problem ? 'text-green-600' : 'text-gray-300'}`} />
-              <Badge variant="outline" className={context.problem ? 'border-green-600 text-green-600' : ''}>
+              <CheckCircle className={`h-4 w-4 ${context.problem ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+              <Badge variant="outline" className={context.problem ? 'border-green-600 dark:border-green-400 text-green-600 dark:text-green-400' : ''}>
                 Problem understood
               </Badge>
             </div>
             {context.problem && (
-              <p className="text-sm text-gray-700 ml-6">{context.problem}</p>
+              <p className="text-sm text-muted-foreground ml-6">{context.problem}</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={`h-4 w-4 ${context.questionsGenerated ? 'text-green-600' : 'text-gray-300'}`} />
-              <Badge variant="outline" className={context.questionsGenerated ? 'border-green-600 text-green-600' : ''}>
+              <CheckCircle className={`h-4 w-4 ${context.questionsGenerated ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+              <Badge variant="outline" className={context.questionsGenerated ? 'border-green-600 dark:border-green-400 text-green-600 dark:text-green-400' : ''}>
                 Questions generated
               </Badge>
             </div>
             {context.questionsGenerated && (
-              <p className="text-sm text-gray-700 ml-6">Research questions have been generated and confirmed in chat</p>
+              <p className="text-sm text-muted-foreground ml-6">Research questions have been generated and confirmed in chat</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={`h-4 w-4 ${context.multiStakeholderConsidered ? 'text-green-600' : 'text-gray-300'}`} />
-              <Badge variant="outline" className={context.multiStakeholderConsidered ? 'border-green-600 text-green-600' : ''}>
+              <CheckCircle className={`h-4 w-4 ${context.multiStakeholderConsidered ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+              <Badge variant="outline" className={context.multiStakeholderConsidered ? 'border-green-600 dark:border-green-400 text-green-600 dark:text-green-400' : ''}>
                 Multi-stakeholder approach considered
               </Badge>
             </div>
             {context.multiStakeholderConsidered && (
-              <p className="text-sm text-gray-700 ml-6">Strategic research approach for multiple user groups reviewed</p>
+              <p className="text-sm text-muted-foreground ml-6">Strategic research approach for multiple user groups reviewed</p>
             )}
           </div>
         </CardContent>

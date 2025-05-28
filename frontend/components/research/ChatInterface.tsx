@@ -309,54 +309,55 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto grid grid-cols-3 gap-6">
-      {/* Chat Interface */}
-      <Card className="col-span-2 flex flex-col h-[600px]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-600" />
-            <h3 className="font-semibold">Customer Research Assistant</h3>
+    <div className="w-full max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+        {/* Chat Interface */}
+        <Card className="lg:col-span-2 flex flex-col h-[500px] lg:h-[600px]">
+          {/* Header */}
+          <div className="flex items-center justify-between p-3 lg:p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-sm lg:text-base">Customer Research Assistant</h3>
+            </div>
+            <div className="flex gap-2">
+              {questions && (
+                <Button variant="outline" size="sm" onClick={() => exportQuestions('pdf')}>
+                  <Download className="h-4 w-4 mr-1 lg:mr-2" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {questions && (
-              <Button variant="outline" size="sm" onClick={() => exportQuestions('pdf')}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            )}
-          </div>
-        </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((message, index) => (
-            <div key={message.id}>
-              <div
-                className={`flex gap-3 ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {message.role === 'assistant' && (
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-blue-600" />
-                    </div>
-                  </div>
-                )}
+          {/* Messages */}
+          <ScrollArea className="flex-1 p-3 lg:p-4">
+            <div className="space-y-4">
+              {messages.map((message, index) => (
+                <div key={message.id}>
+                  <div
+                    className={`flex gap-2 lg:gap-3 ${
+                      message.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    {message.role === 'assistant' && (
+                      <div className="flex-shrink-0">
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                          <Bot className="h-3 w-3 lg:h-4 lg:w-4 text-primary" />
+                        </div>
+                      </div>
+                    )}
 
-                <div
-                  className={`max-w-[80%] ${
-                    message.content === 'MULTI_STAKEHOLDER_COMPONENT' || message.content === 'NEXT_STEPS_COMPONENT'
-                      ? ''
-                      : `rounded-lg p-3 ${
-                          message.role === 'user'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-900'
-                        }`
-                  }`}
-                >
+                    <div
+                      className={`max-w-[85%] lg:max-w-[80%] ${
+                        message.content === 'MULTI_STAKEHOLDER_COMPONENT' || message.content === 'NEXT_STEPS_COMPONENT'
+                          ? ''
+                          : `rounded-lg p-2 lg:p-3 text-sm lg:text-base ${
+                              message.role === 'user'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary text-secondary-foreground border border-border'
+                            }`
+                      }`}
+                    >
                   {message.content === 'MULTI_STAKEHOLDER_COMPONENT' ? (
                     <MultiStakeholderChatMessage
                       onContinueWithCurrent={() => {
@@ -501,8 +502,8 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
                 {message.role === 'user' && (
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-gray-600" />
+                    <div className="w-6 h-6 lg:w-8 lg:h-8 bg-muted rounded-full flex items-center justify-center">
+                      <User className="h-3 w-3 lg:h-4 lg:w-4 text-muted-foreground" />
                     </div>
                   </div>
                 )}
@@ -510,9 +511,9 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
               {/* Show suggestions after assistant messages */}
               {message.role === 'assistant' && index === messages.length - 1 && !isLoading && currentSuggestions.length > 0 && (
-                <div className="mt-3 ml-11">
+                <div className="mt-3 ml-8 lg:ml-11">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs text-gray-600">💡 Quick replies:</span>
+                    <span className="text-xs text-muted-foreground">💡 Quick replies:</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {currentSuggestions.map((suggestion, idx) => (
@@ -520,7 +521,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                         key={idx}
                         variant="outline"
                         size="sm"
-                        className="h-auto py-1 px-2 text-xs hover:bg-blue-50 hover:border-blue-300"
+                        className="h-auto py-1 px-2 text-xs hover:bg-muted"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
@@ -533,17 +534,17 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
           ))}
 
           {isLoading && (
-            <div className="flex gap-3 justify-start">
+            <div className="flex gap-2 lg:gap-3 justify-start">
               <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Bot className="h-4 w-4 text-blue-600" />
+                <div className="w-6 h-6 lg:w-8 lg:h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Bot className="h-3 w-3 lg:h-4 lg:w-4 text-primary" />
                 </div>
               </div>
-              <div className="bg-gray-100 rounded-lg p-3">
+              <div className="bg-muted rounded-lg p-2 lg:p-3">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
             </div>
@@ -552,42 +553,43 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
         <div ref={messagesEndRef} />
       </ScrollArea>
 
-      {/* Input */}
-      <div className="p-4 border-t">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe your business idea or ask for help..."
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isLoading}
-            size="sm"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {/* Input */}
+          <div className="p-3 lg:p-4 border-t">
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Describe your business idea or ask for help..."
+                disabled={isLoading}
+                className="flex-1 text-sm lg:text-base"
+              />
+              <Button
+                onClick={() => handleSend()}
+                disabled={!input.trim() || isLoading}
+                size="sm"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
+        </Card>
+
+        {/* Context Panel - Hidden on mobile, shown on desktop */}
+        <div className="hidden lg:block lg:col-span-1">
+          <div className="h-[600px] overflow-y-auto space-y-4">
+            <ContextPanel
+              context={context}
+              questions={questions || undefined}
+              onExport={() => exportQuestions('pdf')}
+              onContinueToAnalysis={continueToAnalysis}
+            />
+          </div>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Press Enter to send, Shift+Enter for new line
-        </p>
       </div>
-    </Card>
-
-    {/* Context Panel - Always show */}
-    <div className="col-span-1 h-[600px] overflow-y-auto space-y-4">
-      <ContextPanel
-        context={context}
-        questions={questions || undefined}
-        onExport={() => exportQuestions('pdf')}
-        onContinueToAnalysis={continueToAnalysis}
-      />
-
-
     </div>
-  </div>
   );
 }
