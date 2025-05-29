@@ -1,6 +1,6 @@
 {
-  "name": "axwise-frontend",
-  "version": "1.0.0",
+  "name": "interview-analysis-frontend",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
