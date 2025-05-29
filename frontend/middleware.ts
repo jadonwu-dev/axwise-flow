@@ -30,7 +30,6 @@ const isProtectedRoute = createRouteMatcher([
   '/admin(.*)',
   '/clerk-debug(.*)',
   '/firebase-official(.*)',
-  '/firebase-test(.*)',
   '/fetch-debug(.*)',
   '/integration-test(.*)',
   '/test-clerk(.*)'

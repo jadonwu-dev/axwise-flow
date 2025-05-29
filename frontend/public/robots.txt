@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Allow crawling of main pages
+Allow: /onepager-presentation/
+Allow: /workshop-designthinking/
+
+# Disallow sensitive areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /_next/
+Disallow: /unified-dashboard/
+Disallow: /sign-in/
+Disallow: /sign-up/
+
+# Sitemap
+Sitemap: https://axwise.de/sitemap.xml

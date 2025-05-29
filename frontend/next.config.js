@@ -61,6 +61,136 @@ const nextConfig = {
   poweredByHeader: false,
   generateEtags: false,
 
+  // Add comprehensive security headers
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.axwise.de https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.axwise.de https://axwise-backend-oicbg7twja-ez.a.run.app https://clerk.axwise.de https://api.stripe.com;",
+          },
+        ],
+      },
+      // Block access to sensitive files and directories
+      {
+        source: '/.git/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow',
+          },
+        ],
+      },
+      {
+        source: '/.env:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow',
+          },
+        ],
+      },
+      {
+        source: '/config/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow',
+          },
+        ],
+      },
+    ];
+  },
+
+  // Add redirects to block malicious requests
+  async redirects() {
+    return [
+      // Block environment file access
+      {
+        source: '/.env:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      {
+        source: '/backend/.env:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      {
+        source: '/api/.env:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      // Block git access
+      {
+        source: '/.git/:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      // Block PHP info files
+      {
+        source: '/phpinfo:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      {
+        source: '/info.php',
+        destination: '/404',
+        permanent: false,
+      },
+      // Block AWS credentials
+      {
+        source: '/.aws/:path*',
+        destination: '/404',
+        permanent: false,
+      },
+      // Block config files
+      {
+        source: '/config.json',
+        destination: '/404',
+        permanent: false,
+      },
+      {
+        source: '/config.yml',
+        destination: '/404',
+        permanent: false,
+      },
+      {
+        source: '/config.yaml',
+        destination: '/404',
+        permanent: false,
+      },
+      // Redirect discord to contact page
+      {
+        source: '/discord',
+        destination: '/contact',
+        permanent: true,
+      },
+    ];
+  },
+
   // Add rewrites for legacy static pages
   async rewrites() {
     return [
