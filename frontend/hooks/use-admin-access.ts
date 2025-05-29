@@ -32,15 +32,17 @@ export function useAdminAccess() {
     const userEmail = user.primaryEmailAddress?.emailAddress;
     const emailIsAdmin = userEmail && adminEmails.includes(userEmail);
 
-    // Debug logging
-    console.log('🔍 Admin Access Debug:', {
-      userEmail,
-      userRole,
-      isUserAdmin,
-      emailIsAdmin,
-      adminEmails,
-      finalIsAdmin: isUserAdmin || emailIsAdmin || false
-    });
+    // Debug logging (admin only)
+    if (userEmail === 'vitalijs@axwise.de') {
+      console.log('🔍 Admin Access Debug:', {
+        userEmail,
+        userRole,
+        isUserAdmin,
+        emailIsAdmin,
+        adminEmails,
+        finalIsAdmin: isUserAdmin || emailIsAdmin || false
+      });
+    }
 
     setIsAdmin(isUserAdmin || emailIsAdmin || false);
     setIsLoading(false);

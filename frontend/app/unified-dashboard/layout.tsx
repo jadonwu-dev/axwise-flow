@@ -67,15 +67,7 @@ export default function UnifiedDashboardLayout({
         </div>
       </Tabs>
 
-      {/* Firebase Test Link */}
-      <div className="mt-4 text-center">
-        <Link
-          href="/firebase-test"
-          className="text-sm text-blue-500 hover:text-blue-700 underline"
-        >
-          Firebase Authentication Test
-        </Link>
-      </div>
+
     </div>
   );
 }

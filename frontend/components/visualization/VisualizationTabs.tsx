@@ -30,6 +30,7 @@ import { apiClient } from '@/lib/apiClient'; // Keep apiClient if needed elsewhe
 import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
 import { ExportButton } from './ExportButton';
 import type { DetailedAnalysisResult } from '@/types/api'; // Remove PrioritizedInsight import
+import { useUser } from '@clerk/nextjs';
 // import { useAnalysisStore } from '@/store/useAnalysisStore'; // Remove store import if only used for priority insights
 
 interface VisualizationTabsProps {
@@ -55,6 +56,7 @@ export default function VisualizationTabsRefactored({
 }: VisualizationTabsProps) {
   // No router needed
   const searchParams = useSearchParams();
+  const { user } = useUser();
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(
     initialTab as TabValue || activeTabFromUrl || 'themes'
@@ -320,10 +322,10 @@ export default function VisualizationTabsRefactored({
           </Tabs>
         )}
 
-        {/* Debug panel for development - hidden in production */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* Admin debug panel - only visible to admin users */}
+        {process.env.NODE_ENV === 'development' && user?.primaryEmailAddress?.emailAddress === 'vitalijs@axwise.de' && (
           <div className="mt-8 p-4 border border-gray-200 rounded-md bg-gray-50">
-            <h3 className="font-medium mb-2">Debug Information</h3>
+            <h3 className="font-medium mb-2">Debug Information (Admin Only)</h3>
             <div className="space-y-2">
               <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
               <p><strong>Error:</strong> {fetchError || 'None'}</p>
@@ -335,6 +337,8 @@ export default function VisualizationTabsRefactored({
                 (analysis?.sentiment?.sentimentStatements)) ? 'Yes' : 'No'
               }</p>
               <p><strong>Has Results Property:</strong> {analysis?.results ? 'Yes' : 'No'}</p>
+              <p><strong>Server Data:</strong> {serverAnalysisData ? 'Yes' : 'No'}</p>
+              <p><strong>User Email:</strong> {user?.primaryEmailAddress?.emailAddress || 'None'}</p>
 
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm font-medium">Raw Analysis Data</summary>
@@ -345,6 +349,7 @@ export default function VisualizationTabsRefactored({
             </div>
           </div>
         )}
+
       </CardContent>
     </Card>
   );

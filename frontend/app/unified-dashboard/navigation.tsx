@@ -85,10 +85,10 @@ export default function DashboardNav(): JSX.Element { // Add return type
         </Link>
       )}
 
-      {/* Temporary debug info - remove after testing */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Admin debug info */}
+      {process.env.NODE_ENV === 'development' && user?.primaryEmailAddress?.emailAddress === 'vitalijs@axwise.de' && (
         <div className="text-xs text-muted-foreground ml-4 p-2 bg-muted rounded">
-          Debug: isAdmin={isAdmin.toString()}, isLoading={isLoading.toString()}, email={user?.primaryEmailAddress?.emailAddress}
+          Admin Debug: isAdmin={isAdmin.toString()}, isLoading={isLoading.toString()}, email={user?.primaryEmailAddress?.emailAddress}
         </div>
       )}
     </nav>

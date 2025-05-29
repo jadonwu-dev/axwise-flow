@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSubscriptionInfo, resetSubscription } from '@/lib/api/subscription';
-import { toast } from 'sonner';
+import { useToast } from '@/components/providers/toast-provider';
+import { useUser } from '@clerk/nextjs';
+import { RefreshCw } from 'lucide-react';
 
 interface SubscriptionInfo {
   tier: string;
@@ -18,9 +20,13 @@ export function SubscriptionStatus() {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const { showToast } = useToast();
+  const { user } = useUser();
 
-  // Check if we're in development mode
+  // Check if we're in development mode and user is admin
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const isAdmin = user?.primaryEmailAddress?.emailAddress === 'vitalijs@axwise.de';
+  const showDebugTools = isDevelopment && isAdmin;
 
   const fetchSubscriptionInfo = async () => {
     try {
@@ -39,11 +45,11 @@ export function SubscriptionStatus() {
     try {
       setResetting(true);
       await resetSubscription();
-      toast.success('Subscription reset successfully');
+      showToast('Subscription reset successfully', { variant: 'success' });
       await fetchSubscriptionInfo(); // Refresh the info
     } catch (error) {
       console.error('Error resetting subscription:', error);
-      toast.error('Failed to reset subscription');
+      showToast('Failed to reset subscription', { variant: 'error' });
     } finally {
       setResetting(false);
     }
@@ -51,6 +57,11 @@ export function SubscriptionStatus() {
 
   useEffect(() => {
     fetchSubscriptionInfo();
+
+    // Set up periodic refresh every 10 seconds to catch subscription updates
+    const interval = setInterval(fetchSubscriptionInfo, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -111,17 +122,30 @@ export function SubscriptionStatus() {
         </Badge>
       )}
 
-      {/* Development mode reset button */}
-      {isDevelopment && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleReset}
-          disabled={resetting}
-          className="text-xs px-2 py-1 h-6"
-        >
-          {resetting ? 'Resetting...' : 'Reset'}
-        </Button>
+      {/* Admin debug tools */}
+      {showDebugTools && (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchSubscriptionInfo}
+            disabled={loading}
+            className="text-xs px-2 py-1 h-6"
+            title="Refresh subscription status"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            disabled={resetting}
+            className="text-xs px-2 py-1 h-6"
+            title="Reset subscription (Admin only)"
+          >
+            {resetting ? 'Resetting...' : 'Reset'}
+          </Button>
+        </div>
       )}
     </div>
   );
