@@ -62,6 +62,7 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
   overallProgress: number;
   error?: string;
   isSimulated?: boolean;
+  rawBackendData?: any; // Add raw backend data for progress detection
 }> => {
   try {
     // Get processing status from the API
@@ -75,11 +76,11 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
       // Generate mock stage states based on overall progress
       const progress = data.progress || 0.5;
       const mockStageStates: Record<string, any> = {};
-      
+
       // Determine which stage we're at based on progress
       let currentStageIndex = Math.floor(progress * displayOrder.length);
       if (currentStageIndex >= displayOrder.length) currentStageIndex = displayOrder.length - 1;
-      
+
       // Generate states for each stage
       displayOrder.forEach((stage, index) => {
         if (index < currentStageIndex) {
@@ -106,7 +107,7 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
           };
         }
       });
-      
+
       // Replace empty stage_states with our mock data
       data.stage_states = mockStageStates;
 
@@ -120,19 +121,20 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
         })),
         overallProgress: progress,
         error,
-        isSimulated: true
+        isSimulated: true,
+        rawBackendData: data
       };
     }
 
     // Map backend stages to frontend steps
     const steps: ProcessingStep[] = [];
-    
+
     // Process each stage in order
     displayOrder.forEach(frontendStage => {
       // Find the corresponding backend stage
       Object.entries(data.stage_states).forEach(([backendStage, stateData]) => {
         const mappedStage = mapBackendStageToFrontend(backendStage);
-        
+
         if (mappedStage === frontendStage) {
           // Add type casting to handle stateData as unknown type
           const typedStateData = stateData as {
@@ -140,7 +142,7 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
             message: string;
             progress: number;
           };
-          
+
           steps.push({
             stage: mappedStage,
             status: mapBackendStatusToFrontend(typedStateData.status),
@@ -172,7 +174,8 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
     return {
       steps,
       overallProgress: data.progress || 0,
-      error
+      error,
+      rawBackendData: data
     };
   } catch (error) {
     console.error('Error fetching processing status:', error);
@@ -185,17 +188,18 @@ export const fetchProcessingStatus = async (analysisId: string): Promise<{
       })),
       overallProgress: 0,
       error: 'Failed to fetch processing status',
-      isSimulated: true
+      isSimulated: true,
+      rawBackendData: null
     };
   }
 };
 
 // Helper function to enhance status data with simulation
 const enhanceWithSimulation = (
-  status: { steps: ProcessingStep[]; overallProgress: number; error?: string },
+  status: { steps: ProcessingStep[]; overallProgress: number; error?: string; rawBackendData?: any },
   mockProgress: number,
   currentStageIndex: number
-): { steps: ProcessingStep[]; overallProgress: number; error?: string; isSimulated: boolean } => {
+): { steps: ProcessingStep[]; overallProgress: number; error?: string; isSimulated: boolean; rawBackendData?: any } => {
   // Generate simulated steps
   const simulatedSteps: ProcessingStep[] = displayOrder.map((stage, index) => {
     // If overall progress is very high (>95%), mark all steps as completed
@@ -207,7 +211,7 @@ const enhanceWithSimulation = (
         progress: 1
       };
     }
-    
+
     if (index < currentStageIndex) {
       // Completed stages
       return {
@@ -220,7 +224,7 @@ const enhanceWithSimulation = (
       // Current stage
       const stageProgress = (mockProgress * displayOrder.length) - currentStageIndex;
       const cappedProgress = Math.min(Math.max(stageProgress, 0), 1);
-      
+
       return {
         stage,
         status: 'in_progress',
@@ -237,12 +241,13 @@ const enhanceWithSimulation = (
       };
     }
   });
-  
+
   return {
     steps: simulatedSteps,
     overallProgress: mockProgress,
     error: undefined,
-    isSimulated: true
+    isSimulated: true,
+    rawBackendData: status.rawBackendData
   };
 };
 
@@ -250,7 +255,7 @@ const enhanceWithSimulation = (
 const createSimulatedStatus = (
   mockProgress: number,
   currentStageIndex: number
-): { steps: ProcessingStep[]; overallProgress: number; error?: string; isSimulated: boolean } => {
+): { steps: ProcessingStep[]; overallProgress: number; error?: string; isSimulated: boolean; rawBackendData?: any } => {
   const simulatedSteps = displayOrder.map((stage, index) => {
     if (index < currentStageIndex) {
       return {
@@ -262,7 +267,7 @@ const createSimulatedStatus = (
     } else if (index === currentStageIndex) {
       const stageProgress = (mockProgress * displayOrder.length) - currentStageIndex;
       const cappedProgress = Math.min(Math.max(stageProgress, 0), 1);
-      
+
       return {
         stage,
         status: 'in_progress' as ProcessingStatus,
@@ -278,12 +283,13 @@ const createSimulatedStatus = (
       };
     }
   });
-  
+
   return {
     steps: simulatedSteps,
     overallProgress: mockProgress,
     error: undefined,
-    isSimulated: true
+    isSimulated: true,
+    rawBackendData: null
   };
 };
 
@@ -297,11 +303,12 @@ const createSimulatedStatus = (
  */
 export const startProcessingStatusPolling = (
   analysisId: string,
-  onStatusUpdate: (data: { 
-    steps: ProcessingStep[]; 
-    overallProgress: number; 
+  onStatusUpdate: (data: {
+    steps: ProcessingStep[];
+    overallProgress: number;
     error?: string;
     isSimulated?: boolean;
+    rawBackendData?: any;
   }) => void,
   pollingInterval = 3000,
   maxAttempts = 60, // 3 minutes
@@ -310,12 +317,12 @@ export const startProcessingStatusPolling = (
   let attempts = 0;
   let timerId: NodeJS.Timeout | null = null;
   let isCompleted = false;
-  
+
   // For simulation mode
   let mockProgress = 0.1;
   let currentStageIndex = 0;
   const simulationSpeed = 0.05; // Progress increment per poll
-  
+
   const poll = async () => {
     if (attempts >= maxAttempts || isCompleted) {
       stopPolling();
@@ -325,23 +332,31 @@ export const startProcessingStatusPolling = (
     try {
       // First try to fetch real status from the API
       let status = await fetchProcessingStatus(analysisId);
-      
+
       // Check if all stages completed or overall progress is 1
-      if (status.overallProgress >= 1 || 
+      if (status.overallProgress >= 1 ||
           (status.steps.length > 0 && status.steps.every(step => step.status === 'completed'))) {
         isCompleted = true;
         onStatusUpdate(status);
         stopPolling();
         return;
       }
-      
-      // If simulate is enabled AND the API returned minimal data, enhance with simulation
-      const hasMinimalProgress = status.steps.every(step => step.progress === 0);
-      if (simulateProgress && hasMinimalProgress) {
+
+      // Check if we have real progress data from backend
+      // Backend returns progress in stage_states format, check the raw backend data
+      const hasRealProgress = status.overallProgress > 0.15 ||
+        (status.steps && status.steps.some(step => step.progress > 0 && step.status === 'in_progress')) ||
+        (status.rawBackendData && status.rawBackendData.stage_states &&
+         Object.keys(status.rawBackendData.stage_states).length > 5) ||
+        (status.rawBackendData && status.rawBackendData.current_stage &&
+         status.rawBackendData.current_stage !== 'ANALYSIS');
+
+      // Only use simulation if we don't have real progress data
+      if (simulateProgress && !hasRealProgress) {
         // Simulate progress
         mockProgress += simulationSpeed;
         if (mockProgress > 1) mockProgress = 1;
-        
+
         // Calculate which stage we're on
         if (mockProgress > (currentStageIndex + 1) / displayOrder.length) {
           currentStageIndex++;
@@ -349,21 +364,21 @@ export const startProcessingStatusPolling = (
             currentStageIndex = displayOrder.length - 1;
           }
         }
-        
+
         // Enhance status with simulated data
         status = enhanceWithSimulation(status, mockProgress, currentStageIndex);
-        
+
         // Check if simulation has completed
         if (mockProgress >= 1) {
           isCompleted = true;
           stopPolling();
         }
       }
-      
+
       onStatusUpdate(status);
     } catch (error) {
       console.error('Error polling for status:', error);
-      
+
       // If we encounter errors for too many consecutive attempts, switch to simulation
       if (simulateProgress) {
         mockProgress += simulationSpeed;
@@ -372,7 +387,7 @@ export const startProcessingStatusPolling = (
           isCompleted = true;
           stopPolling();
         }
-        
+
         // Calculate which stage we're on based on mock progress
         if (mockProgress > (currentStageIndex + 1) / displayOrder.length) {
           currentStageIndex++;
@@ -380,7 +395,7 @@ export const startProcessingStatusPolling = (
             currentStageIndex = displayOrder.length - 1;
           }
         }
-        
+
         // Use simulation since API failed
         const simulatedStatus = createSimulatedStatus(mockProgress, currentStageIndex);
         onStatusUpdate(simulatedStatus);
@@ -389,11 +404,12 @@ export const startProcessingStatusPolling = (
         onStatusUpdate({
           steps: [],
           overallProgress: 0,
-          error: 'Failed to fetch processing status'
+          error: 'Failed to fetch processing status',
+          rawBackendData: null
         });
       }
     }
-    
+
     attempts++;
     timerId = setTimeout(poll, pollingInterval);
   };
@@ -414,4 +430,4 @@ export const startProcessingStatusPolling = (
 export default {
   fetchProcessingStatus,
   startProcessingStatusPolling
-}; 
+};

@@ -1,175 +1,72 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PrioritizedInsight, PriorityInsightsResponse } from '@/types/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertCircle, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/apiClient';
-import { AlertCircle, AlertTriangle, CheckCircle, RefreshCw, WifiOff } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { LoadingSpinner } from '@/components/loading-spinner';
+import type { PriorityInsightsResponse, PrioritizedInsight } from '@/types/api';
 
-// Simple skeleton component for loading state
-const Skeleton = ({ className }: { className: string }) => (
-  <div className={`animate-pulse bg-slate-200 rounded ${className}`}></div>
-);
+interface PriorityInsightsTabProps {
+  analysisId: string | null;
+}
 
-// Error types for more semantic error handling
-type ErrorType = 'auth' | 'network' | 'server' | 'notFound' | 'parsing' | 'unknown';
-
-// Enhanced type definitions for pattern and theme original data
 interface PatternOriginal {
-  name?: string;
-  description?: string;
-  sentiment?: number;
-  frequency?: number;
-  category?: string;
   evidence?: string[];
-  [key: string]: any; // Allow for additional properties
+  [key: string]: any;
 }
 
 interface ThemeOriginal {
-  name?: string;
-  definition?: string;
-  sentiment?: number;
-  frequency?: number;
-  examples?: string[];
-  [key: string]: any; // Allow for additional properties
+  statements?: string[];
+  [key: string]: any;
 }
 
-// Enhanced types for PrioritizedInsight to include proper original data typing
-type PrioritizedInsightWithOriginal = PrioritizedInsight & { original: ThemeOriginal | PatternOriginal };
-
-interface ErrorState {
-  message: string;
-  type: ErrorType;
-  retryable: boolean;
-  statusCode?: number;
-}
-
-// Utility function to categorize errors
-const categorizeError = (err: any): ErrorState => {
-  if (err.response) {
-    // HTTP error response from server
-    const statusCode = err.response.status;
-    if (statusCode === 401 || statusCode === 403) {
-      return { message: 'Authentication error. Please ensure you are logged in.', type: 'auth', retryable: false, statusCode };
-    } else if (statusCode === 404) {
-      return { message: 'Analysis data not found or not completed yet.', type: 'notFound', retryable: true, statusCode };
-    } else if (statusCode >= 500) {
-      return { message: 'Server error occurred while calculating priorities.', type: 'server', retryable: true, statusCode };
-    } else if (err.response.data?.detail) {
-      return { message: err.response.data.detail, type: 'unknown', retryable: true, statusCode };
-    }
-  } else if (err.request) {
-    // Request was made but no response received
-    return { message: 'Network error. Please check your connection.', type: 'network', retryable: true };
-  } else if (err.message && err.message.includes('JSON')) {
-    // JSON parsing error
-    return { message: 'Error parsing response data. Please try again.', type: 'parsing', retryable: true };
-  }
-
-  // Fallback for generic errors
-  return { message: err.message || 'An unknown error occurred.', type: 'unknown', retryable: true };
+type PrioritizedInsightWithOriginal = PrioritizedInsight & {
+  original: PatternOriginal | ThemeOriginal;
 };
 
-export interface PriorityInsightsProps {
-  analysisId: string;
-}
+export function PriorityInsightsTab({ analysisId }: PriorityInsightsTabProps) {
+  console.log('[PriorityInsightsTab] Component rendered with analysisId:', analysisId);
 
-export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [errorDetails, setErrorDetails] = useState<ErrorState | null>(null);
   const [priorityData, setPriorityData] = useState<PriorityInsightsResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'high' | 'medium' | 'low'>('all');
-  const [retryCount, setRetryCount] = useState(0);
-  const [autoRetryAttempts, setAutoRetryAttempts] = useState(0);
-  const [autoRetrying, setAutoRetrying] = useState(false);
-  const { toast } = useToast();
-
-  // Debug logging
-  console.log(`[PriorityInsights] Component initialized with analysisId: "${analysisId}", type: ${typeof analysisId}`);
-  console.log(`[PriorityInsights] Component rendering, loading: ${loading}, error: ${error}, priorityData: ${priorityData ? 'exists' : 'null'}`);
 
   useEffect(() => {
-    if (!analysisId) return;
+    console.log('[PriorityInsightsTab] useEffect triggered with analysisId:', analysisId);
 
-    console.log(`[PriorityInsights] useEffect triggered with analysisId: "${analysisId}", retryCount: ${retryCount}, autoRetryAttempts: ${autoRetryAttempts}`);
+    if (!analysisId) {
+      console.log('[PriorityInsightsTab] No analysisId provided, setting error');
+      setLoading(false);
+      setError('No analysis ID provided');
+      return;
+    }
 
     const fetchPriorityData = async () => {
       try {
+        console.log('[PriorityInsightsTab] Starting fetchPriorityData');
         setLoading(true);
         setError(null);
-        setErrorDetails(null);
-        setAutoRetrying(false);
 
-        console.log(`[PriorityInsights] Fetching data for analysis ID: "${analysisId}", attempt ${retryCount + 1}, auto-retry: ${autoRetryAttempts}`);
-
-        // Check if analysisId is valid
-        if (!analysisId || analysisId.trim() === '') {
-          throw new Error('No analysis ID provided');
-        }
-
+        console.log(`[PriorityInsightsTab] Fetching priority insights for analysis ID: ${analysisId}`);
         const data = await apiClient.getPriorityInsights(analysisId);
 
-        console.log(`[PriorityInsights] Success: ${data.insights.length} insights found, high: ${data.metrics.high_urgency_count}, medium: ${data.metrics.medium_urgency_count}, low: ${data.metrics.low_urgency_count}`);
+        console.log(`[PriorityInsightsTab] Success: ${data.insights.length} insights found`);
         setPriorityData(data);
-
-        // If we successfully load data after errors, show a success toast
-        if (retryCount > 0 || autoRetryAttempts > 0) {
-          toast({
-            title: "Priority Insights Loaded",
-            description: `Successfully loaded ${data.insights.length} insights after retry.`,
-            variant: "default",
-          });
-        }
-      } catch (err: any) { // Use 'any' type to access error properties
-        console.error('Error fetching priority data:', err);
-
-        // Use the categorization utility function
-        const errorInfo = categorizeError(err);
-        setError(errorInfo.message);
-        setErrorDetails(errorInfo);
-
-        // Log with detailed error information
-        console.error(`[PriorityInsights] Error type: ${errorInfo.type}, Status: ${errorInfo.statusCode || 'N/A'}, Message: ${errorInfo.message}`);
-
-        // Show toast notification with appropriate variant
-        const errorVariant: 'destructive' | 'default' =
-          (errorInfo.type === 'auth' || errorInfo.type === 'server') ? 'destructive' : 'default';
-
-        // Custom title based on error type
-        let toastTitle = "Error Loading Priority Insights";
-        if (errorInfo.type === 'auth') toastTitle = "Authentication Error";
-        else if (errorInfo.type === 'network') toastTitle = "Network Error";
-        else if (errorInfo.type === 'notFound') toastTitle = "Data Not Found";
-
-        toast({
-          title: toastTitle,
-          description: errorInfo.message,
-          variant: errorVariant,
-        });
-
-        // Implement automatic retry for retryable errors (except auth errors)
-        if (errorInfo.retryable && autoRetryAttempts < 2 && errorInfo.type !== 'auth') {
-          console.log(`[PriorityInsights] Scheduling auto-retry #${autoRetryAttempts + 1} in 3 seconds...`);
-          setAutoRetrying(true);
-          setTimeout(() => setAutoRetryAttempts(prev => prev + 1), 3000);
-        }
+      } catch (err) {
+        console.error('[PriorityInsightsTab] Error fetching priority insights:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load priority insights');
       } finally {
+        console.log('[PriorityInsightsTab] fetchPriorityData completed');
         setLoading(false);
       }
     };
 
     fetchPriorityData();
-  }, [analysisId, retryCount, autoRetryAttempts, toast]);
-
-  // Reset state for manual retry
-  const handleRetry = () => {
-    setAutoRetryAttempts(0);
-    setRetryCount(prev => prev + 1);
-  };
+  }, [analysisId]);
 
   // Filter insights based on active tab
   const filteredInsights = (priorityData?.insights || []).filter(insight => {
@@ -219,37 +116,11 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
     );
   };
 
-  // Get error icon based on error type
-  const getErrorIcon = (): React.ReactNode => {
-    if (!errorDetails) return <AlertCircle className="h-5 w-5" />;
-
-    switch (errorDetails.type) {
-      case 'auth':
-        return <AlertCircle className="h-5 w-5" />;
-      case 'network':
-        return <WifiOff className="h-5 w-5" />;
-      case 'server':
-        return <AlertTriangle className="h-5 w-5" />;
-      default:
-        return <AlertTriangle className="h-5 w-5" />;
-    }
-  };
-
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-48" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="text-center py-8">
+        <LoadingSpinner label="Loading priority insights..." />
+      </div>
     );
   }
 
@@ -261,40 +132,23 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
           <CardDescription>Unable to load insights</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="p-4 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              {getErrorIcon()}
-              <span className="font-semibold">
-                {errorDetails?.type === 'auth' ? 'Authentication Error' :
-                 errorDetails?.type === 'network' ? 'Network Error' :
-                 errorDetails?.type === 'server' ? 'Server Error' :
-                 errorDetails?.type === 'notFound' ? 'Not Found' : 'Error'}
-              </span>
+          <div className="p-4 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="h-5 w-5" />
+              <span className="font-semibold">Error</span>
             </div>
             <p>{error}</p>
-            {errorDetails?.statusCode && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">Status code: {errorDetails.statusCode}</p>
-            )}
-            {autoRetrying && (
-              <p className="mt-2 text-sm flex items-center">
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Automatically retrying in a moment...
-              </p>
-            )}
           </div>
-          {(!autoRetrying && errorDetails?.retryable) && (
-            <div className="flex justify-end">
-              <button
-                onClick={handleRetry}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-              >
-                <RefreshCw className="h-4 w-4 mr-2 inline" />
-                Retry Now
-              </button>
-            </div>
-          )}
         </CardContent>
       </Card>
+    );
+  }
+
+  if (!priorityData || !priorityData.insights.length) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No priority insights available for this analysis.
+      </div>
     );
   }
 
@@ -420,4 +274,4 @@ export function PriorityInsights({ analysisId }: PriorityInsightsProps) {
   );
 }
 
-export default PriorityInsights;
+export default PriorityInsightsTab;

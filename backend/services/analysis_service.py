@@ -429,36 +429,25 @@ class AnalysisService:
                         "message": message
                     }
 
-                    # Update overall progress (weighted based on stage)
-                    # Different stages have different weights in the overall progress
-                    stage_weights = {
-                        "PREPROCESSING": 0.05,
+                    # Simple overall progress calculation
+                    # Map stages to simple progress ranges
+                    stage_progress_map = {
+                        "PREPROCESSING": 0.1,
                         "ANALYSIS": 0.2,
-                        "THEME_EXTRACTION": 0.2,
-                        "PATTERN_DETECTION": 0.15,
-                        "SENTIMENT_ANALYSIS": 0.1,
-                        "PERSONA_FORMATION": 0.2,
-                        "INSIGHT_GENERATION": 0.1
+                        "THEME_EXTRACTION": 0.4,
+                        "PATTERN_DETECTION": 0.6,
+                        "SENTIMENT_ANALYSIS": 0.7,
+                        "PERSONA_FORMATION": 0.85,
+                        "INSIGHT_GENERATION": 0.95
                     }
 
-                    # Calculate overall progress based on current stage and its progress
-                    # For stages before the current one, count them as complete
-                    # For stages after the current one, count them as not started
-                    stages = list(stage_weights.keys())
-                    current_stage_index = stages.index(stage) if stage in stages else 0
+                    # Get base progress for current stage
+                    base_progress = stage_progress_map.get(stage, 0.1)
 
-                    overall_progress = 0.0
-                    for i, s in enumerate(stages):
-                        if i < current_stage_index:
-                            # Previous stages are complete
-                            overall_progress += stage_weights[s]
-                        elif i == current_stage_index:
-                            # Current stage is in progress
-                            overall_progress += stage_weights[s] * progress
-                        # Future stages are not started, so they contribute 0
+                    # Add stage progress contribution
+                    stage_contribution = progress * 0.1  # Each stage can contribute up to 10%
+                    overall_progress = min(0.95, base_progress + stage_contribution)
 
-                    # Ensure progress is between 0.1 and 0.95
-                    overall_progress = max(0.1, min(0.95, overall_progress))
                     current_results["progress"] = overall_progress
 
                     # Update message
@@ -467,7 +456,6 @@ class AnalysisService:
                     # Save updated status
                     task_result.results = json.dumps(current_results)
                     async_db.commit()
-                    logger.info(f"Updated progress for result_id: {result_id}, stage: {stage}, progress: {progress:.2f}, overall: {overall_progress:.2f}")
                 except Exception as update_error:
                     logger.error(f"Error updating progress for result_id {result_id}: {str(update_error)}")
 

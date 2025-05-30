@@ -28,7 +28,7 @@ import json
 import asyncio
 import time  # Import time module
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.sql import text
 
 # Import centralized settings
@@ -654,10 +654,20 @@ async def get_analysis_status(
         stage_states = {}
 
         # Initialize response with basic information
+        # Standardize datetime formatting to UTC
+        def format_datetime(dt):
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                # Naive datetime - assume it's UTC and add timezone info
+                dt = dt.replace(tzinfo=timezone.utc)
+            # Convert to UTC and format consistently
+            return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
         response_data = {
             "status": status,
-            "started_at": analysis_result.analysis_date.isoformat() if analysis_result.analysis_date else None,
-            "completed_at": analysis_result.completed_at.isoformat() if analysis_result.completed_at else None,
+            "started_at": format_datetime(analysis_result.analysis_date),
+            "completed_at": format_datetime(analysis_result.completed_at),
         }
 
         # Parse results JSON for additional information
@@ -694,13 +704,20 @@ async def get_analysis_status(
                 # Estimate progress based on creation time if we don't have explicit progress
                 # Assume analysis takes about 5 minutes on average
                 if analysis_result.analysis_date:
-                    elapsed_seconds = (datetime.utcnow() - analysis_result.analysis_date).total_seconds()
+                    # Handle both naive and timezone-aware datetime objects
+                    current_time = datetime.now(timezone.utc)
+                    if analysis_result.analysis_date.tzinfo is None:
+                        # Naive datetime - assume it's UTC
+                        start_time = analysis_result.analysis_date.replace(tzinfo=timezone.utc)
+                    else:
+                        start_time = analysis_result.analysis_date
+                    elapsed_seconds = (current_time - start_time).total_seconds()
                     estimated_progress = min(0.95, elapsed_seconds / 300)  # Cap at 95%
                     response_data["progress"] = estimated_progress
                     response_data["progress_estimated"] = True
                 else:
-                    response_data["progress"] = 0.1  # Default starting progress
-                    response_data["progress_estimated"] = True
+                    # Don't add artificial progress - let stage states determine progress
+                    pass
 
             # For completed status, ensure progress is 1.0
             if status == "completed" and "progress" not in response_data:
@@ -736,7 +753,7 @@ async def get_analysis_status(
 
         logger.info(
             f"[GetStatus - Success] RequestID: {request_id}, User: {current_user.user_id}, "
-            f"ResultID: {result_id}, Status: {status}, Progress: {response_data.get('progress', 'N/A')}"
+            f"ResultID: {result_id}, Status: {status}"
         )
         return response_data
 
@@ -769,7 +786,11 @@ async def health_check():
     """
     Simple health check endpoint.
     """
-    return HealthCheckResponse(status="healthy", timestamp=datetime.utcnow())
+    # Return dict instead of HealthCheckResponse to control timestamp format
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 @app.get(
@@ -968,7 +989,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
 
         return {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "database": {
                 "status": db_status,
                 "error": db_error,
@@ -983,7 +1004,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
         return {
             "status": "error",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 

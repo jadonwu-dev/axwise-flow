@@ -48,11 +48,9 @@ async def process_data(
         # The NLP processor now handles different data formats internally
         logger.info("Calling nlp_processor.process_interview_data...")
 
-        results = await nlp_processor.process_interview_data(data, llm_service, config)
+        results = await nlp_processor.process_interview_data(data, llm_service, config, progress_callback)
 
-        # Report progress: Completed initial analysis
-        if progress_callback:
-            await progress_callback("THEME_EXTRACTION", 0.5, "Extracting themes from interview data")
+        # Progress updates are now handled inside the NLP processor
 
         # DEBUG LOG: Inspect results immediately after processing
         logger.info("Returned from nlp_processor.process_interview_data.")
@@ -68,9 +66,7 @@ async def process_data(
         logger.info("Validating analysis results")
         logger.info("Calling nlp_processor.validate_results...")
 
-        # Report progress: Pattern detection
-        if progress_callback:
-            await progress_callback("PATTERN_DETECTION", 0.5, "Detecting patterns in interview data")
+        # Progress updates are now handled inside the NLP processor
 
         # Use the new return type (is_valid, missing_fields)
         is_valid, missing_fields = await nlp_processor.validate_results(results)
@@ -80,9 +76,7 @@ async def process_data(
             # Continue anyway - we're being more lenient now
             logger.info("Continuing despite validation issues to be more resilient")
 
-        # Report progress: Sentiment analysis
-        if progress_callback:
-            await progress_callback("SENTIMENT_ANALYSIS", 0.7, "Analyzing sentiment in interview data")
+        # Progress updates are now handled inside the NLP processor
 
         # Extract additional insights
         logger.info("Calling nlp_processor.extract_insights...")
@@ -141,7 +135,7 @@ async def process_data(
 
         # Report progress: Completion
         if progress_callback:
-            await progress_callback("COMPLETION", 0.9, "Finalizing analysis results")
+            await progress_callback("COMPLETION", 1.0, "Finalizing analysis results")
 
         # Return the main results dictionary which should contain insights after extract_insights call
         logger.debug(f"[process_data] Final results being returned (keys): {list(results.keys())}") # Log keys before returning

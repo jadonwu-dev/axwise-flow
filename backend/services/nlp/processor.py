@@ -125,7 +125,7 @@ class NLPProcessor:
         ]
 
     async def process_interview_data(
-        self, data: Dict[str, Any], llm_service, config=None
+        self, data: Dict[str, Any], llm_service, config=None, progress_callback=None
     ) -> Dict[str, Any]:
         """Process interview data to extract insights"""
         if config is None:
@@ -134,6 +134,11 @@ class NLPProcessor:
         # Solution 1: Enable enhanced theme analysis by default
         use_enhanced_theme_analysis = config.get("use_enhanced_theme_analysis", True)  # Changed default to True
         logger.info(f"Enhanced theme analysis is {'enabled' if use_enhanced_theme_analysis else 'disabled'}")
+
+        # Helper function to update progress
+        async def update_progress(stage: str, progress: float, message: str):
+            if progress_callback:
+                await progress_callback(stage, progress, message)
 
         try:
             # Extract text content
@@ -307,6 +312,9 @@ class NLPProcessor:
             start_time = asyncio.get_event_loop().time()
             logger.info("Starting parallel analysis")
 
+            # Update progress: Starting theme analysis
+            await update_progress("THEME_EXTRACTION", 0.2, "Starting enhanced theme analysis")
+
             # Skip basic theme analysis and go directly to enhanced theme analysis
             logger.info("Using enhanced theme analysis directly")
 
@@ -351,6 +359,9 @@ class NLPProcessor:
 
             # Get enhanced themes directly
             enhanced_themes_result = await enhanced_themes_task
+
+            # Update progress: Theme analysis completed
+            await update_progress("THEME_EXTRACTION", 0.4, "Enhanced theme analysis completed")
 
             # Store the enhanced themes as the main themes result
             themes_result = {"themes": []}  # Initialize with empty themes
@@ -529,6 +540,9 @@ class NLPProcessor:
             industry = await self._detect_industry(combined_text, llm_service)
             logger.info(f"Detected industry: {industry}")
 
+            # Update progress: Starting pattern detection
+            await update_progress("PATTERN_DETECTION", 0.45, "Starting pattern detection analysis")
+
             # Create pattern recognition payload with filename if available
             pattern_payload = {
                 "task": "pattern_recognition",
@@ -543,6 +557,9 @@ class NLPProcessor:
 
             # Run pattern recognition with theme data and industry context
             patterns_task = llm_service.analyze(pattern_payload)
+
+            # Update progress: Starting sentiment analysis
+            await update_progress("SENTIMENT_ANALYSIS", 0.5, "Starting sentiment analysis")
 
             # Create sentiment analysis payload with filename if available
             sentiment_payload = {
@@ -564,6 +581,12 @@ class NLPProcessor:
             patterns_result, sentiment_result = await asyncio.gather(
                 patterns_task, sentiment_task
             )
+
+            # Update progress: Pattern detection completed
+            await update_progress("PATTERN_DETECTION", 0.6, "Pattern detection completed")
+
+            # Update progress: Sentiment analysis completed
+            await update_progress("SENTIMENT_ANALYSIS", 0.65, "Sentiment analysis completed")
 
             parallel_duration = asyncio.get_event_loop().time() - start_time
             logger.info(
@@ -642,6 +665,9 @@ class NLPProcessor:
             # Generate insights using the results from parallel analysis
             insight_start_time = asyncio.get_event_loop().time()
 
+            # Update progress: Starting insight generation
+            await update_progress("INSIGHT_GENERATION", 0.7, "Starting insight generation")
+
             # Create insight generation payload with filename if available
             insight_payload = {
                 "task": "insight_generation",
@@ -657,6 +683,9 @@ class NLPProcessor:
                 logger.info(f"Adding filename to insight generation payload: {filename}")
 
             insights_result = await llm_service.analyze(insight_payload)
+
+            # Update progress: Insight generation completed
+            await update_progress("INSIGHT_GENERATION", 0.8, "Insight generation completed")
 
             insight_duration = asyncio.get_event_loop().time() - insight_start_time
             logger.info(
@@ -938,7 +967,7 @@ class NLPProcessor:
                 }
 
             # Update progress before persona generation
-            await update_progress("PERSONA_FORMATION", 0.87, "Starting persona formation")
+            await update_progress("PERSONA_FORMATION", 0.9, "Starting persona formation")
 
             # Generate personas from the text
             logger.info("Generating personas from interview text")
@@ -1041,7 +1070,7 @@ class NLPProcessor:
                 await update_progress("PERSONA_FORMATION", 0.95, "Error generating personas, continuing with empty personas")
 
             # Final progress update
-            await update_progress("COMPLETION", 0.98, "Analysis completed successfully")
+            await update_progress("COMPLETION", 1.0, "Analysis completed successfully")
 
             return results
 

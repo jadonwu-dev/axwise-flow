@@ -10,7 +10,7 @@ import { AnalysisResponse, AnalysisStatusResponse, EnhancedStatusResponse } from
  *
  * Note: Enhanced theme analysis is always enabled on the backend,
  * so we've removed the useEnhancedThemeAnalysis parameter.
- * 
+ *
  * @param dataId The ID of the uploaded data to analyze
  * @param llmProvider The LLM provider to use (default: 'openai')
  * @param llmModel The LLM model to use (optional)
@@ -43,11 +43,11 @@ export async function analyzeData(
  *
  * This method polls the backend API to determine if the analysis process
  * has been completed for a specific analysis result.
- * 
+ *
  * @param resultId The ID of the analysis result to check
  * @returns A promise that resolves to the analysis status
  */
-export async function checkAnalysisStatus(resultId: string): Promise<AnalysisStatusResponse> {
+export async function checkAnalysisStatus(resultId: string): Promise<EnhancedStatusResponse> {
   if (!resultId) {
     console.error('[checkAnalysisStatus] Called with empty resultId');
     return { status: 'failed', error: 'Analysis ID is required for status check.' };
@@ -65,20 +65,20 @@ export async function checkAnalysisStatus(resultId: string): Promise<AnalysisSta
     // Map 'processing' to 'pending' for frontend consistency
     const frontendStatus = statusData.status === 'processing' ? 'pending' : statusData.status;
 
-    // Return an enhanced response format with progress information
+    // Return response with snake_case field names to match API
     return {
       status: frontendStatus,
       progress: statusData.progress,
-      currentStage: statusData.current_stage,
-      stageStates: statusData.stage_states,
-      startedAt: statusData.started_at,
-      completedAt: statusData.completed_at,
-      requestId: statusData.request_id,
+      current_stage: statusData.current_stage,
+      stage_states: statusData.stage_states,
+      started_at: statusData.started_at,
+      completed_at: statusData.completed_at,
+      request_id: statusData.request_id,
       // Include error information if status is 'failed'
       ...(frontendStatus === 'failed' && {
         error: statusData.error || statusData.message,
-        errorCode: statusData.error_code,
-        errorStage: statusData.error_stage
+        error_code: statusData.error_code,
+        error_stage: statusData.error_stage
       })
     };
 
@@ -158,7 +158,7 @@ export async function checkAnalysisStatus(resultId: string): Promise<AnalysisSta
 
 /**
  * Get processing status for an analysis
- * 
+ *
  * @param analysisId The ID of the analysis to get the status for
  * @returns A promise that resolves to the processing status
  */

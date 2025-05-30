@@ -30,22 +30,68 @@ function calculateSentimentOverview(scores: number[]): SentimentOverview {
 
 /**
  * Get analysis result by ID
- * 
+ *
  * @param id The ID of the analysis to retrieve
  * @returns A promise that resolves to the detailed analysis result
  */
 export async function getAnalysisById(id: string): Promise<DetailedAnalysisResult> {
   try {
-    const response = await apiCore.getClient().get(`/api/results/${id}`, {
-      timeout: 120000 // 120 seconds timeout for fetching potentially large results
-    });
-    console.log('API response data (raw):', JSON.stringify(response.data, null, 2));
+    console.log('getAnalysisById: Fetching analysis with ID:', id);
 
-    if (!response.data.results) {
+    // Check if we're running on the server or client
+    const isServer = typeof window === 'undefined';
+
+    let data: any;
+
+    if (isServer) {
+      // Server-side: Call backend directly with development token
+      console.log('getAnalysisById: Running on server, calling backend directly');
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+      const response = await fetch(`${backendUrl}/api/results/${id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer DEV_TOKEN_REDACTED',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`getAnalysisById: Backend API call failed: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Failed to fetch analysis: ${response.status} ${errorText}`);
+      }
+
+      data = await response.json();
+    } else {
+      // Client-side: Use Next.js API route for proper authentication
+      console.log('getAnalysisById: Running on client, using API route');
+      const response = await fetch(`/api/results/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Please sign in to view this analysis');
+        }
+        const errorText = await response.text();
+        console.error(`getAnalysisById: API route call failed: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Failed to fetch analysis: ${response.status} ${errorText}`);
+      }
+
+      data = await response.json();
+    }
+
+    console.log('getAnalysisById: API call successful for ID:', id);
+
+    if (!data.results) {
       throw new Error('Invalid API response: missing results');
     }
 
-    const results = response.data.results;
+    const results = data.results;
 
     // Add specific logging for sentimentStatements
     console.log('SentimentStatements from API (direct):',

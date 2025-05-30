@@ -11,7 +11,7 @@ from sqlalchemy import text
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import traceback
 
@@ -72,11 +72,11 @@ async def get_database_status(db: Session = Depends(get_db)):
     try:
         # Test basic connection
         db.execute(text("SELECT 1")).fetchone()
-        
+
         # Get database info
         db_url = str(db.bind.url)
         db_type = db_url.split("://")[0]
-        
+
         # Get version info
         if db_type == "sqlite":
             version_result = db.execute(text("SELECT sqlite_version()")).fetchone()
@@ -84,15 +84,15 @@ async def get_database_status(db: Session = Depends(get_db)):
         else:
             version_result = db.execute(text("SELECT version()")).fetchone()
             db_version = version_result[0] if version_result else "unknown"
-        
+
         # Get table counts
         user_count = db.query(User).count()
         analysis_count = db.query(AnalysisResult).count()
         interview_count = db.query(InterviewData).count()
-        
+
         return {
             "status": "connected",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "database": {
                 "type": db_type,
                 "version": db_version,
@@ -108,7 +108,7 @@ async def get_database_status(db: Session = Depends(get_db)):
         logger.error(f"Database status check failed: {str(e)}")
         return {
             "status": "error",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": str(e),
             "traceback": traceback.format_exc()
         }
@@ -124,7 +124,7 @@ async def test_auth(user: User = Depends(get_current_user)):
     try:
         return {
             "status": "authenticated",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "user": {
                 "id": user.id,
                 "clerk_user_id": user.clerk_user_id,
@@ -148,10 +148,10 @@ async def get_config():
     try:
         from infrastructure.config.settings import Settings
         settings = Settings()
-        
+
         return {
             "status": "success",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "config": {
                 "uvicorn": {
                     "host": settings.uvicorn_host,
@@ -191,16 +191,16 @@ async def test_llm_service(
     """Test the LLM service with a simple prompt."""
     try:
         from backend.services.llm import LLMServiceFactory
-        
+
         # Create LLM service
         llm_service = LLMServiceFactory.create("enhanced_gemini")
-        
+
         # Test the service
         response = await llm_service.generate_response(prompt)
-        
+
         return {
             "status": "success",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "test": {
                 "prompt": prompt,
                 "response": response,
@@ -228,7 +228,7 @@ async def get_recent_logs(
         # In a production environment, you might want to read from actual log files
         return {
             "status": "success",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "logs": {
                 "message": f"Log retrieval not implemented. Requested {lines} lines at {level} level.",
                 "note": "This endpoint would typically read from log files or a logging service.",

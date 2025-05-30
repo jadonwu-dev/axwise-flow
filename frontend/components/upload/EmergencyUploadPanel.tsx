@@ -11,16 +11,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { UploadResponse } from '@/types/api';
 import { uploadAction, analyzeAction } from '@/app/actions';
-import { usePolling } from '@/hooks/usePolling'; // Import the new hook
+// Using simple setInterval for progress tracking
 import { apiClient } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import { setCookie } from 'cookies-next';
 
 /**
- * Emergency UploadPanel Component - Refactored for Server Actions and Polling Hook
+ * Emergency UploadPanel Component - Simple Progress Tracking
  *
  * This component uses React's useState for local state management with
- * Next.js server actions for form submission and a custom hook for polling analysis status.
+ * Next.js server actions for form submission and simple setInterval for polling analysis status.
  */
 export default function EmergencyUploadPanel() {
   const router = useRouter();
@@ -63,196 +63,234 @@ export default function EmergencyUploadPanel() {
     storeAuthToken();
   }, []);
 
-  // --- Polling Hook Setup (Define before handlers that use it) ---
-  // Create a bound version of the checkAnalysisStatus method to ensure 'this' context is preserved
-  const boundCheckAnalysisStatus = useCallback(
-    (resultId: string) => {
-      console.log(`[boundCheckAnalysisStatus] Checking status for ID: ${resultId}`);
-      return apiClient.checkAnalysisStatus(resultId);
-    },
-    []
-  );
+  // --- Simple Progress Tracking ---
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
 
-  // Store the current polling ID in a ref to ensure it's always up-to-date
-  const currentPollingIdRef = useRef<string | null>(null);
+  // Simple function to check analysis status
+  const checkAnalysisStatus = useCallback(async (analysisId: string) => {
+    try {
+      console.log(`\n🔄 [POLLING] === Analysis ${analysisId} Status Check ===`);
 
-  const { startPolling, stopPolling, isPolling } = usePolling< {
-    status: 'pending' | 'completed' | 'failed';
-    progress?: number;
-    currentStage?: string;
-    stageStates?: Record<string, any>;
-    startedAt?: string;
-    completedAt?: string;
-    requestId?: string;
-    analysis?: any;
-    error?: string;
-    errorCode?: string;
-    errorStage?: string;
-  }>({
-    fetchFn: boundCheckAnalysisStatus,
-    interval: 3000, // Poll every 3 seconds
-    stopCondition: (statusResult) =>
-      statusResult.status === 'completed' || statusResult.status === 'failed',
-    useExponentialBackoff: true, // Enable exponential backoff for retries
-    maxBackoffInterval: 30000, // Max 30 seconds between retries
-    maxDurationMs: 10 * 60 * 1000, // 10 minutes max polling time
-    stuckDetectionCount: 5, // Consider progress stuck after 5 identical responses
-    onSuccess: (statusResult) => {
-      // --- START ENHANCED LOGGING ---
-      console.log(`[Polling Success] Received status update for ID ${analysisResultId}:`, statusResult);
-      setAnalysisStatus(statusResult.status); // Update status state
+      // Log frontend state BEFORE API call
+      console.log(`📱 [FRONTEND-BEFORE] Current State:`, {
+        isAnalyzing,
+        isPolling,
+        analysisProgress: `${analysisProgress}%`,
+        analysisStatus,
+        analysisStage,
+        analysisResultId
+      });
 
-      // Update progress if available, but only if it's increasing
-      if (statusResult.progress !== undefined) {
-        // Convert from 0-1 scale to 0-100 scale
-        const progressPercent = Math.round(statusResult.progress * 100);
+      const response = await apiClient.checkAnalysisStatus(analysisId);
 
-        // Only update progress if it's higher than the current progress
-        // This prevents the progress bar from jumping back and forth
-        setAnalysisProgress(prevProgress => {
-          if (progressPercent > prevProgress) {
-            console.log(`[Polling Success] Updated progress from ${prevProgress}% to ${progressPercent}%`);
-            return progressPercent;
-          }
-          return prevProgress;
+      // Detailed logging for backend state
+      console.log(`🔧 [BACKEND] Response Status: ${response.status}`);
+      console.log(`🔧 [BACKEND] Progress: ${response.progress} (${Math.round(response.progress * 100)}%)`);
+      console.log(`🔧 [BACKEND] Current Stage: ${response.current_stage}`);
+      console.log(`🔧 [BACKEND] Full Response:`, JSON.stringify(response, null, 2));
+
+      // Log stage states breakdown (fix field names to match API)
+      if (response.stage_states) {
+        console.log(`🔧 [BACKEND] Stage States Breakdown:`);
+        Object.entries(response.stage_states).forEach(([stageName, stageData]: [string, any]) => {
+          const status = stageData.status;
+          const progress = Math.round(stageData.progress * 100);
+          const message = stageData.message;
+          const emoji = status === 'completed' ? '✅' : status === 'in_progress' ? '🔄' : '⏳';
+          console.log(`  ${emoji} ${stageName}: ${status} (${progress}%) - ${message}`);
         });
       }
 
-      if (statusResult.status === 'completed') {
-        // Get the current polling ID from the ref or from the state
-        const currentId = currentPollingIdRef.current || analysisResultId;
-        console.log(`[Polling Success] Status is 'completed'. Preparing to redirect for ID: ${currentId}`);
-        setIsAnalyzing(false);
+      // Show progress based on current stage only
+      if (response.stage_states && response.current_stage) {
+        const currentStageData = response.stage_states[response.current_stage];
+        if (currentStageData && currentStageData.progress !== undefined) {
+          const progressPercent = Math.round(currentStageData.progress * 100);
+          const oldProgress = analysisProgress;
+          setAnalysisProgress(progressPercent);
+          console.log(`📱 [FRONTEND-UPDATE] Progress: ${oldProgress}% → ${progressPercent}% (current stage: ${response.current_stage})`);
+        }
+      } else if (response.progress !== undefined) {
+        // Fallback to raw progress if stage_states not available
+        const progressPercent = Math.round(response.progress * 100);
+        const oldProgress = analysisProgress;
+        setAnalysisProgress(progressPercent);
+        console.log(`📱 [FRONTEND-UPDATE] Progress: ${oldProgress}% → ${progressPercent}% (fallback from raw progress)`);
+      }
+
+      // Update status and log the change
+      const oldStatus = analysisStatus;
+      setAnalysisStatus(response.status);
+      console.log(`📱 [FRONTEND-UPDATE] Status: ${oldStatus} → ${response.status}`);
+
+      // Update stage message with more detail (fix field names to match API)
+      if (response.current_stage && response.stage_states) {
+        const currentStageData = response.stage_states[response.current_stage];
+        if (currentStageData && currentStageData.message) {
+          const oldStage = analysisStage;
+          setAnalysisStage(currentStageData.message);
+          console.log(`📱 [FRONTEND-UPDATE] Stage: "${oldStage}" → "${currentStageData.message}"`);
+        } else {
+          const stageName = response.current_stage.replace(/_/g, ' ').toLowerCase();
+          const newStage = `Processing: ${stageName}`;
+          const oldStage = analysisStage;
+          setAnalysisStage(newStage);
+          console.log(`📱 [FRONTEND-UPDATE] Stage: "${oldStage}" → "${newStage}"`);
+        }
+      } else if (response.current_stage) {
+        const stageName = response.current_stage.replace(/_/g, ' ').toLowerCase();
+        const newStage = `Processing: ${stageName}`;
+        const oldStage = analysisStage;
+        setAnalysisStage(newStage);
+        console.log(`📱 [FRONTEND-UPDATE] Stage: "${oldStage}" → "${newStage}"`);
+      }
+
+      // Handle completion
+      if (response.status === 'completed') {
+        console.log(`✅ [COMPLETION] Analysis completed successfully!`);
+        console.log(`📱 [FRONTEND-FINAL] Setting final state: progress=100%, isAnalyzing=false, isPolling=false`);
+
         setAnalysisProgress(100);
+        setIsAnalyzing(false);
+        setIsPolling(false);
+
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          console.log(`🛑 [POLLING] Stopped polling interval`);
+        }
+
         toast({
           title: "Analysis completed",
           description: "Redirecting to visualization...",
           variant: "default",
         });
 
-        // Log before calling server action
-        console.log(`[Redirect] Calling getRedirectUrl for ID: ${currentId}`);
-        if (!currentId) {
-          console.error("[Redirect] Error: No valid analysis ID available for redirection!");
-          setAnalysisError("Internal error: Missing analysis ID for redirection.");
-          return; // Prevent further execution
-        }
-
-        // Use setTimeout for redirection
+        // Redirect to dashboard
         setTimeout(() => {
-          console.log(`[Redirect] Starting redirect process for ID: ${currentId}`);
-
-          // Store the analysis ID in localStorage for fallback retrieval
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('recentAnalysisId', currentId);
-            console.log(`[Redirect] Stored analysis ID in localStorage: ${currentId}`);
-          }
-
-          // Redirect directly to the main dashboard with the analysis ID
-          // This will show the analysis results in the main dashboard
-          const timestamp = Date.now();
-          const dashboardUrl = `/unified-dashboard?analysisId=${currentId}&visualizationTab=themes&timestamp=${timestamp}`;
-          console.log(`[Redirect] Redirecting to dashboard: ${dashboardUrl}`);
+          const dashboardUrl = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=themes&timestamp=${Date.now()}`;
+          console.log(`🔄 [REDIRECT] Redirecting to: ${dashboardUrl}`);
           router.push(dashboardUrl);
-        }, 800); // Keep delay
+        }, 1000);
 
-      } else if (statusResult.status === 'failed') {
-        console.log(`[Polling Success] Status is 'failed'. Error: ${statusResult.error}, Code: ${statusResult.errorCode}`);
-        setIsAnalyzing(false); // Analysis/Polling is finished
+        console.log(`🔄 [POLLING] === End Status Check (COMPLETED) ===\n`);
+        return;
+      }
+
+      // Handle failure
+      if (response.status === 'failed') {
+        console.log(`❌ [FAILURE] Analysis failed:`, response.error);
+        console.log(`📱 [FRONTEND-FINAL] Setting error state: progress=0%, isAnalyzing=false, isPolling=false`);
+
+        setIsAnalyzing(false);
+        setIsPolling(false);
         setAnalysisProgress(0);
 
-        // Format a more user-friendly error message
-        let errorMsg = statusResult.error || 'Analysis failed during processing';
-        if (statusResult.errorStage) {
-          errorMsg = `Analysis failed during ${statusResult.errorStage.toLowerCase().replace('_', ' ')}: ${errorMsg}`;
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          console.log(`🛑 [POLLING] Stopped polling interval`);
         }
 
+        const errorMsg = response.error || 'Analysis failed during processing';
         setAnalysisError(errorMsg);
         toast({
           title: "Analysis failed",
           description: errorMsg,
           variant: "destructive",
         });
-      } else if (statusResult.status === 'pending') {
-        // Update UI with current stage information
-        console.log(`[Polling Success] Status is 'pending'. Current stage: ${statusResult.currentStage}, Progress: ${statusResult.progress}`);
 
-        // Only update the stage message if we have a valid stage and it's different from the current one
-        if (statusResult.currentStage) {
-          // Format a user-friendly stage message
-          const stageName = statusResult.currentStage.replace(/_/g, ' ').toLowerCase();
-          const stageMessage = `Processing: ${stageName}`;
-
-          // Update the UI with the current stage information only if it's different
-          // This prevents the UI from "jumping" between the same stage
-          setAnalysisStage(prevStage => {
-            // If the stage is the same, don't update to avoid re-renders
-            if (prevStage === stageMessage) {
-              return prevStage;
-            }
-            return stageMessage;
-          });
-        } else {
-          // If no stage is provided, use progress-based messaging
-          const progressBasedStage =
-            statusResult.progress && statusResult.progress < 0.3 ? 'Starting analysis...' :
-            statusResult.progress && statusResult.progress < 0.6 ? 'Processing interview data...' :
-            statusResult.progress && statusResult.progress < 0.9 ? 'Generating insights...' :
-            'Finalizing results...';
-
-          setAnalysisStage(progressBasedStage);
-        }
-      } else {
-        console.log(`[Polling Success] Status is '${statusResult.status}'. Continuing poll.`);
-      }
-      // --- END ENHANCED LOGGING ---
-    },
-    onError: (error) => {
-      console.error('[Polling Error] Error polling for analysis status:', error);
-
-      // Check if this is a timeout error from our enhanced polling
-      if (error.message && error.message.includes('Polling timed out after')) {
-        console.warn('[Polling Error] Polling timed out. Analysis may still be running in the background.');
-        setIsAnalyzing(false);
-        setAnalysisError(`Analysis is taking longer than expected. It may still be processing in the background.
-          You can check the results page later or try refreshing the page.`);
-        toast({
-          title: "Analysis timeout",
-          description: "Analysis is taking longer than expected. It may still be processing in the background.",
-          variant: "destructive",
-        });
-
-        // Redirect to results page anyway, as the analysis might be complete
-        if (analysisResultId) {
-          router.push(`/unified-dashboard/visualize?analysisId=${analysisResultId}`);
-        }
+        console.log(`🔄 [POLLING] === End Status Check (FAILED) ===\n`);
         return;
       }
 
-      // Don't stop polling on the first error - allow retries
-      // Just log the error and continue polling
-      const errorMsg = error instanceof Error ? error.message : 'Polling fetch failed';
-      console.warn(`[Polling Warning] ${errorMsg} - will retry`);
+      console.log(`🔄 [POLLING] === End Status Check (CONTINUING) ===\n`);
 
-      // Only show a toast and update UI after multiple consecutive errors
-      // This prevents UI flickering for transient network issues
-      // For now, we'll continue polling without showing errors to the user
+    } catch (error) {
+      console.error(`❌ [ERROR] Error checking status for analysis ${analysisId}:`, error);
+      console.log(`📱 [FRONTEND-ERROR] Continuing polling despite error...`);
+      // Don't stop polling on errors - just log and continue
+    }
+  }, [router, toast, isAnalyzing, isPolling, analysisProgress, analysisStatus, analysisStage, analysisResultId]);
 
-      // If you want to stop polling after errors, uncomment these:
-      // setAnalysisError(errorMsg);
-      // toast({ title: "Polling Error", description: errorMsg, variant: "destructive" });
-      // stopPolling();
-      // setIsAnalyzing(false);
-    },
-  });
+  // Start simple polling
+  const startSimplePolling = useCallback((analysisId: string) => {
+    console.log(`🚀 [POLLING-START] Starting polling for analysis ${analysisId}`);
+    console.log(`📱 [FRONTEND-POLLING] Setting isPolling=true`);
+    setIsPolling(true);
 
-  // Effect to stop polling when component unmounts
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      console.log(`🛑 [POLLING-START] Clearing existing polling interval`);
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Start polling every 3 seconds
+    console.log(`⏰ [POLLING-START] Setting up 3-second interval`);
+    pollingIntervalRef.current = setInterval(() => {
+      console.log(`⏰ [POLLING-INTERVAL] Interval tick - checking status...`);
+      checkAnalysisStatus(analysisId);
+    }, 3000);
+
+    // Also check immediately
+    console.log(`🔄 [POLLING-START] Checking status immediately...`);
+    checkAnalysisStatus(analysisId);
+  }, [checkAnalysisStatus]);
+
+  // Stop polling
+  const stopSimplePolling = useCallback(() => {
+    console.log(`🛑 [POLLING-STOP] Stopping polling`);
+    console.log(`📱 [FRONTEND-POLLING] Setting isPolling=false`);
+    setIsPolling(false);
+
+    if (pollingIntervalRef.current) {
+      console.log(`🛑 [POLLING-STOP] Clearing polling interval`);
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    } else {
+      console.log(`🛑 [POLLING-STOP] No active polling interval to clear`);
+    }
+  }, []);
+
+  // Effect to log component mount and initial state
+  useEffect(() => {
+    console.log('[EmergencyUploadPanel] Component mounted');
+    console.log('[EmergencyUploadPanel] Initial state:', {
+      analysisResultId,
+      analysisProgress,
+      analysisStatus,
+      isAnalyzing,
+      isPolling
+    });
+  }, []);
+
+  // Effect to log polling state changes
+  useEffect(() => {
+    console.log('[EmergencyUploadPanel] Polling state changed:', {
+      isPolling,
+      analysisResultId
+    });
+  }, [isPolling, analysisResultId]);
+
+  // Effect to log progress state changes
+  useEffect(() => {
+    console.log('[EmergencyUploadPanel] Progress state changed:', {
+      analysisProgress,
+      analysisStatus,
+      analysisStage
+    });
+  }, [analysisProgress, analysisStatus, analysisStage]);
+
+  // Cleanup effect to stop polling on unmount
   useEffect(() => {
     return () => {
       console.log('[EmergencyUploadPanel] Component unmounting, stopping polling');
-      stopPolling();
+      stopSimplePolling();
     };
-  }, [stopPolling]);
+  }, [stopSimplePolling]);
+
+
 
   // --- Callback Handlers ---
 
@@ -270,7 +308,9 @@ export default function EmergencyUploadPanel() {
 
     setIsAnalyzing(true); // Indicate analysis process (including polling) has started
     setAnalysisError(null);
-    setAnalysisProgress(10); // Start progress at 10%
+    setAnalysisStatus(null); // Reset status
+    setAnalysisStage(null); // Reset stage
+    setAnalysisProgress(0); // Start progress at 0% - let backend control it
 
     try {
       console.log('Starting analysis with server action...');
@@ -280,22 +320,18 @@ export default function EmergencyUploadPanel() {
         const analysisId = result.analysisResponse.result_id.toString();
         console.log(`[Analysis] Successfully started analysis with ID: ${analysisId}`);
 
-        // Store the analysis ID in state and ref to ensure it's available for redirection
+        // Store the analysis ID in state
         setAnalysisResultId(analysisId);
-        currentPollingIdRef.current = analysisId;
 
-        // Start polling with a small delay to ensure the backend has time to initialize the analysis
-        setTimeout(() => {
-          console.log(`[Analysis] Starting polling for ID: ${analysisId}`);
-          startPolling(analysisId); // Start polling via the hook
-        }, 500);
-
-        setAnalysisProgress(30);
         toast({
           title: "Analysis started",
-          description: "Analysis started successfully. This may take a few moments...",
+          description: "Processing your data...",
           variant: "default",
         });
+
+        // Start simple polling immediately to get real progress
+        console.log(`[Analysis] Starting simple polling for ID: ${analysisId}`);
+        startSimplePolling(analysisId);
       } else {
         // Handle error from server action (Type Guard)
         if (!result.success) {
@@ -316,7 +352,7 @@ export default function EmergencyUploadPanel() {
       setIsAnalyzing(false); // Analysis failed, stop indicating analysis is running
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file, isTextFile, toast, startPolling]); // Depends on startPolling from the hook
+  }, [file, isTextFile, toast, startSimplePolling]); // Depends on startSimplePolling
 
   // Handle file upload using server action
   const handleUpload = useCallback(async (e: React.FormEvent) => {
@@ -396,9 +432,9 @@ export default function EmergencyUploadPanel() {
       setIsAnalyzing(false);
       setAnalysisStatus(null);
       setAnalysisStage(null);
-      stopPolling(); // Stop polling if a new file is selected
+      stopSimplePolling(); // Stop polling if a new file is selected
     }
-  }, [stopPolling]); // Depends on stopPolling from the hook
+  }, [stopSimplePolling]); // Depends on stopSimplePolling
 
   // Handle clear file
   const handleClearFile = useCallback(() => {
@@ -412,12 +448,13 @@ export default function EmergencyUploadPanel() {
     setIsAnalyzing(false);
     setAnalysisStatus(null);
     setAnalysisStage(null);
-    stopPolling(); // Stop polling on clear
+    setAnalysisProgress(0); // Reset progress to 0
+    stopSimplePolling(); // Stop polling on clear
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [stopPolling]); // Depends on stopPolling from the hook
+  }, [stopSimplePolling]); // Depends on stopSimplePolling
 
   // Toggle text file setting
   const handleToggleTextFile = useCallback((value: string) => {
@@ -440,46 +477,17 @@ export default function EmergencyUploadPanel() {
   }, []);
 
 
-  // Effect for visual progress increment during polling (optional)
+  // Effect for handling completion status
   useEffect(() => {
-    let progressIncrementInterval: NodeJS.Timeout | null = null;
-
-    // Only increment progress if we're actively polling and not completed/failed
-    if (isPolling && analysisStatus !== 'completed' && analysisStatus !== 'failed') {
-      // Use a longer interval to avoid too frequent updates
-      // This helps prevent the progress bar from jumping around too much
-      progressIncrementInterval = setInterval(() => {
-        setAnalysisProgress(prev => {
-          // Only increment if we haven't received a real progress update recently
-          // This is indicated by the progress being at certain thresholds
-
-          // If progress is at exactly 10, 30, 60, or 90, it's likely from our initial setting
-          // or from a backend update, so we should increment it
-          const isAtThreshold = prev === 10 || prev === 30 || prev === 60 || prev === 90;
-
-          // If we're at a threshold or progress is low, increment it
-          if (isAtThreshold || prev < 20) {
-            // Smaller increments as we get closer to 95%
-            const increment = prev < 50 ? 2 : prev < 80 ? 1 : 0.5;
-            return Math.min(prev + increment, 95);
-          }
-
-          // Otherwise, keep the current progress
-          return prev;
-        });
-      }, 3000); // Less frequent updates to avoid conflicts with real progress updates
-    } else if (analysisStatus === 'completed') {
-      // Ensure we reach 100% on completion
+    // Ensure progress is set correctly for final states
+    if (analysisStatus === 'completed') {
+      console.log('[Progress Effect] Analysis completed, ensuring progress is 100%');
       setAnalysisProgress(100);
     } else if (analysisStatus === 'failed') {
-      // Reset progress on failure
+      console.log('[Progress Effect] Analysis failed, resetting progress to 0%');
       setAnalysisProgress(0);
     }
-
-    return () => {
-      if (progressIncrementInterval) clearInterval(progressIncrementInterval);
-    };
-  }, [isPolling, analysisStatus]);
+  }, [analysisStatus]);
 
   // --- Render Logic ---
   return (
@@ -511,6 +519,8 @@ export default function EmergencyUploadPanel() {
               </div>
             </RadioGroup>
           </div>
+
+
 
           {/* File Upload Area */}
           <div
@@ -609,9 +619,13 @@ export default function EmergencyUploadPanel() {
                    'Please wait'}
                 </span>
               </div>
-              <Progress value={analysisProgress} className="h-2" />
+              <Progress
+                key={`progress-${analysisProgress}`}
+                value={analysisProgress}
+                className="h-2"
+              />
               <div className="text-right text-xs text-muted-foreground">
-                {analysisProgress}%
+                Progress: {analysisProgress}% (Status: {analysisStatus || 'unknown'})
               </div>
             </div>
           )}

@@ -1,6 +1,6 @@
 /**
  * Core API client functionality
- * 
+ *
  * This module provides the core axios client setup and error handling.
  * It implements a singleton pattern to ensure consistent API interaction.
  */
@@ -9,7 +9,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 
 /**
  * Core API Client for interacting with the backend API
- * 
+ *
  * Implemented as a true singleton to ensure consistent API interaction across the application.
  */
 class ApiCore {
@@ -23,7 +23,19 @@ class ApiCore {
    * Use ApiCore.getInstance() instead.
    */
   private constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    // For frontend API routes, use the current origin (Next.js server)
+    // This ensures requests go to Next.js API routes instead of directly to the backend
+    // On client side, use window.location.origin to get the current port
+    // On server side, try to detect the port from environment or use a fallback
+    if (typeof window !== 'undefined') {
+      // Client side - use the current origin (works with any port)
+      this.baseUrl = window.location.origin;
+    } else {
+      // Server side - try to get port from environment or use fallback
+      const port = process.env.PORT || process.env.NEXT_PUBLIC_PORT || '3000';
+      this.baseUrl = `http://localhost:${port}`;
+    }
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {

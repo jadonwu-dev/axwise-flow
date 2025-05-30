@@ -4,7 +4,7 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
 
-  // Output configuration for Firebase App Hosting
+  // Output configuration for Cloud Run deployment
   output: 'standalone',
 
   // Environment variables
@@ -17,15 +17,15 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'axwise-73425.firebaseapp.com'
+        hostname: 'axwise.de'
       },
       {
         protocol: 'https',
-        hostname: 'axwise-73425.firebasestorage.app'
+        hostname: 'api.axwise.de'
       },
       {
         protocol: 'https',
-        hostname: 'axwise-flow--axwise-73425.europe-west4.hosted.app'
+        hostname: 'axwise-flow-oicbg7twja-ez.a.run.app'
       }
     ],
   },
@@ -34,7 +34,8 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: [
-        'axwise-flow--axwise-73425.europe-west4.hosted.app',
+        'axwise.de',
+        'axwise-flow-oicbg7twja-ez.a.run.app',
         'localhost:3000'
       ],
       bodySizeLimit: '2mb'
@@ -57,7 +58,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  // Properly handle middleware for Firebase App Hosting
+  // Properly handle middleware for Cloud Run deployment
   poweredByHeader: false,
   generateEtags: false,
 
@@ -89,7 +90,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.axwise.de https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.axwise.de https://axwise-backend-oicbg7twja-ez.a.run.app https://clerk.axwise.de https://api.stripe.com;",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.axwise.de https://distinct-rattler-76.clerk.accounts.dev https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.axwise.de https://axwise-backend-oicbg7twja-ez.a.run.app https://clerk.axwise.de https://distinct-rattler-76.clerk.accounts.dev https://api.stripe.com;",
           },
         ],
       },
@@ -212,7 +213,7 @@ const nextConfig = {
       config.optimization.moduleIds = 'named';
     }
 
-    // Add path resolution for Firebase App Hosting compatibility
+    // Add path resolution for Cloud Run deployment compatibility
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname),

@@ -1,9 +1,35 @@
 // Firebase Analytics Event Tracking Service for AxWise
-import { logEvent } from 'firebase/analytics';
-import { analytics } from './firebase';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAnalytics, logEvent, isSupported } from 'firebase/analytics';
 
-// Log that analytics service is loaded
-console.log('🔥 Firebase Analytics service loaded for AxWise');
+// Firebase config for analytics only
+const firebaseConfig = {
+  apiKey: "AIzaREDACTED",
+  authDomain: "axwise-73425.firebaseapp.com",
+  projectId: "axwise-73425",
+  storageBucket: "axwise-73425.firebasestorage.app",
+  messagingSenderId: "993236701053",
+  appId: "1:993236701053:web:385685bda2446ccef94614",
+  measurementId: "G-VVCYDEQ1YM"
+};
+
+// Initialize Firebase app for analytics only
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
+// Initialize analytics (only in browser)
+let analytics: any = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+      console.log('🔥 Firebase Analytics initialized for AxWise');
+    } else {
+      console.warn('🔥 Firebase Analytics not supported in this environment');
+    }
+  }).catch((error) => {
+    console.warn('🔥 Firebase Analytics initialization failed:', error);
+  });
+}
 
 /**
  * Firebase Analytics Event Tracking Service

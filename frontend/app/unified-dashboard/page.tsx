@@ -10,7 +10,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import VisualizationTabs from '@/components/visualization/VisualizationTabs';
 import Loading from './visualize/loading';
-import { getServerSideAnalysis, getLatestCompletedAnalysis } from '@/app/actions';
+import { getServerSideAnalysis, getLatestCompletedAnalysis, getServerSidePRD } from '@/app/actions';
 import { NoAnalysisState } from '@/components/visualization/NoAnalysisState';
 
 // Force dynamic rendering to ensure fresh data
@@ -45,12 +45,20 @@ export default async function UnifiedDashboard({ searchParams }: PageProps): Pro
     const analysisData = await getServerSideAnalysis(analysisId);
     const visualizationTab = searchParams?.visualizationTab || null;
 
+    // If PRD tab is requested, also fetch PRD data server-side
+    let prdData = null;
+    if (visualizationTab === 'prd') {
+      const forceRegenerate = searchParams?.regeneratePRD === 'true';
+      prdData = await getServerSidePRD(analysisId, forceRegenerate);
+    }
+
     return (
       <Suspense fallback={<Loading />}>
         <VisualizationTabs
           analysisId={analysisId}
           analysisData={analysisData}
           initialTab={visualizationTab}
+          prdData={prdData}
         />
       </Suspense>
     );
@@ -63,12 +71,20 @@ export default async function UnifiedDashboard({ searchParams }: PageProps): Pro
     // If we have a latest analysis, show it
     const visualizationTab = searchParams?.visualizationTab || null;
 
+    // If PRD tab is requested, also fetch PRD data server-side
+    let prdData = null;
+    if (visualizationTab === 'prd') {
+      const forceRegenerate = searchParams?.regeneratePRD === 'true';
+      prdData = await getServerSidePRD(latestAnalysis.id, forceRegenerate);
+    }
+
     return (
       <Suspense fallback={<Loading />}>
         <VisualizationTabs
           analysisId={latestAnalysis.id}
           analysisData={latestAnalysis}
           initialTab={visualizationTab}
+          prdData={prdData}
         />
       </Suspense>
     );

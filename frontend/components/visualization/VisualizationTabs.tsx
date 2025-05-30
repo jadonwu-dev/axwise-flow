@@ -20,13 +20,15 @@ import { ThemeChart } from './ThemeChart'; // The canonical ThemeChart component
 import { PatternList } from './PatternList';
 import { PersonaList } from './PersonaList';
 import { InsightList } from './InsightList';
-import { PriorityInsights } from './PriorityInsights';
-import PRDTab from './PRDTab'; // Import the PRD tab component
+import { PriorityInsightsDisplay } from './PriorityInsightsDisplay';
+import { apiClient } from '@/lib/apiClient';
+import type { PriorityInsightsResponse } from '@/types/api';
+import { PRDDisplay } from './PRDDisplay';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams } from 'next/navigation';
 import CustomErrorBoundary from './ErrorBoundary';
-import { apiClient } from '@/lib/apiClient'; // Keep apiClient if needed elsewhere
+
 import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
 import { ExportButton } from './ExportButton';
 import type { DetailedAnalysisResult } from '@/types/api'; // Remove PrioritizedInsight import
@@ -37,6 +39,7 @@ interface VisualizationTabsProps {
   analysisId?: string;
   analysisData?: DetailedAnalysisResult | null;
   initialTab?: string | null;
+  prdData?: any | null; // PRD data from server-side generation
 }
 
 // Define a type for the tab values
@@ -52,7 +55,8 @@ export type TabValue = 'themes' | 'patterns' | 'personas' | 'insights' | 'priori
 export default function VisualizationTabsRefactored({
   analysisId,
   analysisData: serverAnalysisData,
-  initialTab
+  initialTab,
+  prdData
 }: VisualizationTabsProps) {
   // No router needed
   const searchParams = useSearchParams();
@@ -61,17 +65,26 @@ export default function VisualizationTabsRefactored({
   const [activeTab, setActiveTab] = useState<TabValue>(
     initialTab as TabValue || activeTabFromUrl || 'themes'
   );
+
+  // Debug logging
+  console.log(`[VisualizationTabs] Current state - activeTab: "${activeTab}", activeTabFromUrl: "${activeTabFromUrl}", initialTab: "${initialTab}"`);
   const [localAnalysis, setLocalAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
   const [loading, setLoading] = useState<boolean>(!serverAnalysisData); // Initial loading based on server data
   const [fetchError, setFetchError] = useState<string | null>(null); // Renamed for clarity
+
   const lastFetchedId = useRef<string | null>(null);
 
   // Extract result_id from URL if analysisId is not provided as prop
   const urlAnalysisId = searchParams.get('analysisId') || searchParams.get('result_id');
   const effectiveAnalysisId = analysisId || urlAnalysisId;
 
+  // Debug logging for analysis ID resolution
+  console.log(`[VisualizationTabs] Analysis ID resolution - analysisId prop: "${analysisId}", urlAnalysisId: "${urlAnalysisId}", effectiveAnalysisId: "${effectiveAnalysisId}"`);
+
   // Use server data if available, otherwise use local state
   const analysis = serverAnalysisData || localAnalysis;
+
+
 
   // Reset analysis data when analysisId changes and fetch new data
   useEffect(() => {
@@ -129,13 +142,17 @@ export default function VisualizationTabsRefactored({
     };
   }, [effectiveAnalysisId, serverAnalysisData]); // Added serverAnalysisData as dependency
 
+
+
   // We're disabling URL updates for tab changes to prevent tab jumping issues
   // Instead, we'll only read the initial tab from the URL
   const initialRender = useRef(true);
 
   // Set active tab based on URL parameter, but only on first render
   useEffect(() => {
+    console.log(`[VisualizationTabs] useEffect for tab setting - activeTabFromUrl: "${activeTabFromUrl}", initialRender: ${initialRender.current}`);
     if (initialRender.current && activeTabFromUrl) {
+      console.log(`[VisualizationTabs] Setting active tab to: "${activeTabFromUrl}"`);
       initialRender.current = false;
       setActiveTab(activeTabFromUrl);
     }
@@ -297,9 +314,17 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="priority" className="mt-6">
-                <PriorityInsights analysisId={effectiveAnalysisId || ''} />
+                {analysis ? (
+                  <PriorityInsightsDisplay analysis={analysis} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No analysis data available for priority insights.
+                  </div>
+                )}
               </TabsContent>
             </CustomErrorBoundary>
+
+
 
             <CustomErrorBoundary
               fallback={
@@ -310,11 +335,14 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="prd" className="mt-6">
-                {effectiveAnalysisId && (
-                  <PRDTab
-                    analysisId={effectiveAnalysisId}
-                    isAnalysisComplete={analysis?.status === 'completed'}
-                  />
+                {prdData ? (
+                  <PRDDisplay analysis={analysis} prdData={prdData} />
+                ) : analysis ? (
+                  <PRDDisplay analysis={analysis} />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No analysis data available for PRD generation.
+                  </div>
                 )}
               </TabsContent>
             </CustomErrorBoundary>

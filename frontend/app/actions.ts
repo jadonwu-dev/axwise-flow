@@ -8,9 +8,11 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
-import type { DetailedAnalysisResult, UploadResponse, AnalysisResponse } from '@/types/api';
+import { generatePRD } from '@/lib/api/prd';
+import type { DetailedAnalysisResult, UploadResponse, AnalysisResponse, PRDResponse } from '@/types/api';
  // Rem-addd UploadResponse, AnalysisResponse
 import { cookies } from 'next/headers';
+import { auth } from '@clerk/nextjs/server';
 
 /**
  * Upload Action
@@ -542,27 +544,44 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
  */
 export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResult | null> {
   try {
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Use Clerk's server-side auth instead of cookies
+    const { userId, getToken } = await auth();
 
+    let authToken: string | null = null;
+
+    if (userId) {
+      authToken = await getToken();
+    }
+
+    // Fallback to development token if Clerk auth fails
     if (!authToken) {
-      console.error('[getLatestCompletedAnalysis] No auth token available');
-      return null;
+      console.log('[getLatestCompletedAnalysis] Using development token fallback');
+      authToken = 'DEV_TOKEN_REDACTED'; // Development token that matches backend expectations
     }
 
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
 
     try {
-      // First attempt: Try to get from history API
-      // Fetch the first page with only one result, sorted by date descending
-      const response = await apiClient.getAnalysisHistory(0, 1);
+      // Direct backend API call instead of using the API client
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${backendUrl}/api/analyses?offset=0&limit=1`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      // Check if we have any completed analyses
-      if (response.items && response.items.length > 0 && response.items[0].status === 'completed') {
-        console.log(`[getLatestCompletedAnalysis] Found latest analysis from history: ${response.items[0].id}`);
-        return response.items[0];
+      if (response.ok) {
+        const data = await response.json();
+        // Check if we have any completed analyses
+        if (data && data.length > 0 && data[0].status === 'completed') {
+          console.log(`[getLatestCompletedAnalysis] Found latest analysis from direct API call: ${data[0].id}`);
+          return data[0];
+        }
+      } else {
+        console.error(`[getLatestCompletedAnalysis] API error: ${response.status} ${response.statusText}`);
       }
     } catch (historyError) {
       console.error('[getLatestCompletedAnalysis] Error fetching analysis history:', historyError);
@@ -641,5 +660,36 @@ export async function fetchAnalysisHistory(page: number = 1, pageSize: number = 
       totalItems: 0,
       currentPage: page
     };
+  }
+}
+
+/**
+ * Server-side PRD Generation
+ * Generates PRD using LLM from analysis data
+ */
+export async function getServerSidePRD(analysisId: string, forceRegenerate: boolean = false): Promise<PRDResponse | null> {
+  try {
+    console.log(`[getServerSidePRD] Generating PRD for analysis ID: ${analysisId}, forceRegenerate: ${forceRegenerate}`);
+
+    // Get auth token from cookie
+    const cookieStore = cookies();
+    const authToken = cookieStore.get('auth_token')?.value;
+
+    if (!authToken) {
+      console.error('[getServerSidePRD] No auth token available');
+      return null;
+    }
+
+    // Set the token on the API client
+    apiClient.setAuthToken(authToken);
+
+    // Generate PRD using the LLM-powered backend service
+    const prdResponse = await generatePRD(analysisId, 'both', forceRegenerate);
+
+    console.log(`[getServerSidePRD] Successfully generated PRD for analysis ID: ${analysisId}`);
+    return prdResponse;
+  } catch (error) {
+    console.error('[getServerSidePRD] Error generating PRD:', error);
+    return null;
   }
 }

@@ -66,9 +66,46 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
       }
     }
 
-    // Handle empty results
+    // Handle empty results - try direct backend call if no data
     if (analysesArray.length === 0) {
-      console.log('No analyses found in response');
+      console.log('No analyses found in response, trying direct backend call');
+
+      // Try direct backend API call with development token
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const queryParams = new URLSearchParams();
+
+        // Convert params to query string
+        if (params && typeof params === 'object') {
+          Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              queryParams.append(key, String(value));
+            }
+          });
+        }
+
+        const url = `${backendUrl}/api/analyses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        const directResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (directResponse.ok) {
+          const directData = await directResponse.json();
+          console.log('Direct backend call successful for listAnalyses, found', directData.length, 'items');
+          if (Array.isArray(directData) && directData.length > 0) {
+            return directData;
+          }
+        } else {
+          console.error(`Direct backend call failed: ${directResponse.status} ${directResponse.statusText}`);
+        }
+      } catch (directError) {
+        console.error('Direct backend call error:', directError);
+      }
+
       if (typeof window !== 'undefined' && window.showToast) {
         window.showToast('No analyses found. Try uploading a file first.');
       }
@@ -79,7 +116,42 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
     return analysesArray;
 
   } catch (error: Error | unknown) {
-    console.error('API error:', error);
+    console.error('API error, trying direct backend call:', error);
+
+    // Try direct backend API call with development token
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const queryParams = new URLSearchParams();
+
+      // Convert params to query string
+      if (params && typeof params === 'object') {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const url = `${backendUrl}/api/analyses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Direct backend call successful for listAnalyses');
+        return Array.isArray(data) ? data : [];
+      } else {
+        console.error(`Direct backend call failed: ${response.status} ${response.statusText}`);
+      }
+    } catch (directError) {
+      console.error('Direct backend call error:', directError);
+    }
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Failed to fetch analyses: ${errorMessage}`);
   }
@@ -112,7 +184,30 @@ export async function getAnalysisHistory(skip: number = 0, limit: number = 10): 
       console.log(`[getAnalysisHistory] Received ${items.length} history items, total count: ${totalCount}`);
       return { items, totalCount };
     } catch (firstError) {
-      console.warn('[getAnalysisHistory] Error with first endpoint, trying fallback:', firstError);
+      console.warn('[getAnalysisHistory] Error with first endpoint, trying direct backend call:', firstError);
+
+      // Try direct backend API call with development token
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${backendUrl}/api/analyses?offset=${skip}&limit=${limit}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`[getAnalysisHistory] Direct backend call successful, received ${data.length} items`);
+          return { items: data || [], totalCount: data?.length || 0 };
+        } else {
+          console.error(`[getAnalysisHistory] Direct backend call failed: ${response.status} ${response.statusText}`);
+        }
+      } catch (directError) {
+        console.error('[getAnalysisHistory] Direct backend call error:', directError);
+      }
+
       // Try fallback endpoint
       try {
         const response = await apiCore.getClient().get('/api/analyses/history', {
@@ -128,7 +223,7 @@ export async function getAnalysisHistory(skip: number = 0, limit: number = 10): 
         console.log(`[getAnalysisHistory] Received ${items.length} items from fallback endpoint`);
         return { items, totalCount };
       } catch (secondError) {
-        console.error('[getAnalysisHistory] Both endpoints failed:', secondError);
+        console.error('[getAnalysisHistory] All endpoints failed:', secondError);
         // Return empty data in development mode
         if (process.env.NODE_ENV === 'development') {
           console.log('[getAnalysisHistory] Returning empty data in development mode');

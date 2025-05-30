@@ -27,6 +27,13 @@ export default function HistoryPanel(): JSX.Element {
   const [history, setHistory] = useState<DetailedAnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+
+  // Force component to render on client side
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   const [filters, setFilters] = useState({
     sortBy: 'createdAt' as 'createdAt' | 'fileName',
     sortDirection: 'desc' as 'asc' | 'desc',
@@ -55,21 +62,47 @@ export default function HistoryPanel(): JSX.Element {
     }));
   }, []);
 
-  // Fetch history function
+  // Fetch history function - use server-side proxy to avoid CORS
   const fetchHistory = useCallback(async () => {
+    console.log('HistoryPanel: fetchHistory called with filters:', filters);
     setIsLoading(true);
     setError(null);
 
     try {
-      // Convert filters to API format
-      const apiParams = {
-        sortBy: filters.sortBy,
-        sortDirection: filters.sortDirection,
-        status: filters.status === 'all' ? undefined : filters.status
-      };
+      console.log('HistoryPanel: Fetching history with filters:', filters);
 
-      const analyses = await apiClient.listAnalyses(apiParams);
-      setHistory(analyses);
+      // Use server-side API route to avoid CORS issues
+      const queryParams = new URLSearchParams();
+
+      // Convert filters to query string
+      if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
+      if (filters.sortDirection) queryParams.append('sortDirection', filters.sortDirection);
+      if (filters.status && filters.status !== 'all') queryParams.append('status', filters.status);
+
+      const url = `/api/history${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      console.log('HistoryPanel: Making API call to:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('HistoryPanel: API call successful, received', data.length, 'analyses');
+        setHistory(Array.isArray(data) ? data : []);
+      } else if (response.status === 401) {
+        // Handle authentication errors gracefully
+        console.log('HistoryPanel: Authentication required');
+        setError(new Error('Please sign in to view your analysis history'));
+        setHistory([]); // Clear any existing data
+      } else {
+        const errorText = await response.text();
+        console.error(`HistoryPanel: API call failed: ${response.status} ${response.statusText}`, errorText);
+        setError(new Error(`API Error: ${response.status} ${errorText}`));
+      }
     } catch (err) {
       console.error('Error fetching analysis history:', err);
       setError(err instanceof Error ? err : new Error('Failed to load history'));
@@ -88,10 +121,13 @@ export default function HistoryPanel(): JSX.Element {
     router.push(analyzeUrl);
   }, [router]);
 
-  // Fetch history when filters change
+  // Fetch history when filters change and component is mounted
   useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+    if (isMounted) {
+      console.log('HistoryPanel: useEffect triggered, calling fetchHistory');
+      fetchHistory();
+    }
+  }, [fetchHistory, isMounted]);
 
   // Format file size for display - memoize as it's a pure function
   const formatFileSize = useMemo(() => (bytes: number | undefined): string => { // Add return type
@@ -115,6 +151,20 @@ export default function HistoryPanel(): JSX.Element {
         return <Badge variant="outline">Unknown</Badge>;
     }
   }, []); // Removed useMemo, simplified return
+
+  // Don't render anything until mounted (prevents hydration issues)
+  if (!isMounted) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex justify-center items-center py-12">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Initializing...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Loading state
   if (isLoading && history.length === 0) {

@@ -15,14 +15,56 @@ export async function getPriorityInsights(analysisId: string): Promise<PriorityI
   try {
     console.log(`Getting priority insights for analysis ID: ${analysisId}`);
 
-    // Make the API call
-    const response = await apiCore.getClient().get(`/api/analysis/priority?result_id=${analysisId}`, {
-      timeout: 30000, // 30 seconds timeout
-      validateStatus: function (status) {
-        // Accept 404 as a valid status code - we'll handle it in the response processing
-        return (status >= 200 && status < 300) || status === 404;
+    // Try Next.js API route first
+    try {
+      const response = await apiCore.getClient().get(`/api/analysis/priority?result_id=${analysisId}`, {
+        timeout: 30000, // 30 seconds timeout
+        validateStatus: function (status) {
+          // Accept 404 as a valid status code - we'll handle it in the response processing
+          return (status >= 200 && status < 300) || status === 404;
+        }
+      });
+
+      // If successful, process the response
+      if (response.status !== 404 && response.data) {
+        return {
+          insights: response.data.insights,
+          metrics: response.data.metrics || {
+            high_urgency_count: 0,
+            medium_urgency_count: 0,
+            low_urgency_count: 0
+          }
+        };
       }
+    } catch (apiError) {
+      console.warn('Next.js API route failed, trying direct backend call:', apiError);
+    }
+
+    // Fallback to direct backend API call
+    console.log('Making direct backend call for priority insights');
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const directResponse = await fetch(`${backendUrl}/api/analysis/priority?result_id=${analysisId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+        'Content-Type': 'application/json',
+      },
     });
+
+    if (directResponse.ok) {
+      const data = await directResponse.json();
+      console.log('Direct backend call successful for priority insights');
+      return {
+        insights: data.insights,
+        metrics: data.metrics || {
+          high_urgency_count: 0,
+          medium_urgency_count: 0,
+          low_urgency_count: 0
+        }
+      };
+    } else {
+      console.error(`Direct backend call failed: ${directResponse.status} ${directResponse.statusText}`);
+    }
 
     console.log('Priority insights response:', response.data);
 

@@ -3,6 +3,7 @@
  */
 
 import { apiCore } from './core';
+import { initializeAuth } from './auth';
 import { API_ENDPOINTS } from '../apiEndpoints';
 
 /**
@@ -121,18 +122,60 @@ export async function generatePRD(
   forceRegenerate: boolean = false
 ): Promise<PRDResponse> {
   try {
+    console.log(`[generatePRD] Starting PRD generation for result ID: ${resultId}, type: ${prdType}, force: ${forceRegenerate}`);
+
+    // Initialize authentication before making API calls
+    await initializeAuth();
+
     const url = forceRegenerate
       ? `${API_ENDPOINTS.GENERATE_PRD(resultId, prdType)}&force_regenerate=true`
       : API_ENDPOINTS.GENERATE_PRD(resultId, prdType);
 
-    const response = await apiCore.getClient().get(
-      url,
-      {
-        timeout: 120000 // 120 seconds timeout for potentially large PRD generation
-      }
-    );
+    console.log(`[generatePRD] Trying Next.js API route: ${url}`);
 
-    return response.data;
+    // Try Next.js API route first
+    try {
+      const response = await apiCore.getClient().get(
+        url,
+        {
+          timeout: 120000 // 120 seconds timeout for potentially large PRD generation
+        }
+      );
+
+      console.log(`[generatePRD] Next.js API route successful:`, response.data);
+      return response.data;
+    } catch (apiError) {
+      console.warn('[generatePRD] Next.js API route failed, trying direct backend call:', apiError);
+    }
+
+    // Fallback to direct backend API call
+    console.log('[generatePRD] Making direct backend call for PRD generation');
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const directUrl = forceRegenerate
+      ? `${backendUrl}/api/prd/${resultId}?prd_type=${prdType}&force_regenerate=true`
+      : `${backendUrl}/api/prd/${resultId}?prd_type=${prdType}`;
+
+    console.log(`[generatePRD] Direct backend URL: ${directUrl}`);
+
+    const directResponse = await fetch(directUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log(`[generatePRD] Direct backend response status: ${directResponse.status}`);
+
+    if (directResponse.ok) {
+      const data = await directResponse.json();
+      console.log('[generatePRD] Direct backend call successful for PRD generation:', data);
+      return data;
+    } else {
+      const errorText = await directResponse.text();
+      console.error(`[generatePRD] Direct backend call failed: ${directResponse.status} ${directResponse.statusText}`, errorText);
+      throw new Error(`Failed to generate PRD: ${directResponse.status} ${directResponse.statusText}`);
+    }
   } catch (error) {
     console.error('Error generating PRD:', error);
     throw error;

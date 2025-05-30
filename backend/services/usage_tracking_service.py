@@ -1,7 +1,7 @@
 """
 Usage Tracking Service for monitoring and enforcing subscription limits.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 import logging
@@ -211,7 +211,7 @@ class UsageTrackingService:
             self.user.usage_data["usage"][current_month]["analyses_count"] += 1
             self.user.usage_data["usage"][current_month]["analyses"].append({
                 "analysis_id": analysis_id,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
             # Update user in database
@@ -294,7 +294,7 @@ class UsageTrackingService:
             self.user.usage_data["usage"][current_month]["prd_generations_count"] += 1
             self.user.usage_data["usage"][current_month]["prd_generations"].append({
                 "result_id": result_id,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
             # Update user in database

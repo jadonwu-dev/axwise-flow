@@ -102,7 +102,7 @@ export function SubscriptionStatus() {
 
   return (
     <div className="flex items-center gap-2">
-      {subscription ? (
+      {subscription && subscription.tier && subscription.status ? (
         <>
           <Badge className={getTierColor(subscription.tier)}>
             {subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)}
