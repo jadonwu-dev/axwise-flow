@@ -39,13 +39,27 @@ class ApiCore {
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
-        'Content-Type': 'application/json',
+        // Don't set Content-Type globally - let axios set it per request
+        // For JSON requests, it will be set automatically
+        // For FormData requests, it will be set to multipart/form-data
         'Access-Control-Allow-Origin': '*', // Added CORS header
         'X-API-Version': 'merged-976ce06-current' // Version tracking for debugging
       },
       // Increase default timeout for potentially longer operations
       timeout: 120000, // 120 seconds (increased from 30)
     });
+
+    // Add request interceptor to set Content-Type for JSON requests
+    this.client.interceptors.request.use(
+      (config) => {
+        // If data is not FormData and no Content-Type is set, use JSON
+        if (config.data && !(config.data instanceof FormData) && !config.headers['Content-Type']) {
+          config.headers['Content-Type'] = 'application/json';
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
 
     // Add response interceptor for handling auth errors and network issues
     this.client.interceptors.response.use(

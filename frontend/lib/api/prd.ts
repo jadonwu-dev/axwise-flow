@@ -150,6 +150,13 @@ export async function generatePRD(
 
     // Fallback to direct backend API call
     console.log('[generatePRD] Making direct backend call for PRD generation');
+
+    // Get real Clerk token for direct backend call
+    const authToken = await getAuthToken();
+    if (!authToken) {
+      throw new Error('Authentication required for PRD generation');
+    }
+
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const directUrl = forceRegenerate
       ? `${backendUrl}/api/prd/${resultId}?prd_type=${prdType}&force_regenerate=true`
@@ -160,7 +167,7 @@ export async function generatePRD(
     const directResponse = await fetch(directUrl, {
       method: 'GET',
       headers: {
-        'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+        'Authorization': `Bearer ${authToken}`, // Real Clerk token
         'Content-Type': 'application/json',
       },
     });

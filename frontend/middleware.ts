@@ -17,6 +17,15 @@ const isPublicRoute = createRouteMatcher([
   '/research-dashboard(.*)', // Allow research dashboard
   '/api/webhook(.*)', // Allow webhooks
   '/api/research(.*)', // Allow research API routes
+  '/api/upload', // Allow upload API route (handles auth internally)
+  '/api/prd(.*)', // Allow PRD API routes (handles auth internally)
+  '/api/analyses(.*)', // Allow analyses API routes (handles auth internally)
+  '/api/analyze', // Allow analyze API route (handles auth internally)
+  '/api/history', // Allow history API route (handles auth internally)
+  '/api/results(.*)', // Allow results API routes (handles auth internally)
+  '/api/analysis(.*)', // Allow analysis API routes (handles auth internally)
+  '/api/health', // Allow health check
+  '/api/protected', // Allow protected route (handles auth internally)
 ]);
 
 // Define protected routes that require authentication

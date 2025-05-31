@@ -56,14 +56,22 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
       // FileReader is a browser-only API and cannot be used in server actions
     }
 
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Get auth token using Clerk's server-side auth
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Not authenticated - no user ID'
+      };
+    }
+
+    const authToken = await getToken();
 
     if (!authToken) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated - no token'
       };
     }
 
@@ -453,14 +461,22 @@ export async function analyzeAction(
   llmProvider: 'openai' | 'gemini' = 'gemini'
 ): Promise<{ success: true; analysisResponse: AnalysisResponse } | { success: false; error: string }> {
   try {
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Get auth token using Clerk's server-side auth
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Not authenticated - no user ID'
+      };
+    }
+
+    const authToken = await getToken();
 
     if (!authToken) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated - no token'
       };
     }
 
@@ -515,9 +531,15 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
   console.log(`[getServerSideAnalysis] Received analysisId: ${analysisId}`); // DEBUG LOG
 
   try {
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Get auth token using Clerk's server-side auth
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      console.error('[getServerSideAnalysis] No user ID available for server fetch');
+      return null;
+    }
+
+    const authToken = await getToken();
 
     if (!authToken) {
       console.error('[getServerSideAnalysis] No auth token available for server fetch');

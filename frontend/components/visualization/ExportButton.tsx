@@ -24,11 +24,18 @@ export function ExportButton({ analysisId }: ExportButtonProps): JSX.Element {
     try {
       setIsExporting(true);
 
-      // Get auth token from cookie
-      const authToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('auth_token='))
-        ?.split('=')[1] || 'DEV_TOKEN_REDACTED'; // Fallback to dev token
+      // Get auth token from Clerk
+      const { getAuthToken } = await import('@/lib/api/auth');
+      const authToken = await getAuthToken();
+
+      if (!authToken) {
+        toast({
+          title: 'Authentication Required',
+          description: 'Please sign in to export analysis results.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       // Get the export URL using our API client functions
       const exportUrl = format === 'pdf'

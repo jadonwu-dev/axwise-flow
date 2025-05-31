@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * Analyses API route - proxies to Python backend
  */
@@ -8,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get authentication from Clerk
     const { userId, getToken } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -18,14 +21,14 @@ export async function GET(request: NextRequest) {
 
     // Get the auth token
     const token = await getToken();
-    
+
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
+
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const queryString = searchParams.toString();
-    
+
     // Forward the request to the Python backend
     const response = await fetch(`${backendUrl}/api/analyses${queryString ? `?${queryString}` : ''}`, {
       method: 'GET',

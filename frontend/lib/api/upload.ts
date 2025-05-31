@@ -39,7 +39,8 @@ export async function uploadData(file: File, isTextFile: boolean = false): Promi
 
     // Important: Do NOT set Content-Type header for multipart/form-data
     // The browser will automatically set the correct Content-Type with boundary
-    const response = await apiCore.getClient().post<UploadResponse>('/api/data', formData, {
+    // Use the frontend API route which handles Clerk authentication properly
+    const response = await apiCore.getClient().post<UploadResponse>('/api/upload', formData, {
       headers: {
         'Accept': 'application/json',
       },

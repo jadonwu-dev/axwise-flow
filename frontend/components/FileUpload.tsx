@@ -121,29 +121,32 @@ export function FileUpload({
       // Check if we're in a browser or server environment
       if (typeof window !== 'undefined') {
         try {
-          // We're in the browser, use the direct uploader
-          console.log('Using client-side upload approach');
+          // We're in the browser, use direct API client upload
+          console.log('Using client-side API upload approach');
 
-          // Create a FormData object for the upload
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('isTextFile', String(isTextFile));
+          // Get Clerk token directly
+          const { getAuthToken } = await import('@/lib/api/auth');
+          const authToken = await getAuthToken();
 
-          // Import the server action for SSR
-          const { uploadAction } = await import('@/app/actions');
+          if (!authToken) {
+            throw new Error('Not authenticated - please sign in');
+          }
 
-          // Call the server action directly - it will use XMLHttpRequest in browser context
-          const result = await uploadAction(formData);
+          // Set the auth token on the API client
+          apiClient.setAuthToken(authToken);
+
+          // Use the API client to upload directly
+          const uploadResponse = await apiClient.uploadData(file, isTextFile);
 
           clearInterval(progressInterval);
           setUploadProgress(100);
 
-          if (result.success) {
+          if (uploadResponse && uploadResponse.data_id) {
             setUploadSuccess(true);
             setIsUploading(false);
-            onUploadComplete(result.uploadResponse.data_id);
+            onUploadComplete(uploadResponse.data_id);
           } else {
-            throw new Error(result.error);
+            throw new Error('Upload failed - no data ID returned');
           }
         } catch (clientError) {
           console.error('Client-side upload failed, trying fallback approach:', clientError);
@@ -249,9 +252,15 @@ export function FileUpload({
         // Continue with upload even if encoding check fails
       }
 
-      await uploadFile(file)
+      // Only auto-upload if autoUpload is enabled
+      if (autoUpload) {
+        await uploadFile(file)
+      } else {
+        // Just notify the parent component about the file selection
+        onFileChange?.(file, false) // Default to false for isTextFile, parent can override
+      }
     }
-  }, [uploadFile, checkFileForEncodingIssues])
+  }, [uploadFile, checkFileForEncodingIssues, autoUpload, onFileChange])
 
   // Initialize dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

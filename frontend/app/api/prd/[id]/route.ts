@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
 
 async function getToken(): Promise<string> {
-  // In development mode, use a development token
-  if (process.env.NODE_ENV === 'development') {
-    return 'DEV_TOKEN_REDACTED';
+  try {
+    // Get the current user's auth token from Clerk
+    const { getToken } = await auth();
+    const token = await getToken();
+
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+
+    return token;
+  } catch (error) {
+    console.error('Error getting Clerk token:', error);
+    throw new Error('Authentication failed');
   }
-  
-  // In production, this would get the actual Clerk JWT token
-  // For now, return development token
-  return 'DEV_TOKEN_REDACTED';
 }
 
 export async function GET(
@@ -17,20 +27,20 @@ export async function GET(
 ) {
   try {
     console.log('PRD API route called for ID:', params.id);
-    
+
     // Get the auth token
     const token = await getToken();
-    
+
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
+
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const queryString = searchParams.toString();
-    
+
     console.log('PRD API: Using development token (development mode only)');
     console.log('Proxying to backend:', `${backendUrl}/api/prd/${params.id}${queryString ? `?${queryString}` : ''}`);
-    
+
     // Forward the request to the Python backend
     const response = await fetch(`${backendUrl}/api/prd/${params.id}${queryString ? `?${queryString}` : ''}`, {
       method: 'GET',
@@ -51,7 +61,7 @@ export async function GET(
 
     const data = await response.json();
     console.log('PRD API: Backend response successful');
-    
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('PRD API: Error:', error);

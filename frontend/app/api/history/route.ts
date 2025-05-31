@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * History API route - proxies to Python backend with proper authentication
  * - Development: Uses development token when Clerk validation is disabled
@@ -42,9 +45,12 @@ export async function GET(request: NextRequest) {
       authToken = token;
       console.log('History API: Using Clerk JWT token for authenticated user:', userId);
     } else {
-      // Development mode with Clerk validation disabled: use development token
-      authToken = 'DEV_TOKEN_REDACTED';
-      console.log('History API: Using development token (development mode only)');
+      // No valid token available
+      console.error('History API: No valid authentication token available');
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
     }
 
     // Get the backend URL from environment

@@ -372,17 +372,25 @@ export default function EmergencyUploadPanel() {
     setUploadProgress(10);
 
     try {
-      console.log('Starting upload with server action...');
+      console.log('Starting upload with direct API client...');
+
+      // Get Clerk token directly
       const authToken = await apiClient.getAuthToken();
-      if (authToken) {
-        setCookie('auth-token', authToken);
+      if (!authToken) {
+        throw new Error('Not authenticated - please sign in');
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('isTextFile', String(isTextFile));
+      // Set the auth token on the API client
+      apiClient.setAuthToken(authToken);
 
-      const result = await uploadAction(formData);
+      // Use the API client to upload directly
+      const uploadResponse = await apiClient.uploadData(file, isTextFile);
+
+      // Simulate the server action response format
+      const result = {
+        success: true,
+        uploadResponse: uploadResponse
+      };
 
       if (result.success && result.uploadResponse) {
         setUploadProgress(100);

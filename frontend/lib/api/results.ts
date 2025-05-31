@@ -186,13 +186,18 @@ export async function getAnalysisHistory(skip: number = 0, limit: number = 10): 
     } catch (firstError) {
       console.warn('[getAnalysisHistory] Error with first endpoint, trying direct backend call:', firstError);
 
-      // Try direct backend API call with development token
+      // Try direct backend API call with real Clerk token
       try {
+        const authToken = await getAuthToken();
+        if (!authToken) {
+          throw new Error('Authentication required');
+        }
+
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const response = await fetch(`${backendUrl}/api/analyses?offset=${skip}&limit=${limit}`, {
           method: 'GET',
           headers: {
-            'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+            'Authorization': `Bearer ${authToken}`, // Real Clerk token
             'Content-Type': 'application/json',
           },
         });

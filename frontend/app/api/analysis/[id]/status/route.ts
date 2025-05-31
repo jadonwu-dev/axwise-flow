@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 
-async function getToken(): Promise<string> {
-  // In development mode, use a development token
-  if (process.env.NODE_ENV === 'development') {
-    return 'DEV_TOKEN_REDACTED';
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
+async function getToken(): Promise<string | null> {
+  try {
+    // Get the authentication context from Clerk
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      console.log('No authenticated user found');
+      return null;
+    }
+
+    // Get the JWT token from Clerk
+    const token = await getToken();
+
+    if (!token) {
+      console.log('No JWT token available from Clerk');
+      return null;
+    }
+
+    return token;
+  } catch (error) {
+    console.error('Error getting Clerk token:', error);
+    return null;
   }
-
-  // In production, this would get the actual Clerk JWT token
-  // For now, return development token
-  return 'DEV_TOKEN_REDACTED';
 }
 
 export async function GET(
@@ -21,10 +39,18 @@ export async function GET(
     // Get the auth token
     const token = await getToken();
 
+    if (!token) {
+      console.log('Analysis Status API: No authentication token available');
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-    console.log('Analysis Status API: Using development token (development mode only)');
+    console.log('Analysis Status API: Using Clerk JWT token');
     console.log('Proxying to backend:', `${backendUrl}/api/analysis/${params.id}/status`);
 
     // Forward the request to the Python backend with cache-busting

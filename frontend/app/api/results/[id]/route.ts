@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * Individual Analysis Results API route - proxies to Python backend with proper authentication
  * - Development: Uses development token when Clerk validation is disabled

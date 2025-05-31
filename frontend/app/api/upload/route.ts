@@ -1,30 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * Upload API route - proxies to Python backend
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get authentication from Clerk
-    const { userId, getToken } = await auth();
+    // First, try to get the Authorization header from the incoming request
+    const authHeader = request.headers.get('Authorization');
+    let token: string | null = null;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Extract token from Authorization header
+      token = authHeader.substring(7);
+      console.log('🔄 [UPLOAD] Using token from Authorization header');
+    } else {
+      // Fallback to Clerk server-side auth
+      const { userId, getToken } = await auth();
 
-    // Get the auth token
-    const token = await getToken();
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
 
-    if (!token) {
-      console.error('🔄 [UPLOAD] No auth token available');
-      return NextResponse.json(
-        { error: 'Authentication token not available' },
-        { status: 401 }
-      );
+      // Get the auth token from Clerk
+      token = await getToken();
+
+      if (!token) {
+        console.error('🔄 [UPLOAD] No auth token available from Clerk');
+        return NextResponse.json(
+          { error: 'Authentication token not available' },
+          { status: 401 }
+        );
+      }
     }
 
     // Get the backend URL from environment
@@ -33,7 +46,6 @@ export async function POST(request: NextRequest) {
     console.log('🔄 [UPLOAD] Backend URL:', backendUrl);
     console.log('🔄 [UPLOAD] Token available:', token ? 'Yes' : 'No');
     console.log('🔄 [UPLOAD] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
-    console.log('🔄 [UPLOAD] User ID:', userId);
 
     // Forward the request to the Python backend
     const formData = await request.formData();

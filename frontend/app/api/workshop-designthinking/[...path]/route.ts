@@ -3,6 +3,9 @@ import { readFile } from 'fs/promises';
 import { join, dirname, resolve } from 'path';
 import { extname } from 'path';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * Helper function to process CSS imports and inline them
  * (Same as onepager-presentation for consistency)
@@ -11,22 +14,22 @@ async function processCSSImports(cssContent: string, cssFilePath: string, baseDi
   const importRegex = /@import\s+['"]([^'"]+)['"];?/g;
   let processedContent = cssContent;
   const matches = [...cssContent.matchAll(importRegex)];
-  
+
   for (const match of matches) {
     const importPath = match[1];
     const fullImportPath = resolve(dirname(cssFilePath), importPath);
-    
+
     try {
       // Read the imported CSS file
       const importedContent = await readFile(fullImportPath, 'utf-8');
-      
+
       // Recursively process any imports in the imported file
       const processedImportedContent = await processCSSImports(
-        importedContent, 
-        fullImportPath, 
+        importedContent,
+        fullImportPath,
         baseDir
       );
-      
+
       // Replace the @import statement with the actual content
       processedContent = processedContent.replace(match[0], processedImportedContent);
     } catch (error) {
@@ -35,7 +38,7 @@ async function processCSSImports(cssContent: string, cssFilePath: string, baseDi
       processedContent = processedContent.replace(match[0], `/* Failed to import: ${importPath} */`);
     }
   }
-  
+
   return processedContent;
 }
 
@@ -55,17 +58,17 @@ export async function GET(
     } else {
       filePath = params.path.join('/');
     }
-    
+
     // Construct the full file path
     const fullPath = join(process.cwd(), 'public', 'workshop-designthinking', filePath);
-    
+
     // Read the file
     const fileContent = await readFile(fullPath);
-    
+
     // Determine content type based on file extension
     const ext = extname(filePath).toLowerCase();
     let contentType = 'text/plain';
-    
+
     switch (ext) {
       case '.html':
         contentType = 'text/html; charset=utf-8';
@@ -110,12 +113,12 @@ export async function GET(
       default:
         contentType = 'application/octet-stream';
     }
-    
+
     // For HTML files, modify the content to fix relative paths
     if (ext === '.html') {
       let htmlContent = fileContent.toString('utf-8');
       const baseUrl = new URL(request.url).origin;
-      
+
       // Replace relative paths with absolute API paths
       htmlContent = htmlContent
         .replace(/href="css\//g, `href="${baseUrl}/api/workshop-designthinking/css/`)
@@ -126,7 +129,7 @@ export async function GET(
         .replace(/src="assets\//g, `src="${baseUrl}/api/workshop-designthinking/assets/`)
         .replace(/href="([^"]*\.(css|js|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf))"/g, `href="${baseUrl}/api/workshop-designthinking/$1"`)
         .replace(/src="([^"]*\.(js|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf))"/g, `src="${baseUrl}/api/workshop-designthinking/$1"`);
-      
+
       return new NextResponse(htmlContent, {
         status: 200,
         headers: {
@@ -135,15 +138,15 @@ export async function GET(
         },
       });
     }
-    
+
     // For CSS files, process @import statements and inline them
     if (ext === '.css') {
       const cssContent = fileContent.toString('utf-8');
       const baseDir = join(process.cwd(), 'public', 'workshop-designthinking');
-      
+
       try {
         const processedCssContent = await processCSSImports(cssContent, fullPath, baseDir);
-        
+
         return new NextResponse(processedCssContent, {
           status: 200,
           headers: {
@@ -163,7 +166,7 @@ export async function GET(
         });
       }
     }
-    
+
     // Return the file content with proper headers
     return new NextResponse(fileContent, {
       status: 200,
@@ -174,7 +177,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error serving workshop-designthinking asset:', error);
-    return new NextResponse('Asset not found', { 
+    return new NextResponse('Asset not found', {
       status: 404,
       headers: {
         'Content-Type': 'text/plain',

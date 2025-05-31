@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Upload } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@clerk/nextjs';
 import { apiClient } from '@/lib/apiClient';
 import AnalysisProgress from '@/components/AnalysisProgress';
 import AnalysisOptions from './AnalysisOptions';
@@ -16,6 +17,7 @@ import { UploadResponse, AnalysisResponse } from '@/types/api';
  */
 const UploadTab = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
+  const { isSignedIn, getToken } = useAuth();
 
   // Upload and analysis state
   const [file, setFile] = useState<File | null>(null);
@@ -24,8 +26,31 @@ const UploadTab = (): JSX.Element => { // Add return type
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [authToken] = useState<string>('testuser123');
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [llmProvider, setLlmProvider] = useState<'openai' | 'gemini'>('gemini');
+
+  // Initialize authentication
+  useEffect(() => {
+    const initAuth = async () => {
+      if (isSignedIn) {
+        try {
+          const token = await getToken();
+          if (token) {
+            setAuthToken(token);
+            apiClient.setAuthToken(token);
+
+            // Store token in cookie for server actions
+            document.cookie = `auth_token=${token}; path=/; secure; samesite=strict`;
+          }
+        } catch (error) {
+          console.error('Failed to get auth token:', error);
+          showToast('Authentication failed. Please sign in again.', { variant: 'error' });
+        }
+      }
+    };
+
+    initAuth();
+  }, [isSignedIn, getToken, showToast]);
 
   // Handle file selection from the FileUpload component
   const handleFileChange = (selectedFile: File, isText: boolean): void => { // Add return type
@@ -41,11 +66,16 @@ const UploadTab = (): JSX.Element => { // Add return type
       return;
     }
 
+    if (!isSignedIn || !authToken) {
+      showToast('Please sign in to upload files', { variant: 'error' });
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // Set auth token
+      // Ensure auth token is set
       apiClient.setAuthToken(authToken);
 
       // Upload the file, passing the isTextFile flag
@@ -70,11 +100,16 @@ const UploadTab = (): JSX.Element => { // Add return type
       return;
     }
 
+    if (!isSignedIn || !authToken) {
+      showToast('Please sign in to start analysis', { variant: 'error' });
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // Set auth token
+      // Ensure auth token is set
       apiClient.setAuthToken(authToken);
 
       // Start analysis with the selected LLM provider
@@ -117,7 +152,7 @@ const UploadTab = (): JSX.Element => { // Add return type
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
             <Button
               onClick={handleUpload}
-              disabled={!file || loading}
+              disabled={!file || loading || !isSignedIn || !authToken}
               className="flex-1"
             >
               {loading && !uploadResponse ? (
@@ -125,6 +160,8 @@ const UploadTab = (): JSX.Element => { // Add return type
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Uploading...
                 </>
+              ) : !isSignedIn ? (
+                'Sign in to Upload'
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
@@ -135,7 +172,7 @@ const UploadTab = (): JSX.Element => { // Add return type
 
             <Button
               onClick={handleStartAnalysis}
-              disabled={!uploadResponse || loading}
+              disabled={!uploadResponse || loading || !isSignedIn || !authToken}
               variant="secondary"
               className="flex-1"
             >
@@ -144,6 +181,8 @@ const UploadTab = (): JSX.Element => { // Add return type
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Starting Analysis...
                 </>
+              ) : !isSignedIn ? (
+                'Sign in to Analyze'
               ) : (
                 'Start Analysis'
               )}

@@ -3,6 +3,9 @@ import { readFile } from 'fs/promises';
 import { join, dirname, resolve } from 'path';
 import { extname } from 'path';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 /**
  * Helper function to process CSS imports and inline them
  */
