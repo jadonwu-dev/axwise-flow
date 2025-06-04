@@ -42,22 +42,56 @@ const hooks = [
 
 export const HeroSection = () => {
   const [currentHookIndex, setCurrentHookIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIsVisible(false);
+    const currentHook = hooks[currentHookIndex];
+    const fullText = currentHook.text + currentHook.emphasis + currentHook.suffix;
+    let currentIndex = 0;
 
-      setTimeout(() => {
-        setCurrentHookIndex((prev) => (prev + 1) % hooks.length);
-        setIsVisible(true);
-      }, 300); // Half of transition duration
-    }, 4000); // Change every 4 seconds
+    setDisplayedText('');
+    setIsTyping(true);
 
-    return () => clearInterval(interval);
-  }, []);
+    const typeInterval = setInterval(() => {
+      if (currentIndex < fullText.length) {
+        setDisplayedText(fullText.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(typeInterval);
+        setIsTyping(false);
+
+        // Wait 2 seconds before starting next message
+        setTimeout(() => {
+          setCurrentHookIndex((prev) => (prev + 1) % hooks.length);
+        }, 2000);
+      }
+    }, 50); // Typing speed: 50ms per character
+
+    return () => clearInterval(typeInterval);
+  }, [currentHookIndex]);
 
   const currentHook = hooks[currentHookIndex];
+
+  // Function to render text with emphasis
+  const renderTypedText = () => {
+    const fullText = currentHook.text + currentHook.emphasis + currentHook.suffix;
+    const emphasisStart = currentHook.text.length;
+    const emphasisEnd = emphasisStart + currentHook.emphasis.length;
+
+    return (
+      <>
+        {displayedText.slice(0, emphasisStart)}
+        {displayedText.length > emphasisStart && (
+          <span className="font-bold text-primary">
+            {displayedText.slice(emphasisStart, Math.min(displayedText.length, emphasisEnd))}
+          </span>
+        )}
+        {displayedText.length > emphasisEnd && displayedText.slice(emphasisEnd)}
+        {isTyping && <span className="animate-pulse">|</span>}
+      </>
+    );
+  };
 
   return (
     <section className="relative pt-8 pb-10 md:pt-12 overflow-hidden">
@@ -94,16 +128,10 @@ export const HeroSection = () => {
             Validate Your Ideas & Understand Your Customers in <span className="font-bold">30 Minutes</span>, Not <span className="font-bold">6 Weeks</span>
           </h1>
 
-          {/* Dynamic Hook - Moved below headline and made more subtle */}
-          <div className="mb-6 h-6 flex items-center justify-center">
-            <p
-              className={`text-base sm:text-lg text-muted-foreground font-medium transition-opacity duration-300 ${
-                isVisible ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              {currentHook.text}
-              <span className="font-bold text-primary">{currentHook.emphasis}</span>
-              {currentHook.suffix}
+          {/* Dynamic Hook with Typewriter Effect */}
+          <div className="mb-6 h-8 flex items-center justify-center">
+            <p className="text-base sm:text-lg text-muted-foreground font-medium min-h-[1.5rem]">
+              {renderTypedText()}
             </p>
           </div>
 
@@ -115,15 +143,12 @@ export const HeroSection = () => {
             <Link href="/customer-research">
               <Button
                 size="lg"
-                className="bg-primary hover:bg-primary/90 text-white font-medium text-base sm:text-lg px-8 sm:px-10 py-5 sm:py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                className="bg-primary hover:bg-primary/90 text-white font-medium text-base sm:text-lg px-8 sm:px-10 py-4 sm:py-5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                 onClick={() => trackCTAClick('Start Research', ButtonLocation.HERO, 'primary')}
               >
-                <span className="flex flex-col items-center text-white">
-                  <span className="flex items-center gap-2">
-                    Start Research
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                  <span className="text-xs sm:text-sm font-normal opacity-90">Generate Questions</span>
+                <span className="flex items-center gap-2 text-white">
+                  Start Research
+                  <ArrowRight className="w-4 h-4" />
                 </span>
               </Button>
             </Link>
@@ -140,10 +165,12 @@ export const HeroSection = () => {
                 onClick={() => trackButtonClick('Upload Interview Transcripts', ButtonLocation.HERO, '/unified-dashboard')}
               >
                 <span className="flex flex-col items-center">
-                  <span className="flex items-center">
+                  <span className="flex items-center font-medium">
                     Upload Interview Transcripts
                   </span>
-                  <span className="text-xs sm:text-sm font-normal opacity-75">Generate Product Requirements</span>
+                  <span className="text-xs font-normal opacity-75 mt-1">
+                    To Get Detailed Product Requirements
+                  </span>
                 </span>
               </Button>
             </Link>
