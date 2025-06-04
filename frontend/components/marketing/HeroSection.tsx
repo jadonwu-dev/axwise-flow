@@ -125,7 +125,7 @@ export const HeroSection = () => {
         {/* Hero Content */}
         <div className="text-center mb-12 md:mb-16 animate-fade-in">
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight leading-[1.2] pb-3 mb-6 text-foreground">
-            Validate Your Ideas & Understand Your Customers in <span className="font-bold">30 Minutes</span>, Not <span className="font-bold">6 Weeks</span>
+            Validate Your Ideas & Understand Your Customers in <span className="font-bold">17 Minutes</span>, Not <span className="font-bold">6 Weeks</span>
           </h1>
 
           {/* Dynamic Hook with Typewriter Effect */}
@@ -193,10 +193,10 @@ export const HeroSection = () => {
               Complete Workflow
             </div>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
-              From Idea to Product in <span className="text-primary">30 Minutes</span>
+              From Idea to Product in <span className="text-primary">17 Minutes</span>
             </h2>
             <p className="text-lg md:text-xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
-              <em>What took <span className="font-bold">6 weeks</span> now takes <span className="font-bold">30 minutes</span> with AI assistance</em>
+              <em>What took <span className="font-bold">6 weeks</span> now takes <span className="font-bold">17 minutes</span> with AI personas or <span className="font-bold">30-45 minutes</span> with real interviews</em>
             </p>
             <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 text-blue-700 dark:text-blue-300 px-6 py-3 rounded-full text-sm font-medium border border-blue-200/50 dark:border-blue-800/50">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
@@ -211,9 +211,9 @@ export const HeroSection = () => {
               <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
                   <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">1</div>
-                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">2 minutes</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">10 minutes</div>
                   <h3 className="font-bold text-foreground mb-3 text-lg">Generate Research Questions</h3>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI creates custom questions for your idea</p>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI guiding you as professional consultant from big 4, to define scope with business idea, identifying target customer, and problem and then summarising that into discovery and validation questions for your particular problem</p>
                   <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "What problem does this solve for users?"
                   </div>
@@ -238,9 +238,9 @@ export const HeroSection = () => {
               <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
                   <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">2</div>
-                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">10 minutes</div>
-                  <h3 className="font-bold text-foreground mb-3 text-lg">Conduct Research / Get AI Personas</h3>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">Real interviews or AI-generated responses</p>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">3 minutes</div>
+                  <h3 className="font-bold text-foreground mb-3 text-lg">Conduct Research</h3>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">30-45 minutes with real people OR get instant answers using Tailored Synthetic Personas based on your specific problem, business scope, and target audience</p>
                   <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Upload transcripts or chat with AI personas"
                   </div>
@@ -265,9 +265,9 @@ export const HeroSection = () => {
               <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
                   <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">3</div>
-                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">10 minutes</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">2 minutes</div>
                   <h3 className="font-bold text-foreground mb-3 text-lg">Automatic Interview Analysis</h3>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI extracts insights & patterns</p>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI extracts insights, patterns, themes and personas as real UX Researcher with 20 years of experience will do utilizing best practices of customer development and design thinking processes</p>
                   <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Users want faster checkout process"
                   </div>
@@ -292,9 +292,9 @@ export const HeroSection = () => {
               <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
                   <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">4</div>
-                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">8 minutes</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">2 minutes</div>
                   <h3 className="font-bold text-foreground mb-3 text-lg">Get Fully-Fledged PRDs</h3>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">Complete product requirements ready to build</p>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">Product requirements are crafted from previous step, creating enterprise grade objectives as it would be PM with 20 years of experience in Agile and Product Management (technical & business), user stories with clear structure, tasks and even technical requirements and success metrics for both</p>
                   <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Feature: One-click checkout button"
                   </div>
