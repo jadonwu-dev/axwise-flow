@@ -44,6 +44,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     context,
     questions,
     updateContext,
+    updateQuestions,
     generateQuestions,
     exportQuestions,
     continueToAnalysis,
@@ -78,7 +79,25 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll to bottom but leave some padding to keep input visible
+    setTimeout(() => {
+      const scrollContainer = document.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        const { scrollHeight, clientHeight } = scrollContainer;
+        // Scroll to bottom minus 80px padding to keep input field visible
+        const targetScrollTop = scrollHeight - clientHeight + 80;
+        scrollContainer.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth'
+        });
+      } else {
+        // Fallback to messagesEndRef if scroll container not found
+        messagesEndRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }
+    }, 10);
   };
 
   // Simplified stakeholder detection - primarily rely on LLM backend analysis
@@ -304,8 +323,14 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     });
   };
 
+  // Always scroll to bottom when messages change
+  const scrollToBottomIfNeeded = () => {
+    setTimeout(() => scrollToBottom(), 50);
+  };
+
+  // Auto-scroll when messages change
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottomIfNeeded();
   }, [messages]);
 
   // Load session when loadSessionId changes
@@ -400,6 +425,14 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
         user_id: undefined, // Will be populated when auth is added
       });
 
+      // Debug: Log what the backend is returning
+      console.log('Backend response:', {
+        hasQuestions: !!data.questions,
+        questionsData: data.questions,
+        extractedContext: data.metadata?.extracted_context,
+        messageCount: apiMessages.length
+      });
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: data.content,
@@ -451,6 +484,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
         // Update the questions state directly
         setLocalQuestions(apiQuestions);
+        updateQuestions(apiQuestions); // Also update the useResearch hook
         updateContext({ questionsGenerated: true });
 
         // Use LLM-detected stakeholders from API response if available, otherwise fallback to local detection
@@ -611,8 +645,18 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
         {/* Chat Interface */}
         <Card className="lg:col-span-2 flex flex-col h-full min-h-0">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 lg:p-4 border-b">
+          <div className="flex items-center justify-between p-3 lg:p-4 border-b flex-shrink-0">
             <div className="flex items-center gap-2">
+              {onBack && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onBack}
+                  className="mr-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
               <Bot className="h-5 w-5 text-primary" />
               <h3 className="font-semibold text-sm lg:text-base">Customer Research Assistant</h3>
             </div>
@@ -636,7 +680,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
           </div>
 
           {/* Messages */}
-          <ScrollArea className="flex-1 p-3 lg:p-4 min-h-0">
+          <ScrollArea className="flex-1 p-3 lg:p-4">
             <div className="space-y-4">
               {messages.map((message, index) => (
                 <div key={message.id}>
@@ -1090,7 +1134,7 @@ ${stakeholder.questions.followUp.map((q, i) => `${i + 1}. "${q}"`).join('\n')}
       </ScrollArea>
 
           {/* Input */}
-          <div className="p-3 lg:p-4 border-t">
+          <div className="p-3 lg:p-4 border-t flex-shrink-0">
             <div className="flex gap-2">
               <Input
                 value={input}

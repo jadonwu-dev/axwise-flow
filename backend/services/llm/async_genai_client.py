@@ -232,13 +232,30 @@ class AsyncGenAIClient:
 
         for attempt in range(max_retries):
             try:
-                # Make the API call
-                response = await self.client.aio.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config
+                # Make the API call with explicit timeout
+                response = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config
+                    ),
+                    timeout=180.0  # 3 minutes timeout for individual API calls
                 )
                 return response
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    # Log the timeout and retry
+                    logger.warning(
+                        f"API call timed out (attempt {attempt + 1}/{max_retries}): {str(e)}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= backoff_factor
+                else:
+                    # Last attempt failed, raise the exception
+                    logger.error(f"API call timed out after {max_retries} attempts: {str(e)}")
+                    raise LLMAPIError(f"API call timed out after {max_retries} attempts: {str(e)}") from e
             except Exception as e:
                 last_exception = e
                 if attempt < max_retries - 1:
@@ -285,13 +302,30 @@ class AsyncGenAIClient:
 
         for attempt in range(max_retries):
             try:
-                # Make the API call
-                stream = await self.client.aio.models.generate_content_stream(
-                    model=model,
-                    contents=prompt,
-                    config=config
+                # Make the API call with explicit timeout
+                stream = await asyncio.wait_for(
+                    self.client.aio.models.generate_content_stream(
+                        model=model,
+                        contents=prompt,
+                        config=config
+                    ),
+                    timeout=180.0  # 3 minutes timeout for individual API calls
                 )
                 return stream
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    # Log the timeout and retry
+                    logger.warning(
+                        f"API stream call timed out (attempt {attempt + 1}/{max_retries}): {str(e)}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= backoff_factor
+                else:
+                    # Last attempt failed, raise the exception
+                    logger.error(f"API stream call timed out after {max_retries} attempts: {str(e)}")
+                    raise LLMAPIError(f"API stream call timed out after {max_retries} attempts: {str(e)}") from e
             except Exception as e:
                 last_exception = e
                 if attempt < max_retries - 1:

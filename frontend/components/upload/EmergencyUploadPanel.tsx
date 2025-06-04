@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
-import { AlertCircle, FileUp, FileText, FilePen, X } from 'lucide-react';
+import { AlertCircle, FileUp, FileText, FilePen, X, ExternalLink } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { UploadResponse } from '@/types/api';
@@ -509,6 +509,23 @@ export default function EmergencyUploadPanel() {
 
       <CardContent>
         <div className="space-y-4">
+          {/* Vexa.ai mention */}
+          <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg border">
+            <p className="mb-2">
+              <strong>Need live transcription?</strong> For real-time meeting transcription,
+              check out our partnership with{' '}
+              <a
+                href="https://vexa.ai/get-started"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Vexa.ai
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              {' '}then upload the transcript here for analysis.
+            </p>
+          </div>
           {/* File Type Selection */}
           <div className="mb-4">
             <Label htmlFor="data-type" className="mb-2 block">Data Type</Label>

@@ -14,6 +14,16 @@ interface SubscriptionInfo {
   current_period_end?: string;
   trial_end?: string;
   cancel_at_period_end?: boolean;
+  limits?: {
+    analysesPerMonth?: number;
+    prdGenerationsPerMonth?: number;
+  };
+  currentUsage?: {
+    analyses?: number;
+    prdGenerations?: number;
+  };
+  canPerformAnalysis?: boolean;
+  canGeneratePRD?: boolean;
 }
 
 export function SubscriptionStatus() {
@@ -100,19 +110,38 @@ export function SubscriptionStatus() {
     }
   };
 
+  // Helper function to format usage display for analyses (remaining/total)
+  const formatAnalysesUsage = (used: number, limit: number) => {
+    const remaining = Math.max(0, limit - used);
+    return `${remaining}/${limit} analyses`;
+  };
+
   return (
     <div className="flex items-center gap-2">
       {subscription && subscription.tier && subscription.status ? (
         <>
-          <Badge className={getTierColor(subscription.tier)}>
-            {subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)}
+          <Badge className={getTierColor(subscription.status === 'trialing' ? 'pro' : subscription.tier)}>
+            {subscription.status === 'trialing' ? 'Pro' : subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)}
           </Badge>
           <Badge className={getStatusColor(subscription.status)}>
             {subscription.status === 'trialing' ? 'Trial' : subscription.status}
           </Badge>
+
+          {/* Usage counter - only show analyses */}
+          {subscription.limits && subscription.currentUsage && (
+            <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {formatAnalysesUsage(
+                  subscription.currentUsage.analyses || 0,
+                  subscription.limits.analysesPerMonth || 0
+                )}
+              </span>
+            </div>
+          )}
+
           {subscription.trialEnd && (
             <span className="text-xs text-muted-foreground hidden md:block">
-              Trial ends: {new Date(subscription.trialEnd).toLocaleDateString()}
+              Trial ends: {new Date(subscription.trialEnd * 1000).toLocaleDateString()}
             </span>
           )}
         </>

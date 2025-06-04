@@ -9,25 +9,38 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get authentication from Clerk
-    const { userId, getToken } = await auth();
+    // Check environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    let userId: string | null = null;
+    let token: string | null = null;
 
-    // Get the auth token
-    const token = await getToken();
+    if (isProduction || enableClerkValidation) {
+      // Get authentication from Clerk
+      const authResult = await auth();
+      userId = authResult.userId;
+      token = await authResult.getToken();
 
-    if (!token) {
-      console.error('🔄 [ANALYZE] No auth token available');
-      return NextResponse.json(
-        { error: 'Authentication token not available' },
-        { status: 401 }
-      );
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      if (!token) {
+        console.error('🔄 [ANALYZE] No auth token available');
+        return NextResponse.json(
+          { error: 'Authentication token not available' },
+          { status: 401 }
+        );
+      }
+    } else {
+      // Development mode: use development user
+      userId = 'testuser123';
+      token = 'DEV_TOKEN_REDACTED';
+      console.log('🔄 [ANALYZE] Using development mode authentication');
     }
 
     // Get the backend URL from environment

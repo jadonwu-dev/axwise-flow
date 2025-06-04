@@ -4,14 +4,37 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 async function getToken(): Promise<string> {
-  // In development mode, use a development token
-  if (process.env.NODE_ENV === 'development') {
-    return 'DEV_TOKEN_REDACTED';
-  }
+  // Import auth from Clerk
+  const { auth } = await import('@clerk/nextjs/server');
 
-  // In production, this would get the actual Clerk JWT token
-  // For now, return development token
-  return 'DEV_TOKEN_REDACTED';
+  try {
+    // Get the authentication context
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    // Get the JWT token from Clerk
+    const token = await getToken();
+
+    if (!token) {
+      throw new Error('Failed to get authentication token');
+    }
+
+    return token;
+  } catch (error) {
+    console.error('Authentication error:', error);
+
+    // In development mode, fall back to development token
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Falling back to development token');
+      return 'DEV_TOKEN_REDACTED';
+    }
+
+    // In production, throw the error
+    throw new Error('Authentication required');
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -27,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Get request body
     const body = await request.json();
 
-    console.log('Create Checkout Session API: Using development token (development mode only)');
+    console.log('Create Checkout Session API: Using authentication token');
     console.log('Proxying to backend:', `${backendUrl}/api/subscription/create-checkout-session`);
 
     // Forward the request to the Python backend
@@ -55,6 +78,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error('Create Checkout Session API: Error:', error);
+
+    // Handle authentication errors specifically
+    if (error instanceof Error && error.message.includes('Authentication')) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in and try again.' },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

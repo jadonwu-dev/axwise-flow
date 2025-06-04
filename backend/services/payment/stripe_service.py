@@ -217,6 +217,10 @@ class StripeService:
                 "current_period_end": subscription.current_period_end
             }
 
+            # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(self.user, "usage_data")
+
             # Update Clerk metadata
             await self.clerk_service.update_user_metadata(self.user.user_id, {
                 "publicMetadata": {
@@ -267,6 +271,10 @@ class StripeService:
                 # Update usage_data
                 if self.user.usage_data and "subscription" in self.user.usage_data:
                     self.user.usage_data["subscription"]["status"] = "canceled"
+
+                    # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(self.user, "usage_data")
 
                 # Update Clerk metadata
                 await self.clerk_service.update_user_metadata(self.user.user_id, {
@@ -416,6 +424,10 @@ class StripeService:
                     "current_period_end": end_date,
                     "trial_end": trial_end_date
                 }
+
+                # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self.user, "usage_data")
             except Exception as e:
                 logger.warning(f"Error updating usage_data with subscription info: {str(e)}")
                 # Fallback to simpler data structure
@@ -424,6 +436,10 @@ class StripeService:
                     "status": subscription.status,
                     "trial_end": trial_end
                 }
+
+                # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self.user, "usage_data")
 
             # Update Clerk metadata
             try:

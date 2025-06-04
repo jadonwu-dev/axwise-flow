@@ -10,20 +10,33 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get authentication from Clerk
-    const { userId, getToken } = await auth();
+    // Check environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    let userId: string | null = null;
+    let token: string | null = null;
+
+    if (isProduction || enableClerkValidation) {
+      // Get authentication from Clerk
+      const authResult = await auth();
+      userId = authResult.userId;
+      token = await authResult.getToken();
+
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    } else {
+      // Development mode: use development user
+      userId = 'testuser123';
+      token = 'DEV_TOKEN_REDACTED';
+      console.log('🔄 [DATA] Using development mode authentication');
     }
 
     console.log('🔄 [DATA] User authenticated:', userId);
-
-    // Get the auth token
-    const token = await getToken();
 
     // For now, let's check if we have a local backend running
     // If not, we'll return a mock response for testing
@@ -104,18 +117,31 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authentication from Clerk
-    const { userId, getToken } = await auth();
+    // Check environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    let userId: string | null = null;
+    let token: string | null = null;
+
+    if (isProduction || enableClerkValidation) {
+      // Get authentication from Clerk
+      const authResult = await auth();
+      userId = authResult.userId;
+      token = await authResult.getToken();
+
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    } else {
+      // Development mode: use development user
+      userId = 'testuser123';
+      token = 'DEV_TOKEN_REDACTED';
+      console.log('🔄 [DATA GET] Using development mode authentication');
     }
-
-    // Get the auth token
-    const token = await getToken();
 
     // Get query parameters
     const { searchParams } = new URL(request.url);

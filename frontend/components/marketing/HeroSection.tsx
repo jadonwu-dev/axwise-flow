@@ -187,98 +187,115 @@ export const HeroSection = () => {
         </div>
 
         {/* Workflow Visualization */}
-        <div className="max-w-5xl mx-auto animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          <div className="text-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">From Idea to Product in <span className="font-bold">30 Minutes</span></h2>
-            <p className="text-muted-foreground mb-4">
+        <div className="max-w-6xl mx-auto animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="text-center mb-12">
+            <div className="inline-block bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-sm font-semibold px-6 py-3 rounded-full mb-6 border border-primary/30">
+              Complete Workflow
+            </div>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
+              From Idea to Product in <span className="text-primary">30 Minutes</span>
+            </h2>
+            <p className="text-lg md:text-xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
               <em>What took <span className="font-bold">6 weeks</span> now takes <span className="font-bold">30 minutes</span> with AI assistance</em>
             </p>
-            <div className="inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-medium">
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 text-blue-700 dark:text-blue-300 px-6 py-3 rounded-full text-sm font-medium border border-blue-200/50 dark:border-blue-800/50">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
               Powered by advanced AI research methodology
             </div>
           </div>
 
           {/* Horizontal Workflow Steps */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6">
             {/* Step 1 */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl p-6 border border-primary/20 h-full hover:shadow-lg transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg mb-4">1</div>
-                  <div className="bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-full mb-2">2 minutes</div>
-                  <h3 className="font-semibold text-foreground mb-2">Generate Research Questions</h3>
-                  <p className="text-sm text-muted-foreground mb-3">AI creates custom questions for your idea</p>
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded italic">
+                  <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">1</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">2 minutes</div>
+                  <h3 className="font-bold text-foreground mb-3 text-lg">Generate Research Questions</h3>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI creates custom questions for your idea</p>
+                  <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "What problem does this solve for users?"
                   </div>
                 </div>
               </div>
               {/* Arrow for desktop */}
-              <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 z-10">
-                <ArrowRight className="w-6 h-6 text-primary bg-background rounded-full p-1" />
+              <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowRight className="w-4 h-4 text-primary" />
+                </div>
               </div>
               {/* Arrow for mobile */}
-              <div className="md:hidden flex justify-center py-3">
-                <ArrowDown className="w-6 h-6 text-primary" />
+              <div className="md:hidden flex justify-center py-4">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowDown className="w-4 h-4 text-primary" />
+                </div>
               </div>
             </div>
 
             {/* Step 2 */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl p-6 border border-primary/20 h-full hover:shadow-lg transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg mb-4">2</div>
-                  <div className="bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-full mb-2">10 minutes</div>
-                  <h3 className="font-semibold text-foreground mb-2">Conduct Research / Get AI Personas</h3>
-                  <p className="text-sm text-muted-foreground mb-3">Real interviews or AI-generated responses</p>
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded italic">
+                  <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">2</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">10 minutes</div>
+                  <h3 className="font-bold text-foreground mb-3 text-lg">Conduct Research / Get AI Personas</h3>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">Real interviews or AI-generated responses</p>
+                  <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Upload transcripts or chat with AI personas"
                   </div>
                 </div>
               </div>
               {/* Arrow for desktop */}
-              <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 z-10">
-                <ArrowRight className="w-6 h-6 text-primary bg-background rounded-full p-1" />
+              <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowRight className="w-4 h-4 text-primary" />
+                </div>
               </div>
               {/* Arrow for mobile */}
-              <div className="md:hidden flex justify-center py-3">
-                <ArrowDown className="w-6 h-6 text-primary" />
+              <div className="md:hidden flex justify-center py-4">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowDown className="w-4 h-4 text-primary" />
+                </div>
               </div>
             </div>
 
             {/* Step 3 */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl p-6 border border-primary/20 h-full hover:shadow-lg transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg mb-4">3</div>
-                  <div className="bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-full mb-2">10 minutes</div>
-                  <h3 className="font-semibold text-foreground mb-2">Automatic Interview Analysis</h3>
-                  <p className="text-sm text-muted-foreground mb-3">AI extracts insights & patterns</p>
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded italic">
+                  <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">3</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">10 minutes</div>
+                  <h3 className="font-bold text-foreground mb-3 text-lg">Automatic Interview Analysis</h3>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">AI extracts insights & patterns</p>
+                  <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Users want faster checkout process"
                   </div>
                 </div>
               </div>
               {/* Arrow for desktop */}
-              <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 z-10">
-                <ArrowRight className="w-6 h-6 text-primary bg-background rounded-full p-1" />
+              <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowRight className="w-4 h-4 text-primary" />
+                </div>
               </div>
               {/* Arrow for mobile */}
-              <div className="md:hidden flex justify-center py-3">
-                <ArrowDown className="w-6 h-6 text-primary" />
+              <div className="md:hidden flex justify-center py-4">
+                <div className="w-8 h-8 bg-background border-2 border-primary/30 rounded-full flex items-center justify-center shadow-md">
+                  <ArrowDown className="w-4 h-4 text-primary" />
+                </div>
               </div>
             </div>
 
             {/* Step 4 */}
             <div>
-              <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl p-6 border border-primary/20 h-full hover:shadow-lg transition-all duration-300">
+              <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-8 border border-primary/20 h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg mb-4">4</div>
-                  <div className="bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-full mb-2">8 minutes</div>
-                  <h3 className="font-semibold text-foreground mb-2">Get Fully-Fledged PRDs</h3>
-                  <p className="text-sm text-muted-foreground mb-3">Complete product requirements ready to build</p>
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded italic">
+                  <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg mb-6 group-hover:scale-110 transition-transform duration-300">4</div>
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 text-primary text-xs font-semibold px-3 py-2 rounded-full mb-4 border border-primary/30">8 minutes</div>
+                  <h3 className="font-bold text-foreground mb-3 text-lg">Get Fully-Fledged PRDs</h3>
+                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">Complete product requirements ready to build</p>
+                  <div className="text-xs text-muted-foreground bg-gradient-to-r from-muted/50 to-muted/30 p-3 rounded-lg italic border border-muted/30">
                     "Feature: One-click checkout button"
                   </div>
                 </div>
@@ -287,16 +304,23 @@ export const HeroSection = () => {
           </div>
         </div>
 
-        <div className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-4 sm:gap-8">
-          <div className="text-center max-w-4xl mx-auto">
-            <div className="flex flex-col items-start justify-center gap-3 text-left">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-base sm:text-lg text-muted-foreground">Trusted by Product Designers, UX Researchers, Product Managers from Enterprises and Startup Founders</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="text-base sm:text-lg text-muted-foreground">Supported by Constructor University Accelerator as a partner</span>
+        {/* Social Proof Section */}
+        <div className="mt-16 sm:mt-20 md:mt-24">
+          <div className="text-center max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-muted/30 to-muted/10 rounded-2xl p-8 border border-muted/30">
+              <div className="flex flex-col items-center justify-center gap-6">
+                <div className="flex items-start gap-3">
+                  <Users className="w-5 h-5 text-primary flex-shrink-0 mt-1" />
+                  <span className="text-lg sm:text-xl text-muted-foreground text-center">
+                    Trusted by <span className="font-bold">Product Designers</span>, <span className="font-bold">UX Researchers</span>, <span className="font-bold">Product Managers</span> from <span className="font-bold">Enterprises</span> and <span className="font-bold">Startup Founders</span>
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Star className="w-5 h-5 text-primary flex-shrink-0 mt-1" />
+                  <span className="text-lg sm:text-xl text-muted-foreground text-center">
+                    Supported by <span className="font-bold">Constructor University Accelerator</span> as a partner
+                  </span>
+                </div>
               </div>
             </div>
           </div>

@@ -9,6 +9,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
+    // Check environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+
     // First, try to get the Authorization header from the incoming request
     const authHeader = request.headers.get('Authorization');
     let token: string | null = null;
@@ -17,8 +21,8 @@ export async function POST(request: NextRequest) {
       // Extract token from Authorization header
       token = authHeader.substring(7);
       console.log('🔄 [UPLOAD] Using token from Authorization header');
-    } else {
-      // Fallback to Clerk server-side auth
+    } else if (isProduction || enableClerkValidation) {
+      // Fallback to Clerk server-side auth only in production or when Clerk validation is enabled
       const { userId, getToken } = await auth();
 
       if (!userId) {
@@ -38,6 +42,10 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
+    } else {
+      // Development mode: use development token
+      token = 'DEV_TOKEN_REDACTED';
+      console.log('🔄 [UPLOAD] Using development token (development mode only)');
     }
 
     // Get the backend URL from environment

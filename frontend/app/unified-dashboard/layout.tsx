@@ -12,6 +12,8 @@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { UsageWarning } from '@/components/usage-warning';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 
 import type { ReactNode } from 'react';
 
@@ -22,6 +24,9 @@ export default function UnifiedDashboardLayout({
 }): JSX.Element {
   // Get the current path to determine active tab
   const pathname = usePathname();
+
+  // Get subscription status for usage warnings
+  const { subscription, loading: subscriptionLoading } = useSubscriptionStatus();
 
   // Determine active tab based on pathname
   let activeTab = 'dashboard';
@@ -61,6 +66,23 @@ export default function UnifiedDashboardLayout({
             </Link>
           </TabsTrigger>
         </TabsList>
+
+        {/* Usage Warning - Show when subscription data is available */}
+        {!subscriptionLoading && subscription && subscription.limits && subscription.currentUsage && (
+          <div className="mt-4">
+            <UsageWarning
+              currentUsage={{
+                analyses: subscription.currentUsage.analyses || 0,
+                prdGenerations: subscription.currentUsage.prdGenerations || 0
+              }}
+              limits={{
+                analysesPerMonth: subscription.limits.analysesPerMonth || 0,
+                prdGenerationsPerMonth: subscription.limits.prdGenerationsPerMonth || 0
+              }}
+              tier={subscription.tier}
+            />
+          </div>
+        )}
 
         <div className="mt-6">
           {children}

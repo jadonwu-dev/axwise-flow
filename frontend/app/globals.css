@@ -203,6 +203,69 @@
 /* Marketing page styles */
 .gradient-btn {
   @apply bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300;
+  /* Ensure text remains visible during all states */
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* Prevent text from becoming transparent */
+  -webkit-text-fill-color: white !important;
+}
+
+.gradient-btn:hover {
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  -webkit-text-fill-color: white !important;
+}
+
+.gradient-btn * {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+}
+
+/* Fix for gradient text in headers to prevent invisibility */
+.bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
+  /* Fallback for when gradient text becomes invisible */
+  background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Fallback color in case gradient fails */
+  color: hsl(var(--primary));
+}
+
+/* Ensure gradient text has fallback color */
+@supports not (-webkit-background-clip: text) {
+  .bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
+    color: hsl(var(--primary)) !important;
+    -webkit-text-fill-color: hsl(var(--primary)) !important;
+    background: none !important;
+  }
+}
+
+/* Additional fallback for when gradient text becomes invisible */
+@media (prefers-reduced-motion: reduce) {
+  .bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
+    background: none !important;
+    color: hsl(var(--primary)) !important;
+    -webkit-text-fill-color: hsl(var(--primary)) !important;
+  }
+}
+
+/* Specific fix for hero headline */
+h1 span.bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
+  /* Ensure visibility with stronger fallback */
+  background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent))) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* If gradient fails, show primary color */
+@supports not (-webkit-background-clip: text) {
+  h1 span.bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
+    color: hsl(var(--primary)) !important;
+    -webkit-text-fill-color: hsl(var(--primary)) !important;
+    background: none !important;
+  }
 }
 
 .animate-fade-in {

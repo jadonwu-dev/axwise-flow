@@ -4,30 +4,24 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingDown, Clock, Users, DollarSign } from 'lucide-react';
 
 export const ProblemSolutionSection = () => {
-  const problems = [
+  const challenges = [
     {
       icon: DollarSign,
-      title: "Research Costs",
-      description: "$50K-100K/year researchers",
-      detail: "Companies spend massive amounts on user research teams and tools, yet struggle to turn insights into action."
+      title: "Expensive Research",
+      description: "Traditional research costs $50K-100K/year",
+      detail: "Most teams can't afford dedicated researchers, leaving them guessing about user needs."
     },
     {
       icon: TrendingDown,
-      title: "Insight-to-Action Gap",
-      description: "Months between research and implementation",
-      detail: "Critical insights get lost in translation between research teams and product development."
-    },
-    {
-      icon: Users,
-      title: "Stakeholder Buy-in",
-      description: "Difficulty convincing leadership",
-      detail: "Research findings often lack the compelling narrative needed to secure resources and alignment."
+      title: "Slow Validation",
+      description: "Months to validate simple assumptions",
+      detail: "By the time insights reach development, opportunities are missed and markets have shifted."
     },
     {
       icon: Clock,
-      title: "Wasted Development",
-      description: "$260B/year wasted globally",
-      detail: "Products built without proper user validation lead to massive waste in development resources."
+      title: "Failed Products",
+      description: "$260B/year wasted on unwanted features",
+      detail: "Without proper customer validation, teams build products that solve problems nobody has."
     }
   ];
 
@@ -41,21 +35,21 @@ export const ProblemSolutionSection = () => {
             The Bottleneck Between <span className="text-destructive">Conversation</span> and <span className="text-primary">Code</span>
           </h2>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-            Product teams are drowning in user feedback but starving for actionable insights. 
+            Product teams are drowning in user feedback but starving for actionable insights.
             The gap between what users say and what developers build is costing companies billions.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          {problems.map((problem, index) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+          {challenges.map((challenge, index) => (
             <Card key={index} className="border-destructive/20 hover:border-destructive/40 transition-colors">
               <CardContent className="p-6 text-center">
                 <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
-                  <problem.icon className="w-6 h-6 text-destructive" />
+                  <challenge.icon className="w-6 h-6 text-destructive" />
                 </div>
-                <h3 className="font-semibold mb-2">{problem.title}</h3>
-                <p className="text-sm font-medium text-destructive mb-2">{problem.description}</p>
-                <p className="text-xs text-muted-foreground">{problem.detail}</p>
+                <h3 className="font-semibold mb-2">{challenge.title}</h3>
+                <p className="text-sm font-medium text-destructive mb-2">{challenge.description}</p>
+                <p className="text-xs text-muted-foreground">{challenge.detail}</p>
               </CardContent>
             </Card>
           ))}
@@ -65,37 +59,45 @@ export const ProblemSolutionSection = () => {
         <div className="text-center">
           <Badge variant="default" className="mb-4">The Solution</Badge>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
-            How AxWise <span className="text-primary">Simplifies</span> User Research
+            Complete Research & Development Platform in <span className="text-primary">One Place</span>
           </h2>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
-            Transform hours of interviews into actionable insights in minutes. 
-            The only input needed is your user interviews!
+            From idea validation to product launch: Generate research questions, analyze customer interviews,
+            and create comprehensive PRDs—all powered by AI.
           </p>
-          
+
           <div className="bg-primary/5 rounded-2xl p-8 md:p-12 border border-primary/20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="text-2xl font-bold text-primary">1</span>
                 </div>
-                <h3 className="font-semibold mb-2">Upload Interviews</h3>
-                <p className="text-sm text-muted-foreground">Drop your interview files and let AI do the heavy lifting</p>
+                <h3 className="font-semibold mb-2">Generate Research Questions</h3>
+                <p className="text-sm text-muted-foreground">AI creates custom questions for your idea</p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="text-2xl font-bold text-primary">2</span>
                 </div>
-                <h3 className="font-semibold mb-2">Get Insights</h3>
-                <p className="text-sm text-muted-foreground">Receive structured personas, pain points, and opportunities</p>
+                <h3 className="font-semibold mb-2">Conduct Research / Get AI Personas</h3>
+                <p className="text-sm text-muted-foreground">Real interviews or AI-generated responses</p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="text-2xl font-bold text-primary">3</span>
                 </div>
-                <h3 className="font-semibold mb-2">Build Products</h3>
-                <p className="text-sm text-muted-foreground">Turn insights into PRDs and development plans</p>
+                <h3 className="font-semibold mb-2">Automatic Interview Analysis</h3>
+                <p className="text-sm text-muted-foreground">AI extracts insights & patterns</p>
+              </div>
+
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-primary">4</span>
+                </div>
+                <h3 className="font-semibold mb-2">Get Fully-Fledged PRDs</h3>
+                <p className="text-sm text-muted-foreground">Complete product requirements ready to build</p>
               </div>
             </div>
           </div>

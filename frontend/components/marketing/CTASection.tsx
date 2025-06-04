@@ -33,9 +33,9 @@ export const CTASection = () => {
       description: "Your AI Co-Pilot, Fully Managed",
       features: [
         "Fully Hosted AxWise Platform",
-        "Powered by Managed Gemini AI",
-        "Up to 20 Core Analyses per month",
-        "Up to 2 PRD outputs per month",
+        "Customer Research Assistant",
+        "Up to 20 Analyses per month",
+        "PRD Generation included",
         "Standard Email Support",
         "1 user seat"
       ],
@@ -50,8 +50,8 @@ export const CTASection = () => {
       description: "Scale Your Strategic AI Power",
       features: [
         "All Starter Pack features",
-        "Up to 100 Core Analyses per month",
-        "Up to 100 PRD outputs per month",
+        "Up to 100 Analyses per month",
+        "Advanced Customer Research Tools",
         "Priority Email Support",
         "Team Collaboration (up to 5 users)",
         "7-Day Free Trial option"
@@ -102,6 +102,51 @@ export const CTASection = () => {
           </p>
         </div>
 
+        {/* Customer Research Highlight */}
+        <div className="mb-16">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-2xl p-8 md:p-12 border border-blue-200/50 dark:border-blue-800/50">
+            <div className="text-center mb-8">
+              <Badge variant="outline" className="mb-4 border-blue-500 text-blue-700 dark:text-blue-300">
+                🚀 New Feature
+              </Badge>
+              <h3 className="text-2xl md:text-3xl font-bold mb-4">
+                Start with Customer Research Assistant
+              </h3>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Not sure what to research? Our AI generates custom research questions for your business idea.
+                It's like having a UX researcher on your team—but available 24/7 and completely free to try.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/customer-research">
+                <Button
+                  size="lg"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6"
+                  onClick={() => trackCTAClick('Try Customer Research', ButtonLocation.CTA, 'customer-research')}
+                >
+                  Try Customer Research <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
+
+              <Link href="/unified-dashboard">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="px-8 py-6 border-blue-200 dark:border-blue-800"
+                  onClick={() => trackCTAClick('Upload Interviews', ButtonLocation.CTA, 'upload')}
+                >
+                  Upload Interviews Instead
+                </Button>
+              </Link>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center mt-4">
+              No signup required • Get research questions in 5 minutes • Free to use
+            </p>
+          </div>
+        </div>
+
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
           {pricingTiers.map((tier, index) => (
@@ -143,10 +188,11 @@ export const CTASection = () => {
 
                 <Link href={tier.href} className="w-full">
                   <Button
-                    className={`w-full ${
+                    variant={tier.popular ? undefined : "outline"}
+                    className={`w-full transition-all duration-300 ${
                       tier.popular
-                        ? 'gradient-btn text-white'
-                        : 'variant-outline'
+                        ? 'gradient-btn text-white hover:shadow-lg'
+                        : 'hover:bg-primary hover:text-primary-foreground'
                     }`}
                     size="lg"
                     onClick={() => trackPricingInteraction('select_plan', tier.name, tier.price)}

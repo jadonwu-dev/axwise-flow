@@ -61,6 +61,9 @@ class UsageTrackingService:
         This helps with users created before the proper initialization was added.
         """
         try:
+            # Debug logging for specific user
+            if self.user.user_id == "user_2xaXl1ECHV80vYTdmiu6x3X66Wf":
+                logger.info(f"DEBUG: User {self.user.user_id} - subscription_status: {self.user.subscription_status}, subscription_id: {self.user.subscription_id}, usage_data: {self.user.usage_data}")
             # Initialize usage_data if not exists or invalid
             if not self.user.usage_data or not isinstance(self.user.usage_data, dict):
                 self.user.usage_data = {
@@ -70,21 +73,35 @@ class UsageTrackingService:
                     },
                     "usage": {}
                 }
+                # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self.user, "usage_data")
                 self.db.commit()
                 logger.info(f"Initialized usage_data for user {self.user.user_id}")
 
-            # Ensure subscription section exists
+            # Ensure subscription section exists (but don't overwrite existing data)
             elif "subscription" not in self.user.usage_data:
-                self.user.usage_data["subscription"] = {
-                    "tier": "free",
-                    "status": "active"
-                }
-                self.db.commit()
-                logger.info(f"Added subscription section to usage_data for user {self.user.user_id}")
+                # Only add default subscription if user has no subscription_status
+                if not self.user.subscription_status or self.user.subscription_status == "inactive":
+                    self.user.usage_data["subscription"] = {
+                        "tier": "free",
+                        "status": "active"
+                    }
+                    # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(self.user, "usage_data")
+                    self.db.commit()
+                    logger.info(f"Added default subscription section to usage_data for user {self.user.user_id}")
+                else:
+                    # User has subscription_status but no usage_data - this shouldn't happen
+                    logger.warning(f"User {self.user.user_id} has subscription_status {self.user.subscription_status} but no usage_data subscription section")
 
             # Ensure usage section exists
             elif "usage" not in self.user.usage_data:
                 self.user.usage_data["usage"] = {}
+                # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self.user, "usage_data")
                 self.db.commit()
                 logger.info(f"Added usage section to usage_data for user {self.user.user_id}")
 
@@ -100,7 +117,7 @@ class UsageTrackingService:
         Returns:
             Dict with analyses_count and prd_generations_count
         """
-        current_month = datetime.now().strftime("%Y-%m")
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
 
         # Check if usage_data exists
         if not self.user.usage_data:
@@ -136,10 +153,10 @@ class UsageTrackingService:
         Returns:
             Dict with analyses_per_month and prd_generations_per_month limits
         """
-        # Default to free tier limits (unlimited for self-hosted)
+        # Default to free tier limits
         limits = {
-            "analyses_per_month": 0,  # 0 means unlimited
-            "prd_generations_per_month": 0,  # 0 means unlimited
+            "analyses_per_month": 3,  # Free users get 3 analyses
+            "prd_generations_per_month": 0,  # 0 means unlimited PRDs
         }
 
         try:
@@ -155,14 +172,27 @@ class UsageTrackingService:
                 return limits
 
             tier = subscription_info.get("tier", "free")
+            status = subscription_info.get("status", "inactive")
 
-            # Set limits based on tier
+            # Fallback: if subscription_info is empty but user has subscription_status, use that
+            if not subscription_info and self.user.subscription_status:
+                status = self.user.subscription_status
+                # If user has trialing status, assume Pro tier
+                if status == "trialing":
+                    tier = "pro"
+                logger.info(f"Using fallback subscription data for user {self.user.user_id}: tier={tier}, status={status}")
+
+            # Debug logging
+            logger.info(f"Usage limits calculation - tier: {tier}, status: {status}, subscription_info: {subscription_info}")
+
+            # Set limits based on tier or trial status
             if tier == "starter":
                 limits["analyses_per_month"] = 20
-                limits["prd_generations_per_month"] = 2
-            elif tier == "pro":
+                limits["prd_generations_per_month"] = 0  # 0 means unlimited
+            elif tier == "pro" or status == "trialing":
+                # Pro tier OR trialing users get Pro limits
                 limits["analyses_per_month"] = 100
-                limits["prd_generations_per_month"] = 100
+                limits["prd_generations_per_month"] = 0  # 0 means unlimited
             elif tier == "enterprise":
                 # Enterprise limits are customized, get from subscription info
                 limits["analyses_per_month"] = subscription_info.get("analyses_limit", 1000)
@@ -186,11 +216,7 @@ class UsageTrackingService:
         # Get subscription limits
         limits = await self.get_subscription_limits()
 
-        # If self-hosted (limits are 0), allow unlimited
-        if limits["analyses_per_month"] == 0:
-            return True
-
-        # Check if quota exceeded
+        # Check if quota exceeded (all tiers now have limits)
         return current_usage["analyses_count"] < limits["analyses_per_month"]
 
     async def can_generate_prd(self) -> bool:
@@ -234,7 +260,7 @@ class UsageTrackingService:
                 self.user.usage_data = {}
 
             # Get current month and year for tracking
-            current_month = datetime.now().strftime("%Y-%m")
+            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
 
             # Initialize usage tracking if not exists
             if "usage" not in self.user.usage_data:
@@ -254,6 +280,10 @@ class UsageTrackingService:
                 "analysis_id": analysis_id,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
+
+            # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(self.user, "usage_data")
 
             # Update user in database
             self.db.commit()
@@ -317,7 +347,7 @@ class UsageTrackingService:
                 self.user.usage_data = {}
 
             # Get current month and year for tracking
-            current_month = datetime.now().strftime("%Y-%m")
+            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
 
             # Initialize usage tracking if not exists
             if "usage" not in self.user.usage_data:
@@ -337,6 +367,10 @@ class UsageTrackingService:
                 "result_id": result_id,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
+
+            # CRITICAL: Mark the JSON field as modified so SQLAlchemy detects the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(self.user, "usage_data")
 
             # Update user in database
             self.db.commit()

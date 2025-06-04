@@ -28,34 +28,11 @@ export default function CustomerResearchPage() {
   if (showChat) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-4 lg:py-8">
-          <div className="mb-4 lg:mb-6">
-            <Button
-              variant="outline"
-              onClick={() => setShowChat(false)}
-              className="mb-4"
-            >
-              ← Back to Overview
-            </Button>
-            <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Customer Research Assistant</h1>
-            <p className="text-muted-foreground mt-2">
-              Get personalized research questions for your business idea
-            </p>
-          </div>
-
-          <ChatInterface
-            onComplete={handleQuestionsGenerated}
-            onBack={() => setShowChat(false)}
-            loadSessionId={currentSessionId || undefined}
-          />
-
-          <div className="mt-6 lg:hidden">
-            <SessionManager
-              onLoadSession={handleLoadSession}
-              currentSessionId={currentSessionId || undefined}
-            />
-          </div>
-        </div>
+        <ChatInterface
+          onComplete={handleQuestionsGenerated}
+          onBack={() => setShowChat(false)}
+          loadSessionId={currentSessionId || undefined}
+        />
       </div>
     );
   }
