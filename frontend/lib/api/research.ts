@@ -214,7 +214,7 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
   // Use retry and timeout wrappers
   return await withRetry(async () => {
     return await withTimeout(async () => {
-      const response = await fetch(`${API_BASE_URL}/api/research/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/research/v2/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

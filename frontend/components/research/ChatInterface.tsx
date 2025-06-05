@@ -12,6 +12,7 @@ import { StakeholderAlert } from './StakeholderAlert';
 import { MultiStakeholderSummary } from './MultiStakeholderSummary';
 import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
 import { NextStepsChatMessage } from './NextStepsChatMessage';
+
 import { FormattedQuestionsComponent } from './FormattedQuestionsComponent';
 import { EnhancedMultiStakeholderComponent } from './EnhancedMultiStakeholderComponent';
 import { StakeholderQuestionsComponent } from './StakeholderQuestionsComponent';
@@ -67,11 +68,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationStarted, setConversationStarted] = useState(false);
-  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([
-    "I have a business idea",
-    "I want to decide about one feature",
-    "I need help with customer research"
-  ]);
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [showStakeholderAlert, setShowStakeholderAlert] = useState(false);
   const [showMultiStakeholderPlan, setShowMultiStakeholderPlan] = useState(false);
@@ -328,10 +325,14 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     setTimeout(() => scrollToBottom(), 50);
   };
 
+
+
   // Auto-scroll when messages change
   useEffect(() => {
     scrollToBottomIfNeeded();
   }, [messages]);
+
+
 
   // Load session when loadSessionId changes
   useEffect(() => {
@@ -619,11 +620,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     setInput('');
     setIsLoading(false);
     setConversationStarted(false);
-    setCurrentSuggestions([
-      "I have a business idea",
-      "I want to decide about one feature",
-      "I need help with customer research"
-    ]);
+    setCurrentSuggestions([]); // Clear suggestions on reset
     setSessionId(null);
     setShowClearConfirm(false);
 

@@ -31,6 +31,7 @@ openai==1.12.0
 google-genai>=1.1.0
 anthropic>=0.25.0  # Required by instructor library (even for Gemini usage)
 instructor>=0.4.5  # For structured outputs from LLMs
+langgraph>=0.0.55  # State machine workflow for LLM applications
 
 # Data processing
 python-dotenv==1.0.1

@@ -259,9 +259,11 @@ app.include_router(stripe_webhook_router)
 from backend.api.endpoints.debug import router as debug_router
 app.include_router(debug_router, prefix="/api")
 
-# Include customer research router
+# Include customer research routers
 from backend.api.routes.customer_research import router as customer_research_router
+from backend.api.routes.customer_research_v2 import router as customer_research_v2_router
 app.include_router(customer_research_router)
+app.include_router(customer_research_v2_router)
 
 # Initialize database tables
 create_tables()
