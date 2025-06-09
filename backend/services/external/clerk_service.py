@@ -90,6 +90,20 @@ class ClerkService:
                 - Dictionary containing the decoded payload if valid, None otherwise
         """
         try:
+            # Debug: Log token format (first 50 chars for security)
+            logger.debug(f"Validating token: {token[:50]}...")
+
+            # Check if token is empty or malformed
+            if not token or not isinstance(token, str):
+                logger.error(f"Invalid token format: {type(token)}")
+                return False, None
+
+            # Check if token has proper JWT format (3 parts separated by dots)
+            token_parts = token.split('.')
+            if len(token_parts) != 3:
+                logger.error(f"Invalid JWT format: expected 3 parts, got {len(token_parts)}")
+                return False, None
+
             # Get the unverified headers to extract the key ID
             headers = jwt.get_unverified_header(token)
             kid = headers.get('kid')

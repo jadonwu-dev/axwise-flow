@@ -15,7 +15,14 @@ export async function GET(request: NextRequest) {
 
     // Check environment
     const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    const enableClerkValidation = true; // Force enable Clerk validation for testing
+
+    console.log('History API: Environment check:', {
+      isProduction,
+      enableClerkValidation,
+      envVar: process.env.NEXT_PUBLIC_ENABLE_CLERK_VALIDATION,
+      nodeEnv: process.env.NODE_ENV
+    });
 
     let authToken: string;
 
@@ -31,11 +38,23 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Get the auth token from Clerk
-      const token = await getToken();
+      // Get the auth token from Clerk with retry logic
+      let token;
+      try {
+        token = await getToken({ skipCache: true });
+
+        // If token is still null, try one more time
+        if (!token) {
+          console.warn('History API: First token attempt failed, retrying...');
+          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+          token = await getToken({ skipCache: true });
+        }
+      } catch (tokenError) {
+        console.error('History API: Token retrieval error:', tokenError);
+      }
 
       if (!token) {
-        console.log('History API: No auth token available');
+        console.log('History API: No auth token available after retry');
         return NextResponse.json(
           { error: 'Authentication token not available' },
           { status: 401 }
@@ -46,7 +65,7 @@ export async function GET(request: NextRequest) {
       console.log('History API: Using Clerk JWT token for authenticated user:', userId);
     } else {
       // Development mode: use development token
-      authToken = 'DEV_TOKEN_REDACTED';
+      authToken = 'dev_test_token_DEV_TOKEN_REDACTED';
       console.log('History API: Using development token (development mode only)');
     }
 

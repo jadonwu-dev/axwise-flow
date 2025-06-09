@@ -49,7 +49,7 @@ export async function GET(
       console.log('Results API: Using Clerk JWT token for authenticated user:', userId);
     } else {
       // Development mode with Clerk validation disabled: use development token
-      authToken = 'DEV_TOKEN_REDACTED';
+      authToken = 'dev_test_token_DEV_TOKEN_REDACTED';
       console.log('Results API: Using development token (development mode only)');
     }
 

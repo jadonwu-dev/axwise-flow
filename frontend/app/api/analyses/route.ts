@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Development mode: use development user
-      userId = 'testuser123';
-      token = 'DEV_TOKEN_REDACTED';
+      userId = 'DEV_TOKEN_REDACTED';
+      token = 'dev_test_token_DEV_TOKEN_REDACTED';
       console.log('🔄 [ANALYSES] Using development mode authentication');
     }
 

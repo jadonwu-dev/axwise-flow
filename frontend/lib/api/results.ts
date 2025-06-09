@@ -70,7 +70,7 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
     if (analysesArray.length === 0) {
       console.log('No analyses found in response, trying direct backend call');
 
-      // Try direct backend API call with development token
+      // Try direct backend API call with proper authentication
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const queryParams = new URLSearchParams();
@@ -84,11 +84,17 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
           });
         }
 
+        // Get proper auth token
+        const authToken = await apiCore.getAuthToken();
+        if (!authToken) {
+          throw new Error('No authentication token available');
+        }
+
         const url = `${backendUrl}/api/analyses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
         const directResponse = await fetch(url, {
           method: 'GET',
           headers: {
-            'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+            'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json',
           },
         });
@@ -118,7 +124,7 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
   } catch (error: Error | unknown) {
     console.error('API error, trying direct backend call:', error);
 
-    // Try direct backend API call with development token
+    // Try direct backend API call with proper authentication
     try {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const queryParams = new URLSearchParams();
@@ -132,11 +138,17 @@ export async function listAnalyses(params?: unknown): Promise<DetailedAnalysisRe
         });
       }
 
+      // Get proper auth token
+      const authToken = await apiCore.getAuthToken();
+      if (!authToken) {
+        throw new Error('No authentication token available');
+      }
+
       const url = `${backendUrl}/api/analyses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': 'Bearer DEV_TOKEN_REDACTED', // Development token
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',
         },
       });

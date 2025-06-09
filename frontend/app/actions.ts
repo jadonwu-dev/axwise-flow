@@ -480,10 +480,28 @@ export async function analyzeAction(
       };
     }
 
-    // Set the token on the API client
-    apiClient.setAuthToken(authToken);
+    // Call backend directly instead of going through frontend API route
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-    const analysisResponse = await apiClient.analyzeData(dataId, llmProvider, undefined, isTextFile);
+    const response = await fetch(`${backendUrl}/api/analyze`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data_id: dataId,
+        llm_provider: llmProvider,
+        is_free_text: isTextFile || false
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error: ${errorText}`);
+    }
+
+    const analysisResponse = await response.json();
 
     return {
       success: true,
@@ -642,14 +660,25 @@ export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResu
  */
 export async function fetchAnalysisHistory(page: number = 1, pageSize: number = 10) {
   try {
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Get auth token using Clerk's server-side auth
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Not authenticated - no user ID',
+        items: [],
+        totalItems: 0,
+        currentPage: page
+      };
+    }
+
+    const authToken = await getToken();
 
     if (!authToken) {
       return {
         success: false,
-        error: 'Not authenticated',
+        error: 'Not authenticated - no token',
         items: [],
         totalItems: 0,
         currentPage: page
@@ -693,9 +722,15 @@ export async function getServerSidePRD(analysisId: string, forceRegenerate: bool
   try {
     console.log(`[getServerSidePRD] Generating PRD for analysis ID: ${analysisId}, forceRegenerate: ${forceRegenerate}`);
 
-    // Get auth token from cookie
-    const cookieStore = cookies();
-    const authToken = cookieStore.get('auth_token')?.value;
+    // Get auth token using Clerk's server-side auth
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+      console.error('[getServerSidePRD] No user ID available');
+      return null;
+    }
+
+    const authToken = await getToken();
 
     if (!authToken) {
       console.error('[getServerSidePRD] No auth token available');

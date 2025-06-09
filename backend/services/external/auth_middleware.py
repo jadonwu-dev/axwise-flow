@@ -158,15 +158,29 @@ async def get_current_user(
             # If using Clerk validation and we have a real JWT, try to get user info
             if ENABLE_CLERK_VALIDATION:
                 user_info = clerk_service.get_user_info(user_id)
+                user_email = (
+                    user_info.get("email_addresses", [{}])[0].get("email_address")
+                    if user_info
+                    else None
+                )
 
-                # Create a new user record with Clerk data if available
+                # Check if there's an existing user with the same email (for subscription transfer)
+                existing_user_with_subscription = None
+                if user_email:
+                    existing_users = db.query(User).filter(User.email == user_email).all()
+                    # Look for users with subscriptions
+                    for existing_user in existing_users:
+                        if (existing_user.stripe_customer_id or
+                            existing_user.subscription_status or
+                            (existing_user.usage_data and
+                             existing_user.usage_data.get("subscription", {}).get("tier") != "free")):
+                            existing_user_with_subscription = existing_user
+                            break
+
+                # Create a new user record with Clerk data
                 new_user = User(
                     user_id=user_id,
-                    email=(
-                        user_info.get("email_addresses", [{}])[0].get("email_address")
-                        if user_info
-                        else None
-                    ),
+                    email=user_email,
                     first_name=user_info.get("first_name") if user_info else None,
                     last_name=user_info.get("last_name") if user_info else None,
                     usage_data={
@@ -177,6 +191,20 @@ async def get_current_user(
                         "usage": {}
                     }
                 )
+
+                # Transfer subscription from existing user if found
+                if existing_user_with_subscription:
+                    logger.info(f"Transferring subscription from {existing_user_with_subscription.user_id} to {user_id}")
+                    new_user.stripe_customer_id = existing_user_with_subscription.stripe_customer_id
+                    new_user.subscription_status = existing_user_with_subscription.subscription_status
+                    new_user.subscription_id = existing_user_with_subscription.subscription_id
+                    if existing_user_with_subscription.usage_data:
+                        new_user.usage_data = existing_user_with_subscription.usage_data.copy()
+
+                    # Clear subscription from old user
+                    existing_user_with_subscription.stripe_customer_id = None
+                    existing_user_with_subscription.subscription_status = None
+                    existing_user_with_subscription.subscription_id = None
             else:
                 # For non-validated tokens, create a user record with proper email
                 # Convert user_id back to email format if it's email-based

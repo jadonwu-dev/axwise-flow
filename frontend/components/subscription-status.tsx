@@ -110,10 +110,9 @@ export function SubscriptionStatus() {
     }
   };
 
-  // Helper function to format usage display for analyses (remaining/total)
+  // Helper function to format usage display for analyses (used/total)
   const formatAnalysesUsage = (used: number, limit: number) => {
-    const remaining = Math.max(0, limit - used);
-    return `${remaining}/${limit} analyses`;
+    return `${used}/${limit} analyses`;
   };
 
   return (
