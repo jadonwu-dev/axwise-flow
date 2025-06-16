@@ -1,6 +1,6 @@
 /**
- * Thinking Progress API Route
- * Proxies thinking progress requests to the Python backend
+ * Thinking Progress API Route - V3 Rebuilt
+ * Proxies thinking progress requests to the Python backend V3 Rebuilt service
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,10 +15,10 @@ export async function GET(
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-    console.log('Proxying to backend:', `${backendUrl}/api/research/v3-simple/thinking-progress/${params.request_id}`);
+    console.log('Proxying to backend:', `${backendUrl}/api/research/v3-rebuilt/thinking-progress/${params.request_id}`);
 
     // Forward the request to the Python backend with cache-busting
-    const response = await fetch(`${backendUrl}/api/research/v3-simple/thinking-progress/${params.request_id}`, {
+    const response = await fetch(`${backendUrl}/api/research/v3-rebuilt/thinking-progress/${params.request_id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -33,7 +33,7 @@ export async function GET(
       const errorText = await response.text();
       console.error('Backend thinking progress error:', response.status, errorText);
       return NextResponse.json(
-        { 
+        {
           error: `Backend error: ${errorText}`,
           request_id: params.request_id,
           thinking_process: [],
@@ -47,6 +47,8 @@ export async function GET(
 
     const data = await response.json();
     console.log('Thinking progress response:', data);
+    console.log('Thinking steps in response:', data.thinking_steps);
+    console.log('Thinking process in response:', data.thinking_process);
 
     return NextResponse.json(data, {
       headers: {
@@ -59,7 +61,7 @@ export async function GET(
   } catch (error) {
     console.error('Thinking progress API error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch thinking progress',
         request_id: params.request_id,
         thinking_process: [],

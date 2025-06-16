@@ -2374,14 +2374,28 @@ Focus on creating questions that will help validate the market need and refine t
                     assistant_response_text = response_content if isinstance(response_content, str) else response_content.get("content", "")
 
                     # Use the proven V1/V2 LLM-based suggestion generation
-                    suggestions = await generate_contextual_suggestions(
+                    base_suggestions = await generate_contextual_suggestions(
                         llm_service=llm_client,
                         messages=v1_messages,
                         user_input=latest_input,
                         assistant_response=assistant_response_text,
                         conversation_context=conversation_context
                     )
-                    logger.info(f"Generated V1/V2 LLM-based suggestions: {suggestions}")
+                    logger.info(f"Generated V1/V2 LLM-based base suggestions: {base_suggestions}")
+
+                    # Add UX research methodology special options as specified in requirements
+                    if base_suggestions and len(base_suggestions) >= 1:
+                        # Add special options at the beginning for discovery phases
+                        suggestions = ["All of the above", "I don't know"] + base_suggestions
+                        logger.info(f"✅ Added special options to V1 suggestions: {suggestions}")
+                    else:
+                        # Fallback with special options
+                        suggestions = ["All of the above", "I don't know", "Tell me more", "Continue", "What else?"]
+                        logger.info(f"✅ Using fallback suggestions with special options: {suggestions}")
+
+                    # Ensure we have 3-5 suggestions as specified in requirements
+                    if len(suggestions) > 5:
+                        suggestions = suggestions[:5]
 
                 except Exception as e:
                     logger.warning(f"V1/V2 LLM suggestion generation failed: {e}")
@@ -2394,21 +2408,30 @@ Focus on creating questions that will help validate the market need and refine t
                     target_customer = (context_analysis.get('target_customer') or context_analysis.get('targetCustomer', '')) if context_analysis else ''
 
                     if business_idea and 'laundry' in business_idea.lower():
-                        suggestions = [
+                        base_suggestions = [
                             "Pick-up and delivery service",
                             "Self-service laundromat",
-                            "Commercial clients focus",
-                            "Eco-friendly cleaning options"
+                            "Commercial clients focus"
                         ]
+                        # Add special options for UX research methodology
+                        suggestions = ["All of the above", "I don't know"] + base_suggestions
                     elif business_idea and target_customer:
-                        suggestions = [
+                        base_suggestions = [
                             f"Tell me more about {target_customer}",
                             f"What challenges do {target_customer} face?",
                             f"How would {business_idea} help them?"
                         ]
+                        # Add special options for UX research methodology
+                        suggestions = ["All of the above", "I don't know"] + base_suggestions
                     else:
                         # Use V1/V2 fallback as last resort
-                        suggestions = generate_fallback_suggestions(latest_input, assistant_response_text)
+                        base_suggestions = generate_fallback_suggestions(latest_input, assistant_response_text)
+                        # Add special options for UX research methodology
+                        suggestions = ["All of the above", "I don't know"] + base_suggestions
+
+                    # Ensure we have 3-5 suggestions as specified in requirements
+                    if len(suggestions) > 5:
+                        suggestions = suggestions[:5]
 
                     logger.info(f"Using contextual fallback suggestions: {suggestions}")
 
@@ -2434,8 +2457,8 @@ Focus on creating questions that will help validate the market need and refine t
 
         except Exception as e:
             logger.error(f"Response generation failed: {e}")
-            # Fallback response
-            fallback_suggestions = ["Tell me more", "That sounds interesting", "What else?"]
+            # Fallback response with UX research methodology special options
+            fallback_suggestions = ["All of the above", "I don't know", "Tell me more", "That sounds interesting", "What else?"]
             return {
                 "content": "I understand you're working on your business idea. Could you tell me more about what you're trying to build?",
                 "questions": None,
@@ -2526,14 +2549,28 @@ Focus on creating questions that will help validate the market need and refine t
                 from backend.api.routes.customer_research import generate_contextual_suggestions, generate_fallback_suggestions
 
                 # Use the proven V1/V2 LLM-based suggestion generation
-                suggestions = await generate_contextual_suggestions(
+                base_suggestions = await generate_contextual_suggestions(
                     llm_service=llm_client,
                     messages=v1_messages,
                     user_input=latest_input,
                     assistant_response=response_content,
                     conversation_context=conversation_context
                 )
-                logger.info(f"V1 fallback generated LLM-based suggestions: {suggestions}")
+                logger.info(f"V1 fallback generated LLM-based base suggestions: {base_suggestions}")
+
+                # Add UX research methodology special options as specified in requirements
+                if base_suggestions and len(base_suggestions) >= 1:
+                    # Add special options at the beginning for discovery phases
+                    suggestions = ["All of the above", "I don't know"] + base_suggestions
+                    logger.info(f"✅ V1 fallback: Added special options to suggestions: {suggestions}")
+                else:
+                    # Fallback with special options
+                    suggestions = ["All of the above", "I don't know", "Tell me more", "Continue", "What else?"]
+                    logger.info(f"✅ V1 fallback: Using fallback suggestions with special options: {suggestions}")
+
+                # Ensure we have 3-5 suggestions as specified in requirements
+                if len(suggestions) > 5:
+                    suggestions = suggestions[:5]
 
             except Exception as e:
                 logger.warning(f"V1 fallback LLM suggestion generation failed: {e}")
@@ -2542,19 +2579,29 @@ Focus on creating questions that will help validate the market need and refine t
                 target_customer = context_analysis.get('targetCustomer', '')
 
                 if business_idea and 'laundry' in business_idea.lower():
-                    suggestions = [
+                    base_suggestions = [
                         "Pick-up and delivery service",
                         "Self-service laundromat",
                         "Commercial clients focus"
                     ]
+                    # Add special options for UX research methodology
+                    suggestions = ["All of the above", "I don't know"] + base_suggestions
                 elif business_idea and target_customer:
-                    suggestions = [
+                    base_suggestions = [
                         f"Tell me more about {target_customer}",
                         f"What challenges do {target_customer} face?",
                         f"How would {business_idea} help them?"
                     ]
+                    # Add special options for UX research methodology
+                    suggestions = ["All of the above", "I don't know"] + base_suggestions
                 else:
-                    suggestions = generate_fallback_suggestions(latest_input, response_content)
+                    base_suggestions = generate_fallback_suggestions(latest_input, response_content)
+                    # Add special options for UX research methodology
+                    suggestions = ["All of the above", "I don't know"] + base_suggestions
+
+                # Ensure we have 3-5 suggestions as specified in requirements
+                if len(suggestions) > 5:
+                    suggestions = suggestions[:5]
 
             # Add fallback thinking step
             if self.config.enable_thinking_process:

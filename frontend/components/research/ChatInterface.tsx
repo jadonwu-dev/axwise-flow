@@ -14,9 +14,9 @@ import { EnhancedMultiStakeholderComponent } from './EnhancedMultiStakeholderCom
 import { StakeholderQuestionsComponent } from './StakeholderQuestionsComponent';
 import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
 import { StakeholderAlert } from './StakeholderAlert';
-import { SimpleThinkingDisplay } from './SimpleThinkingDisplay';
+
 import { useResearch } from '@/hooks/use-research';
-import { useThinkingProgress } from './use-thinking-progress';
+
 
 // Import modular components
 import { ChatInterfaceProps } from './types';
@@ -25,12 +25,55 @@ import {
   useScrollManagement,
   useChatClear,
   useSessionLoading,
-  useClipboard
+  useClipboard,
+  useLoadingTimer
 } from './chat-hooks';
 import {
   handleSendMessage,
   loadSession
 } from './chat-handlers';
+
+// Conversion function for ResearchQuestions to FormattedQuestionsComponent format
+const convertResearchQuestionsToArray = (questions: any): Array<{id: string, text: string, category: 'discovery' | 'validation' | 'follow_up'}> => {
+  if (!questions) return [];
+
+  const result: Array<{id: string, text: string, category: 'discovery' | 'validation' | 'follow_up'}> = [];
+
+  // Convert problemDiscovery questions
+  if (questions.problemDiscovery && Array.isArray(questions.problemDiscovery)) {
+    questions.problemDiscovery.forEach((text: string, index: number) => {
+      result.push({
+        id: `discovery_${index}`,
+        text,
+        category: 'discovery' as const
+      });
+    });
+  }
+
+  // Convert solutionValidation questions
+  if (questions.solutionValidation && Array.isArray(questions.solutionValidation)) {
+    questions.solutionValidation.forEach((text: string, index: number) => {
+      result.push({
+        id: `validation_${index}`,
+        text,
+        category: 'validation' as const
+      });
+    });
+  }
+
+  // Convert followUp questions
+  if (questions.followUp && Array.isArray(questions.followUp)) {
+    questions.followUp.forEach((text: string, index: number) => {
+      result.push({
+        id: `follow_up_${index}`,
+        text,
+        category: 'follow_up' as const
+      });
+    });
+  }
+
+  return result;
+};
 
 export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfaceProps) {
   const {
@@ -46,14 +89,8 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   const { state, actions } = useChatState();
   const { messagesEndRef } = useScrollManagement(state.messages);
   const { copyMessage } = useClipboard();
-  const {
-    thinkingSteps,
-    isThinking,
-    thinkingError,
-    startThinking,
-    stopThinking,
-    clearThinking
-  } = useThinkingProgress();
+  const formattedElapsedTime = useLoadingTimer(state.isLoading);
+
   const { handleClearClick, clearChat: originalClearChat } = useChatClear(
     state.messages,
     actions.setMessages,
@@ -66,11 +103,8 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     updateContext
   );
 
-  // Enhanced clear chat that also clears thinking
-  const clearChat = () => {
-    clearThinking();
-    originalClearChat();
-  };
+  // Use original clear chat
+  const clearChat = originalClearChat;
 
   // Local state for questions to handle API responses directly
   const currentQuestions = state.localQuestions || questions;
@@ -84,14 +118,28 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
       context,
       updateContext,
       updateQuestions,
-      onComplete,
-      startThinking
+      onComplete
     );
   };
 
   const handleSuggestionClickLocal = (suggestion: string) => {
     console.log('🔧 Suggestion clicked:', suggestion);
-    handleSendLocal(suggestion);
+
+    // Handle special suggestions
+    if (suggestion === "I don't know") {
+      // Send immediately to chat
+      handleSendLocal(suggestion);
+    } else if (suggestion === "All of the above") {
+      // Add all other suggestions to input field with commas (excluding special options)
+      const regularSuggestions = state.currentSuggestions.filter(s =>
+        s !== "I don't know" && s !== "All of the above"
+      );
+      const combinedText = regularSuggestions.join(', ');
+      actions.setInput(combinedText);
+    } else {
+      // Regular suggestion - send to chat
+      handleSendLocal(suggestion);
+    }
   };
 
   const loadSessionLocal = async (sessionId: string) => {
@@ -292,7 +340,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                       {/* Component rendering logic */}
                       {message.content === 'FORMATTED_QUESTIONS_COMPONENT' ? (
                         <FormattedQuestionsComponent
-                          questions={message.metadata?.questions || []}
+                          questions={convertResearchQuestionsToArray(message.metadata?.questions)}
                           onExport={() => exportQuestions('txt')}
                           onContinue={continueToAnalysis}
                         />
@@ -352,15 +400,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                         <div>
                           <div className="whitespace-pre-wrap">{message.content}</div>
 
-                          {/* Show thinking process if available */}
-                          {message.role === 'assistant' && message.metadata?.thinking_steps && message.metadata.thinking_steps.length > 0 && (
-                            <div className="mt-4">
-                              <SimpleThinkingDisplay
-                                steps={message.metadata.thinking_steps}
-                                className="max-w-none"
-                              />
-                            </div>
-                          )}
+
                         </div>
                       )}
 
@@ -393,6 +433,8 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                     )}
                   </div>
 
+
+
                   {/* Show suggestions after assistant messages */}
                   {message.role === 'assistant' &&
                    index === state.messages.length - 1 &&
@@ -404,17 +446,24 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                         <span className="text-xs text-muted-foreground">💡 Quick replies:</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {state.currentSuggestions.map((suggestion, idx) => (
-                          <Button
-                            key={idx}
-                            variant="outline"
-                            size="sm"
-                            className="h-auto py-1 px-2 text-xs hover:bg-muted"
-                            onClick={() => handleSuggestionClickLocal(suggestion)}
-                          >
-                            {suggestion}
-                          </Button>
-                        ))}
+                        {state.currentSuggestions.map((suggestion, idx) => {
+                          const isSpecial = suggestion === "I don't know" || suggestion === "All of the above";
+                          return (
+                            <Button
+                              key={idx}
+                              variant={isSpecial ? "secondary" : "outline"}
+                              size="sm"
+                              className={`h-auto py-1 px-2 text-xs ${
+                                isSpecial
+                                  ? "bg-muted/50 hover:bg-muted border-dashed"
+                                  : "hover:bg-muted"
+                              }`}
+                              onClick={() => handleSuggestionClickLocal(suggestion)}
+                            >
+                              {suggestion}
+                            </Button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -431,36 +480,21 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                     </div>
                   </div>
                   <div className="bg-muted rounded-lg p-2 lg:p-3">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {formattedElapsedTime}
+                      </span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Live Thinking Progress - Show during analysis */}
-              {(isThinking || (state.isLoading && thinkingSteps.length > 0)) && (
-                <div className="flex gap-2 lg:gap-3 justify-start">
-                  <div className="flex-shrink-0">
-                    <div className="w-6 h-6 lg:w-8 lg:h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Bot className="h-3 w-3 lg:h-4 lg:w-4 text-primary" />
-                    </div>
-                  </div>
-                  <div className="max-w-[85%] lg:max-w-[80%]">
-                    <SimpleThinkingDisplay
-                      steps={thinkingSteps}
-                      className="max-w-none"
-                    />
-                    {thinkingError && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
-                        Thinking process error: {thinkingError}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+
             </div>
             <div ref={messagesEndRef} />
           </ScrollArea>

@@ -20,7 +20,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
-from backend.database.database import get_db
+from backend.database import get_db
 
 # Import all types
 from .v3_simple_types import (
@@ -110,7 +110,7 @@ __version__ = "3.0.0-modular"
 __description__ = "Customer Research API v3 Simplified - Modular Architecture"
 __modules__ = [
     "v3_simple_types",
-    "v3_simple_service", 
+    "v3_simple_service",
     "v3_simple_analysis",
     "v3_simple_questions",
     "v3_simple_handlers",
@@ -132,18 +132,18 @@ def check_modular_health():
         from . import v3_simple_questions
         from . import v3_simple_handlers
         from . import v3_simple_utils
-        
+
         # Test core functionality
         from .v3_simple_service import SimplifiedResearchService
         from .v3_simple_types import SimplifiedConfig
-        
+
         # Create test service
         config = SimplifiedConfig()
         service = SimplifiedResearchService(config)
-        
+
         logger.info("✅ All modular components loaded successfully")
         return True
-        
+
     except Exception as e:
         logger.error(f"❌ Modular health check failed: {e}")
         return False

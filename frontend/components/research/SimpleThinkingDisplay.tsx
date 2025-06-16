@@ -28,18 +28,45 @@ interface SimpleThinkingDisplayProps {
   onHide?: () => void;
 }
 
-export function SimpleThinkingDisplay({ 
-  steps, 
+export function SimpleThinkingDisplay({
+  steps,
   className = '',
-  onHide 
+  onHide
 }: SimpleThinkingDisplayProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const timestamp = new Date().toISOString().slice(11, 23);
+  console.log(`🎨 [${timestamp}] SimpleThinkingDisplay received steps:`, steps);
+  console.log(`🎨 [${timestamp}] Steps length:`, steps?.length);
+  console.log(`🎨 [${timestamp}] Component rendering with isExpanded:`, isExpanded);
+
   if (!steps || steps.length === 0) {
-    return null;
+    console.log(`🎨 [${timestamp}] SimpleThinkingDisplay: No steps yet, showing loading state`);
+    return (
+      <div className={`bg-blue-50 border border-blue-200 rounded-lg p-4 ${className}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-blue-700">Starting Analysis...</span>
+          </div>
+          {onHide && (
+            <button
+              onClick={onHide}
+              className="text-blue-400 hover:text-blue-600 text-sm"
+            >
+              Hide
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-blue-600">Initializing customer research analysis...</p>
+      </div>
+    );
   }
 
+  console.log(`🎨 [${timestamp}] SimpleThinkingDisplay: RENDERING with ${steps.length} steps`);
+
   const completedSteps = steps.filter(step => step.status === 'completed').length;
+  const inProgressSteps = steps.filter(step => step.status === 'in_progress').length;
   const failedSteps = steps.filter(step => step.status === 'failed').length;
   const totalSteps = steps.length;
 
@@ -71,7 +98,9 @@ export function SimpleThinkingDisplay({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-blue-600" />
-            <CardTitle className="text-lg">Analysis Complete</CardTitle>
+            <CardTitle className="text-lg">
+              {inProgressSteps > 0 ? 'Analyzing...' : failedSteps > 0 ? 'Analysis Failed' : 'Analysis Complete'}
+            </CardTitle>
             <Badge variant="outline" className="text-xs">
               {completedSteps}/{totalSteps} steps
             </Badge>
@@ -115,9 +144,24 @@ export function SimpleThinkingDisplay({
         </div>
 
         {/* Summary */}
-        <div className="flex items-center gap-2 text-sm text-green-700 mt-2">
-          <CheckCircle2 className="h-3 w-3" />
-          <span>Analysis completed successfully!</span>
+        <div className={`flex items-center gap-2 text-sm mt-2 ${
+          inProgressSteps > 0 ? 'text-blue-700' : failedSteps > 0 ? 'text-red-700' : 'text-green-700'
+        }`}>
+          {inProgressSteps > 0 ? (
+            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          ) : failedSteps > 0 ? (
+            <AlertCircle className="h-3 w-3" />
+          ) : (
+            <CheckCircle2 className="h-3 w-3" />
+          )}
+          <span>
+            {inProgressSteps > 0
+              ? `Processing step ${completedSteps + 1} of ${totalSteps}...`
+              : failedSteps > 0
+                ? 'Analysis encountered errors!'
+                : 'Analysis completed successfully!'
+            }
+          </span>
           <span className="text-xs opacity-75">
             ({steps.reduce((sum, step) => sum + step.duration_ms, 0)}ms total)
           </span>

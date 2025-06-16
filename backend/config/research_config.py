@@ -195,9 +195,9 @@ class ValidationConfig:
     MIN_MESSAGE_LENGTH: int = 1
 
     # Context validation
-    MAX_BUSINESS_IDEA_LENGTH: int = 500
-    MAX_TARGET_CUSTOMER_LENGTH: int = 300
-    MAX_PROBLEM_LENGTH: int = 500
+    MAX_BUSINESS_IDEA_LENGTH: int = 1000
+    MAX_TARGET_CUSTOMER_LENGTH: int = 500
+    MAX_PROBLEM_LENGTH: int = 1000
 
     # Session validation
     MAX_MESSAGES_PER_SESSION: int = 200

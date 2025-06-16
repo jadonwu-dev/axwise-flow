@@ -230,3 +230,54 @@ export const useDebounce = <T>(value: T, delay: number): T => {
 
   return debouncedValue;
 };
+
+/**
+ * Hook for managing loading timer with milliseconds
+ */
+export const useLoadingTimer = (isLoading: boolean) => {
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isLoading) {
+      // Reset timer when loading starts
+      const now = Date.now();
+      setStartTime(now);
+      setElapsedMs(0);
+
+      // Start timer with 100ms precision
+      intervalRef.current = setInterval(() => {
+        setElapsedMs(Date.now() - now);
+      }, 100);
+    } else {
+      // Clear timer when loading stops
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setStartTime(null);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isLoading]);
+
+  // Format time as "Xs" or "X.Xs"
+  const formatTime = (ms: number): string => {
+    if (ms < 1000) {
+      return '0s';
+    }
+    const seconds = ms / 1000;
+    if (seconds < 10) {
+      return `${seconds.toFixed(1)}s`;
+    }
+    return `${Math.floor(seconds)}s`;
+  };
+
+  return formatTime(elapsedMs);
+};

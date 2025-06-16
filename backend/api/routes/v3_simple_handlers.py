@@ -113,20 +113,29 @@ async def chat_v3_simple(
 
         # Build response with proper metadata including suggestions
         metadata = analysis_result.get("metadata", {})
+        response_data = analysis_result.get("response", {})
 
-        # Ensure suggestions are in metadata if they exist in the analysis result
-        if "suggestions" in analysis_result and analysis_result["suggestions"]:
-            metadata["suggestions"] = analysis_result["suggestions"]
-            metadata["contextual_suggestions"] = analysis_result["suggestions"]
+        # Ensure suggestions are in metadata from response or analysis result
+        suggestions = response_data.get("suggestions") or analysis_result.get("suggestions", [])
+        if suggestions:
+            metadata["suggestions"] = suggestions
+            metadata["contextual_suggestions"] = suggestions
+
+        # Include response metadata if available
+        if "metadata" in response_data:
+            metadata.update(response_data["metadata"])
 
         # Ensure request_id is in metadata for progressive updates
         metadata["request_id"] = service.request_id
 
+        # Extract response data from analysis result
+        response_data = analysis_result.get("response", {})
+
         # Return plain dictionary to avoid Pydantic validation issues
         response = {
-            "content": analysis_result["content"],
+            "content": response_data.get("content", "I'd be happy to help you with your research."),
             "metadata": metadata,
-            "questions": analysis_result.get("questions"),
+            "questions": response_data.get("questions") or analysis_result.get("questions"),
             "session_id": request.session_id,
             "thinking_process": analysis_result.get("thinking_process", []),
             "performance_metrics": analysis_result.get("performance_metrics"),

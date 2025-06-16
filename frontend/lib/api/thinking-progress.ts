@@ -14,6 +14,7 @@ export interface ThinkingStep {
 export interface ThinkingProgressResponse {
   request_id: string;
   thinking_process: ThinkingStep[];
+  thinking_steps?: ThinkingStep[]; // Add alternative field for backend compatibility
   is_complete: boolean;
   total_steps: number;
   completed_steps: number;
@@ -21,7 +22,7 @@ export interface ThinkingProgressResponse {
 }
 
 /**
- * Fetch current thinking progress from backend
+ * Fetch current thinking progress from backend (V3 Rebuilt)
  */
 export async function fetchThinkingProgress(requestId: string): Promise<ThinkingProgressResponse> {
   try {
@@ -53,8 +54,8 @@ export function startThinkingProgressPolling(
   onProgress: (progress: ThinkingProgressResponse) => void,
   onComplete: (finalProgress: ThinkingProgressResponse) => void,
   onError: (error: Error) => void,
-  pollingInterval: number = 2000, // 2 seconds
-  maxAttempts: number = 60 // 2 minutes max
+  pollingInterval: number = 300, // 300ms for real-time updates
+  maxAttempts: number = 400 // 2 minutes max (300ms * 400 = 2 minutes)
 ): { stopPolling: () => void } {
   let attempts = 0;
   let timerId: NodeJS.Timeout | null = null;
@@ -73,7 +74,7 @@ export function startThinkingProgressPolling(
 
     try {
       const progress = await fetchThinkingProgress(requestId);
-      
+
       // Call progress callback
       onProgress(progress);
 
@@ -91,7 +92,7 @@ export function startThinkingProgressPolling(
       }
     } catch (error) {
       console.error(`Thinking progress polling attempt ${attempts} failed:`, error);
-      
+
       // Continue polling on error (backend might not be ready yet)
       if (attempts < maxAttempts && !isCompleted) {
         timerId = setTimeout(poll, pollingInterval);
@@ -117,29 +118,8 @@ export function startThinkingProgressPolling(
 
 /**
  * Create initial thinking steps for immediate display
+ * @deprecated - No longer using placeholder steps, only real ones
  */
 export function createInitialThinkingSteps(): ThinkingStep[] {
-  return [
-    {
-      step: "Initializing Analysis",
-      status: 'in_progress',
-      details: "Starting customer research analysis...",
-      duration_ms: 0,
-      timestamp: Date.now()
-    },
-    {
-      step: "Processing Context",
-      status: 'in_progress',
-      details: "Analyzing business context and requirements...",
-      duration_ms: 0,
-      timestamp: Date.now()
-    },
-    {
-      step: "Generating Insights",
-      status: 'in_progress',
-      details: "Creating research questions and recommendations...",
-      duration_ms: 0,
-      timestamp: Date.now()
-    }
-  ];
+  return [];
 }

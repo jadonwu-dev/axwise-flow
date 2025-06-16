@@ -142,3 +142,12 @@ class ResearchQuestions(BaseModel):
     problemDiscovery: List[str]
     solutionValidation: List[str]
     followUp: List[str]
+
+
+# Import V1 proven models for sustainability
+try:
+    from backend.models.comprehensive_questions import ComprehensiveQuestions, StakeholderDetection
+except ImportError:
+    # Fallback if models not available
+    ComprehensiveQuestions = None
+    StakeholderDetection = None

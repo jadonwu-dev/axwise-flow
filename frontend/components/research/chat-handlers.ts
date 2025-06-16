@@ -27,8 +27,7 @@ export const handleSendMessage = async (
   context: any,
   updateContext: (updates: any) => void,
   updateQuestions: (questions: any) => void,
-  onComplete?: (questions: any) => void,
-  startThinking?: (requestId: string) => void
+  onComplete?: (questions: any) => void
 ) => {
   const textToSend = messageText || state.input;
   if (!textToSend.trim() || state.isLoading) return;
@@ -53,14 +52,10 @@ export const handleSendMessage = async (
   actions.setIsLoading(true);
   actions.setConversationStarted(true);
 
-  // Generate a temporary request ID for thinking progress
-  const tempRequestId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Track request start time for completion timer
+  const requestStartTime = Date.now();
 
-  // Start thinking visualization immediately
-  if (startThinking) {
-    console.log('🧠 Starting immediate thinking visualization with temp ID:', tempRequestId);
-    startThinking(tempRequestId);
-  }
+
 
   try {
     // Convert messages to API format
@@ -84,26 +79,19 @@ export const handleSendMessage = async (
       enable_thinking_process: true,
     });
 
-    // Get real request ID from backend response for debugging
-    const realRequestId = (data as any).metadata?.request_id || (data as any).request_id;
 
-    // If we have a real request ID and it's different from temp ID, update thinking progress
-    if (realRequestId && realRequestId !== tempRequestId && startThinking) {
-      console.log('🧠 Switching to real request ID:', realRequestId);
-      // Note: For now we'll keep using the temp ID since the backend thinking is already complete
-      // In a real-time system, we'd switch to polling the real ID
-    }
 
     // Debug: Log what the backend is returning
     console.log('Backend response:', {
       hasQuestions: !!data.questions,
       questionsData: data.questions,
       extractedContext: data.metadata?.extracted_context,
-      messageCount: apiMessages.length,
-      requestId: realRequestId,
-      thinkingProcess: data.thinking_process,
-      thinkingStepsCount: data.thinking_process?.length || 0
+      messageCount: apiMessages.length
     });
+
+    // Calculate completion time for metadata
+    const completionTimeMs = Date.now() - requestStartTime;
+    const completionTimeSec = Math.round(completionTimeMs / 1000);
 
     const assistantMessage = createAssistantMessage(data.content, {
       questionCategory: (data.metadata?.questionCategory === 'discovery' ||
@@ -114,8 +102,8 @@ export const handleSendMessage = async (
                      data.metadata?.researchStage === 'validation' ||
                      data.metadata?.researchStage === 'analysis')
                      ? data.metadata.researchStage as 'initial' | 'validation' | 'analysis' : undefined,
-      // Include thinking process from backend response
-      thinking_steps: data.thinking_process || [],
+      completionTimeMs,
+      completionTimeSec,
       // Include all other metadata from the API response
       ...data.metadata
     });
@@ -173,8 +161,9 @@ export const handleSendMessage = async (
     actions.setMessages(prev => [...prev, errorMessage]);
   } finally {
     actions.setIsLoading(false);
-    // Note: We don't stop thinking here because the final thinking steps
-    // from the backend response should be displayed in the message
+    // Note: We don't stop thinking here because the thinking process
+    // should remain visible after the user message. The thinking will
+    // be cleared when the user sends a new message or clears the chat.
   }
 };
 
@@ -333,11 +322,10 @@ export const handleSuggestionClick = (
   context: any,
   updateContext: (updates: any) => void,
   updateQuestions: (questions: any) => void,
-  onComplete?: (questions: any) => void,
-  startThinking?: (requestId: string) => void
+  onComplete?: (questions: any) => void
 ) => {
   console.log('🔧 Suggestion clicked:', suggestion);
-  handleSendMessage(suggestion, state, actions, context, updateContext, updateQuestions, onComplete, startThinking);
+  handleSendMessage(suggestion, state, actions, context, updateContext, updateQuestions, onComplete);
 };
 
 /**

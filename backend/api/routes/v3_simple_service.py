@@ -54,6 +54,9 @@ class SimplifiedResearchService:
         # Initialize LLM client (reuse from V1/V2 proven patterns)
         self._llm_client = None
 
+        # Initialize Instructor client for structured output (V1 sustainability pattern)
+        self._instructor_client = None
+
         # Store instance in global registry for progressive updates
         SimplifiedResearchService._active_instances[self.request_id] = self
         logger.debug(f"Added instance {self.request_id} to registry. Total active instances: {len(SimplifiedResearchService._active_instances)}")
@@ -67,6 +70,13 @@ class SimplifiedResearchService:
             from backend.services.llm import LLMServiceFactory
             self._llm_client = LLMServiceFactory.create("gemini")
         return self._llm_client
+
+    def _get_instructor_client(self):
+        """Get or create Instructor client for structured output (V1 sustainability pattern)."""
+        if self._instructor_client is None:
+            from backend.services.llm.instructor_gemini_client import InstructorGeminiClient
+            self._instructor_client = InstructorGeminiClient()
+        return self._instructor_client
 
     def _add_thinking_step(self, step: str, status: str = "in_progress", details: str = "", duration_ms: int = 0):
         """Add or update a thinking step with memory management."""

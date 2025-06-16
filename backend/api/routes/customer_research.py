@@ -68,6 +68,7 @@ class ChatResponse(BaseModel):
     content: str
     metadata: Optional[Dict[str, Any]] = None
     questions: Optional[ResearchQuestions] = None
+    suggestions: Optional[List[str]] = None
     session_id: Optional[str] = None
 
 # System prompt for customer research
@@ -246,6 +247,7 @@ async def research_chat(
                     "suggestions": confirmation_suggestions,
                     "extracted_context": extracted_context
                 },
+                suggestions=confirmation_suggestions,
                 session_id=session_id
             )
 
@@ -362,6 +364,7 @@ async def research_chat(
                 "extracted_context": extracted_context
             },
             questions=questions,
+            suggestions=suggestions,
             session_id=session_id
         )
 
@@ -764,31 +767,24 @@ Business Context:
 Recent Conversation:
 {conversation_text}
 
-Based on this context, identify the stakeholders and return ONLY valid JSON in this exact format:
-{{
-  "primary": [
-    {{
-      "name": "Stakeholder Role 1",
-      "description": "Business-specific description of their role and responsibilities in this context"
-    }},
-    {{
-      "name": "Stakeholder Role 2",
-      "description": "Business-specific description of their role and responsibilities in this context"
-    }}
-  ],
-  "secondary": [
-    {{
-      "name": "Stakeholder Role 3",
-      "description": "Business-specific description of their role and responsibilities in this context"
-    }},
-    {{
-      "name": "Stakeholder Role 4",
-      "description": "Business-specific description of their role and responsibilities in this context"
-    }}
-  ],
-  "industry": "industry_name",
-  "reasoning": "Brief explanation of why these stakeholders were identified and their relevance to this business"
-}}
+Identify the most relevant stakeholders for customer research interviews. You must provide:
+
+1. PRIMARY STAKEHOLDERS (2-3 most important):
+   - Main decision makers, daily users, or people who directly benefit
+   - Each must have a specific "name" and detailed "description"
+
+2. SECONDARY STAKEHOLDERS (1-3 additional perspectives):
+   - Influencers, occasional users, or indirect beneficiaries
+   - Each must have a specific "name" and detailed "description"
+
+3. INDUSTRY classification (single word)
+
+For this business context:
+- Business: {business_idea}
+- Customers: {target_customer}
+- Problem: {problem}
+
+Focus on stakeholders who would provide valuable insights for customer research interviews.
 
 Guidelines:
 - Primary stakeholders: Main decision makers, daily users, or people who directly benefit (max 3)
@@ -821,8 +817,6 @@ Make descriptions specific to the business idea, target customers, and problem b
             stakeholder_data = await instructor_client.generate_with_model_async(
                 prompt=prompt,
                 model_class=StakeholderDetection,
-                temperature=0.3,
-                max_output_tokens=8000,
                 system_instruction="You are an expert business analyst. Identify the most relevant stakeholders for customer research interviews."
             )
 
@@ -1002,20 +996,32 @@ BUSINESS CONTEXT:
 - Problem: {problem}
 - Industry: {industry}
 
-STAKEHOLDERS TO CREATE QUESTIONS FOR:
-Primary: {', '.join(primary_names)}
-Secondary: {', '.join(secondary_names)}
+You must create a structured response with the following format:
 
-REQUIREMENTS:
-1. Create 5 problem discovery questions per stakeholder (understand current challenges)
-2. Create 5 solution validation questions per stakeholder (test the proposed solution)
-3. Create 3 follow-up questions per stakeholder (gather additional insights)
-4. Make questions specific to each stakeholder's perspective and role
-5. Use the exact business terminology and context provided
-6. Ensure questions are actionable and will provide valuable insights
-7. Avoid generic questions - make them specific to this business situation
+PRIMARY STAKEHOLDERS (create exactly {len(primary_names)} stakeholder objects):
+{chr(10).join([f'- {name}: Create a stakeholder object with name "{name}", a detailed description of their role/relationship to the business, and specific questions' for name in primary_names])}
 
-Focus on creating questions that will help validate the market need and refine the solution for each stakeholder group."""
+SECONDARY STAKEHOLDERS (create exactly {len(secondary_names)} stakeholder objects):
+{chr(10).join([f'- {name}: Create a stakeholder object with name "{name}", a detailed description of their role/relationship to the business, and specific questions' for name in secondary_names])}
+
+For EACH stakeholder, you must provide:
+1. name: The exact stakeholder name (e.g., "{primary_names[0] if primary_names else 'Young Professionals'}")
+2. description: A detailed description of this stakeholder's role and relationship to the business (50-150 words)
+3. questions: An object containing three arrays:
+   - problemDiscovery: 5 specific questions to understand their current challenges
+   - solutionValidation: 5 specific questions to validate the solution with them
+   - followUp: 3 specific questions for additional insights
+
+CRITICAL REQUIREMENTS:
+- Each stakeholder MUST have a non-empty "name" field
+- Each stakeholder MUST have a detailed "description" field explaining their role
+- Each stakeholder MUST have a "questions" object with all three question arrays
+- Questions must be specific to each stakeholder's perspective and role
+- Use the exact business context: {business_idea} for {target_customer} solving {problem}
+- Make questions actionable and specific to this business situation
+- Avoid generic questions - tailor them to each stakeholder's unique perspective
+
+The response must be a valid JSON structure matching the ComprehensiveQuestions schema with primaryStakeholders, secondaryStakeholders, and timeEstimate fields."""
 
     try:
         # Use Instructor for structured output generation
@@ -1028,9 +1034,7 @@ Focus on creating questions that will help validate the market need and refine t
         comprehensive_questions = await instructor_client.generate_with_model_async(
             prompt=prompt,
             model_class=ComprehensiveQuestions,
-            temperature=0.3,
-            max_output_tokens=32000,  # Keep high token limit for comprehensive output
-            system_instruction="You are an expert customer research consultant. Generate comprehensive, specific research questions tailored to each stakeholder group."
+            system_instruction="You are an expert customer research consultant. You must generate a complete ComprehensiveQuestions object with properly structured stakeholder objects. Each stakeholder must have a name, description, and questions object with problemDiscovery, solutionValidation, and followUp arrays. Never return empty objects or null values."
         )
 
         logger.info(f"✅ Instructor generated comprehensive questions successfully")
@@ -1098,9 +1102,29 @@ async def generate_research_questions(
 def generate_comprehensive_fallback_questions(context: ResearchContext, stakeholder_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Generate comprehensive fallback questions when LLM fails."""
 
-    business_type = context.businessIdea or "solution"
-    customer_type = context.targetCustomer or "customers"
-    problem_area = context.problem or "challenge"
+    # Use the full context instead of generic fallbacks
+    business_idea = context.businessIdea or "your solution"
+    target_customer = context.targetCustomer or "target customers"
+    problem_context = context.problem or "the challenge you're addressing"
+
+    # Extract key terms for more specific questions
+    if business_idea and len(business_idea) > 20:
+        # Use a more specific business description
+        if "cafe" in business_idea.lower() or "coffee" in business_idea.lower():
+            business_type = "community hub cafe"
+            solution_context = "cafe and community space"
+        elif "app" in business_idea.lower():
+            business_type = "mobile app"
+            solution_context = "app"
+        elif "service" in business_idea.lower():
+            business_type = "service"
+            solution_context = "service"
+        else:
+            business_type = "solution"
+            solution_context = "solution"
+    else:
+        business_type = business_idea if business_idea != "your solution" else "solution"
+        solution_context = business_type
 
     # Use stakeholder data if available, otherwise create default
     if not stakeholder_data:
@@ -1114,45 +1138,45 @@ def generate_comprehensive_fallback_questions(context: ResearchContext, stakehol
         if is_primary:
             return {
                 'problemDiscovery': [
-                    f"How do {stakeholder_name.lower()} currently handle {problem_area}?",
-                    f"What's the most frustrating part of {problem_area} for {stakeholder_name.lower()}?",
-                    f"How much time do {stakeholder_name.lower()} spend on this each week?",
-                    f"What tools or methods have {stakeholder_name.lower()} tried before?",
+                    f"How do {stakeholder_name.lower()} currently handle {problem_context}?",
+                    f"What's the most frustrating part of {problem_context} for {stakeholder_name.lower()}?",
+                    f"How much time do {stakeholder_name.lower()} spend dealing with this each week?",
+                    f"What alternatives or solutions have {stakeholder_name.lower()} tried before?",
                     f"What would an ideal solution look like for {stakeholder_name.lower()}?"
                 ],
                 'solutionValidation': [
-                    f"Would {stakeholder_name.lower()} be interested in trying a {business_type}?",
-                    f"What features would be most important to {stakeholder_name.lower()}?",
-                    f"How much would {stakeholder_name.lower()} be willing to pay for this?",
-                    f"What concerns would {stakeholder_name.lower()} have about switching?",
-                    f"How do {stakeholder_name.lower()} typically evaluate new solutions?"
+                    f"Would {stakeholder_name.lower()} be interested in trying {business_idea}?",
+                    f"What features would be most important to {stakeholder_name.lower()} in a {solution_context}?",
+                    f"How much would {stakeholder_name.lower()} be willing to pay for this {solution_context}?",
+                    f"What concerns would {stakeholder_name.lower()} have about using a new {solution_context}?",
+                    f"How do {stakeholder_name.lower()} typically evaluate new {solution_context}s?"
                 ],
                 'followUp': [
-                    f"Who else would {stakeholder_name.lower()} involve in the decision?",
-                    f"How would {stakeholder_name.lower()} measure success?",
-                    f"What timeline would {stakeholder_name.lower()} expect?"
+                    f"Who else would {stakeholder_name.lower()} involve in the decision to use this {solution_context}?",
+                    f"How would {stakeholder_name.lower()} measure success with this {solution_context}?",
+                    f"What timeline would {stakeholder_name.lower()} expect for implementation?"
                 ]
             }
         else:
             return {
                 'problemDiscovery': [
-                    f"How do {stakeholder_name.lower()} interact with current solutions?",
-                    f"What challenges do {stakeholder_name.lower()} face daily?",
-                    f"How important is ease of use for {stakeholder_name.lower()}?",
-                    f"What information do {stakeholder_name.lower()} need to feel confident?",
-                    f"How do {stakeholder_name.lower()} prefer to learn new systems?"
+                    f"How do {stakeholder_name.lower()} interact with current solutions for {problem_context}?",
+                    f"What challenges do {stakeholder_name.lower()} face when dealing with {problem_context}?",
+                    f"How important is ease of use for {stakeholder_name.lower()} when choosing a {solution_context}?",
+                    f"What information do {stakeholder_name.lower()} need to feel confident about a new {solution_context}?",
+                    f"How do {stakeholder_name.lower()} prefer to learn about new {solution_context}s?"
                 ],
                 'solutionValidation': [
-                    f"Would {stakeholder_name.lower()} find this solution helpful?",
-                    f"What would make {stakeholder_name.lower()} want to use this?",
-                    f"How important is training and support for {stakeholder_name.lower()}?",
-                    f"What would prevent {stakeholder_name.lower()} from adopting this?",
-                    f"How would {stakeholder_name.lower()} want to provide feedback?"
+                    f"Would {stakeholder_name.lower()} find this {solution_context} helpful for {problem_context}?",
+                    f"What would make {stakeholder_name.lower()} want to use this {solution_context}?",
+                    f"How important is training and support for {stakeholder_name.lower()} when adopting a new {solution_context}?",
+                    f"What would prevent {stakeholder_name.lower()} from adopting this {solution_context}?",
+                    f"How would {stakeholder_name.lower()} want to provide feedback about this {solution_context}?"
                 ],
                 'followUp': [
-                    f"What other tools do {stakeholder_name.lower()} use daily?",
-                    f"How do {stakeholder_name.lower()} stay updated on new solutions?",
-                    f"What would convince {stakeholder_name.lower()} to recommend this?"
+                    f"What other {solution_context}s do {stakeholder_name.lower()} use for similar needs?",
+                    f"How do {stakeholder_name.lower()} stay updated on new {solution_context}s in this area?",
+                    f"What would convince {stakeholder_name.lower()} to recommend this {solution_context}?"
                 ]
             }
 
@@ -1260,7 +1284,7 @@ def should_generate_research_questions(
         'generate questions', 'create questions', 'research questions',
         'questions for', 'help me with questions', 'what questions',
         'interview questions', 'customer questions', 'ready for questions',
-        'let\'s create questions', 'build questions', 'make questions'
+        "let's create questions", 'build questions', 'make questions'
     ])
 
     if user_wants_questions:

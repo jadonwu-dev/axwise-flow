@@ -162,16 +162,24 @@ export const extractSuggestions = (
 ): string[] => {
   let suggestions: string[] = [];
 
-  // Try to extract suggestions from the API response metadata
-  if (data.metadata?.suggestions && Array.isArray(data.metadata.suggestions)) {
+  // V3 Rebuilt: Try to extract suggestions from the direct suggestions field first
+  if (data.suggestions && Array.isArray(data.suggestions)) {
+    suggestions = data.suggestions;
+    console.log('🔧 Found V3 Rebuilt suggestions:', suggestions);
+  }
+  // V3 Simple: Try to extract suggestions from the API response metadata (legacy)
+  else if (data.metadata?.suggestions && Array.isArray(data.metadata.suggestions)) {
     suggestions = data.metadata.suggestions;
+    console.log('🔧 Found V3 Simple metadata suggestions:', suggestions);
   } else if (data.metadata && 'contextual_suggestions' in data.metadata && Array.isArray((data.metadata as any).contextual_suggestions)) {
     suggestions = (data.metadata as any).contextual_suggestions;
+    console.log('🔧 Found V3 Simple contextual suggestions:', suggestions);
   }
 
   // If no suggestions from API, generate contextual fallback suggestions
   // Note: Generate suggestions even when questions are present, unless it's the final question set
   if (suggestions.length === 0 && !hasCompleteQuestions) {
+    console.log('🔧 No API suggestions found, generating fallback suggestions');
     const businessContext = data.metadata?.extracted_context?.business_idea || context.businessIdea || '';
     const customerContext = data.metadata?.extracted_context?.target_customer || context.targetCustomer || '';
 
@@ -194,6 +202,7 @@ export const extractSuggestions = (
         'Who are your target customers?'
       ];
     }
+    console.log('🔧 Generated fallback suggestions:', suggestions);
   }
 
   return suggestions;
@@ -273,11 +282,17 @@ export const logSuggestionsDebug = (suggestions: string[], data: any, context: a
     suggestionsLength: suggestions.length,
     hasQuestions: !!data.questions,
     hasCompleteQuestions: hasCompleteQuestions(data.questions),
+    // V3 Rebuilt format
+    directSuggestions: data.suggestions,
+    // V3 Simple format (legacy)
     metadataSuggestions: data.metadata?.suggestions,
     contextualSuggestions: (data.metadata as any)?.contextual_suggestions,
     businessContext: data.metadata?.extracted_context?.business_idea || context.businessIdea,
     customerContext: data.metadata?.extracted_context?.target_customer || context.targetCustomer,
-    apiSuggestions: (data as any).suggestions,
+    // V3 Rebuilt enhancements
+    v3Enhancements: data.v3_enhancements,
+    industryAnalysis: data.metadata?.industry_analysis,
+    serviceVersion: data.api_version,
     fullMetadata: data.metadata
   });
 };

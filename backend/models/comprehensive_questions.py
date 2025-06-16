@@ -11,21 +11,21 @@ from pydantic import BaseModel, Field, validator
 
 class StakeholderQuestions(BaseModel):
     """Questions for a specific stakeholder category."""
-    
+
     problemDiscovery: List[str] = Field(
         ...,
         description="5 specific questions to discover and validate problems this stakeholder faces",
         min_items=3,
         max_items=7
     )
-    
+
     solutionValidation: List[str] = Field(
         ...,
         description="5 specific questions to validate the proposed solution with this stakeholder",
         min_items=3,
         max_items=7
     )
-    
+
     followUp: List[str] = Field(
         ...,
         description="3 follow-up questions to gather additional insights from this stakeholder",
@@ -43,21 +43,21 @@ class StakeholderQuestions(BaseModel):
 
 class Stakeholder(BaseModel):
     """A stakeholder with their role description and specific questions."""
-    
+
     name: str = Field(
         ...,
         description="Clear, specific name for this stakeholder group (e.g., 'Elderly Women', 'Family Caregivers')",
         min_length=2,
         max_length=50
     )
-    
+
     description: str = Field(
         ...,
         description="Brief description of this stakeholder's role and relationship to the business",
         min_length=10,
-        max_length=200
+        max_length=500
     )
-    
+
     questions: StakeholderQuestions = Field(
         ...,
         description="Structured questions specific to this stakeholder"
@@ -80,20 +80,20 @@ class Stakeholder(BaseModel):
 
 class TimeEstimate(BaseModel):
     """Time estimates for conducting the research interviews."""
-    
+
     totalQuestions: int = Field(
         ...,
         description="Total number of questions across all stakeholders",
         ge=5,
         le=100
     )
-    
+
     estimatedMinutes: str = Field(
         ...,
         description="Estimated time range in minutes (e.g., '45-60')",
-        regex=r'^\d+-\d+$'
+        pattern=r'^\d+-\d+$'
     )
-    
+
     breakdown: Dict[str, Any] = Field(
         ...,
         description="Detailed breakdown of time estimates"
@@ -102,29 +102,35 @@ class TimeEstimate(BaseModel):
     @validator('breakdown')
     def validate_breakdown(cls, v):
         """Ensure breakdown contains required fields."""
-        required_fields = ['primary', 'secondary']
-        for field in required_fields:
-            if field not in v:
-                raise ValueError(f"Breakdown must contain '{field}' field")
+        if not isinstance(v, dict):
+            # If breakdown is empty or invalid, create a default structure
+            return {'primary': 0, 'secondary': 0}
+
+        # Ensure required fields exist, add defaults if missing
+        if 'primary' not in v:
+            v['primary'] = 0
+        if 'secondary' not in v:
+            v['secondary'] = 0
+
         return v
 
 
 class ComprehensiveQuestions(BaseModel):
     """Complete comprehensive research questions with stakeholder integration."""
-    
+
     primaryStakeholders: List[Stakeholder] = Field(
         ...,
         description="Primary stakeholders who are directly affected by or involved with the business",
         min_items=1,
         max_items=5
     )
-    
+
     secondaryStakeholders: List[Stakeholder] = Field(
         default_factory=list,
         description="Secondary stakeholders who have indirect influence or interest",
         max_items=5
     )
-    
+
     timeEstimate: TimeEstimate = Field(
         ...,
         description="Realistic time estimates for conducting all interviews"
@@ -164,20 +170,20 @@ class ComprehensiveQuestions(BaseModel):
 
 class StakeholderDetection(BaseModel):
     """Detected stakeholders for a business context."""
-    
+
     primary: List[Dict[str, str]] = Field(
         ...,
         description="Primary stakeholders with name and description",
         min_items=1,
         max_items=5
     )
-    
+
     secondary: List[Dict[str, str]] = Field(
         default_factory=list,
         description="Secondary stakeholders with name and description",
         max_items=5
     )
-    
+
     industry: str = Field(
         ...,
         description="Industry classification for the business",
@@ -188,11 +194,28 @@ class StakeholderDetection(BaseModel):
     @validator('primary', 'secondary')
     def validate_stakeholder_structure(cls, v):
         """Ensure each stakeholder has name and description."""
-        for stakeholder in v:
+        validated_stakeholders = []
+
+        for i, stakeholder in enumerate(v):
             if not isinstance(stakeholder, dict):
-                raise ValueError("Each stakeholder must be a dictionary")
-            if 'name' not in stakeholder or 'description' not in stakeholder:
-                raise ValueError("Each stakeholder must have 'name' and 'description'")
-            if not stakeholder['name'].strip() or not stakeholder['description'].strip():
-                raise ValueError("Stakeholder name and description cannot be empty")
-        return v
+                # If it's not a dict, skip it or create a default
+                continue
+
+            # Check for required fields and provide defaults if missing
+            name = stakeholder.get('name', '').strip()
+            description = stakeholder.get('description', '').strip()
+
+            if not name:
+                # Skip stakeholders without names
+                continue
+
+            if not description:
+                # Provide a default description if missing
+                description = f"Stakeholder involved in {name.lower()} activities"
+
+            validated_stakeholders.append({
+                'name': name,
+                'description': description
+            })
+
+        return validated_stakeholders

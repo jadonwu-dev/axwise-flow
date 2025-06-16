@@ -1,12 +1,13 @@
 /**
- * Research API Client - V3 Simplified
+ * Research API Client - V3 Rebuilt
  * Handles all customer research related API calls with local storage for anonymous users
  *
- * MIGRATED TO V3 SIMPLE: Now uses /api/research/v3-simple/chat endpoint
- * - Enhanced analysis capabilities
- * - Thinking process tracking
- * - Improved performance and stability
- * - Maintains compatibility with existing frontend code
+ * MIGRATED TO V3 REBUILT: Now uses /api/research/v3-rebuilt/chat endpoint
+ * - V1 core reliability with V3 enhancements
+ * - UX research methodology with "All of the above" and "I don't know" options
+ * - Industry classification and enhanced context
+ * - Circuit breaker pattern for enhancement reliability
+ * - Automatic fallback to V1 behavior if enhancements fail
  */
 
 import { RESEARCH_CONFIG, validateMessage, sanitizeInput } from '@/lib/config/research-config';
@@ -62,7 +63,7 @@ export interface ChatRequest {
   context?: ResearchContext;
   session_id?: string;
   user_id?: string;
-  // V3 Simple options
+  // V3 Rebuilt options
   enable_enhanced_analysis?: boolean;
   enable_thinking_process?: boolean;
 }
@@ -225,13 +226,15 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
     input: sanitizedInput,
     session_id: sessionId,
     user_id: anonymousUserId,
-    // Simple endpoint doesn't need these options
+    // V3 Rebuilt uses V1 core with enhancements
+    enable_enhanced_analysis: true,
+    enable_thinking_process: false, // Disable for better performance
   };
 
   // Use retry and timeout wrappers
   return await withRetry(async () => {
     return await withTimeout(async () => {
-      const response = await fetch(`${API_BASE_URL}/api/research/v3-simple/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/research/v3-rebuilt/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -300,19 +303,20 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
 
 /**
  * Generate research questions based on context
+ * Updated to use V3 Rebuilt endpoint for enhanced reliability
  */
 export async function generateResearchQuestions(
   context: ResearchContext,
   conversationHistory: Message[]
 ): Promise<GeneratedQuestions> {
-  const response = await fetch(`${API_BASE_URL}/api/research/generate-questions`, {
+  const response = await fetch(`${API_BASE_URL}/api/research/v3-rebuilt/questions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       context,
-      conversationHistory,
+      conversation_history: conversationHistory,
     }),
   });
 
