@@ -22,6 +22,28 @@ interface TimeEstimate {
     withBuffer: number;
     perQuestion: number;
   };
+  // New stakeholder-separated format from backend
+  total?: {
+    questions: number;
+    min: number;
+    max: number;
+    description: string;
+  };
+  primary?: {
+    questions: number;
+    min: number;
+    max: number;
+    description: string;
+  };
+  secondary?: {
+    questions: number;
+    min: number;
+    max: number;
+    description: string;
+  };
+  // Legacy format support
+  min?: number;
+  max?: number;
 }
 
 interface ComprehensiveQuestionsProps {
@@ -84,10 +106,29 @@ export function ComprehensiveQuestionsComponent({
     return timeEstimate;
   };
 
-  // Use calculated time estimate if the provided one is empty/default
-  const actualTimeEstimate = (timeEstimate.totalQuestions === 0 || !timeEstimate.totalQuestions)
-    ? calculateActualTimeEstimate()
-    : timeEstimate;
+  // Handle both old and new time estimate formats from backend
+  const actualTimeEstimate = (() => {
+    // If backend provides new stakeholder-separated format
+    if (timeEstimate.total && timeEstimate.total.questions > 0) {
+      return {
+        totalQuestions: timeEstimate.total.questions,
+        estimatedMinutes: `${timeEstimate.total.min}-${timeEstimate.total.max}`,
+        breakdown: {
+          baseTime: timeEstimate.total.min,
+          withBuffer: timeEstimate.total.max,
+          perQuestion: Math.round((timeEstimate.total.min + timeEstimate.total.max) / 2 / timeEstimate.total.questions * 10) / 10
+        }
+      };
+    }
+
+    // If backend provides legacy format with totalQuestions
+    if (timeEstimate.totalQuestions && timeEstimate.totalQuestions > 0) {
+      return timeEstimate;
+    }
+
+    // Fallback to frontend calculation
+    return calculateActualTimeEstimate();
+  })();
 
   // Calculate separate estimates for primary and secondary stakeholders
   const calculateStakeholderEstimate = (stakeholders: StakeholderQuestions[]) => {
@@ -318,7 +359,7 @@ ${(questions.followUp || []).map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4 text-green-600" />
-            <span>{actualTimeEstimate.estimatedMinutes} minutes</span>
+            <span>{primaryEstimate.timeRange} per conversation</span>
           </div>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl mx-auto">

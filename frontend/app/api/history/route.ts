@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Check environment
     const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = true; // Force enable Clerk validation for testing
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
 
     console.log('History API: Environment check:', {
       isProduction,
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       console.log('History API: Using Clerk JWT token for authenticated user:', userId);
     } else {
       // Development mode: use development token
-      authToken = 'dev_test_token_DEV_TOKEN_REDACTED';
+      authToken = 'DEV_TOKEN_REDACTED';
       console.log('History API: Using development token (development mode only)');
     }
 

@@ -6,16 +6,23 @@
 import { Message, StakeholderData, FormattedStakeholder, GeneratedQuestions } from './types';
 
 /**
- * Scroll to bottom of chat with smooth animation
+ * Scroll to bottom of chat with smooth animation - Mobile optimized
  */
 export const scrollToBottom = () => {
-  // Scroll to bottom but leave some padding to keep input visible
+  // Scroll to bottom with mobile viewport considerations
   setTimeout(() => {
     const scrollContainer = document.querySelector('[data-radix-scroll-area-viewport]');
     if (scrollContainer) {
       const { scrollHeight, clientHeight } = scrollContainer;
-      // Scroll to bottom minus 80px padding to keep input field visible
-      const targetScrollTop = scrollHeight - clientHeight + 80;
+
+      // Calculate padding based on device type
+      const isMobile = window.innerWidth < 768;
+      const inputHeight = isMobile ? 80 : 100; // Account for mobile keyboard
+      const safeAreaPadding = isMobile ? 20 : 10; // Extra padding for mobile
+
+      // Scroll to bottom with appropriate padding to keep input visible
+      const targetScrollTop = scrollHeight - clientHeight + inputHeight + safeAreaPadding;
+
       scrollContainer.scrollTo({
         top: Math.max(0, targetScrollTop),
         behavior: 'smooth'
@@ -25,7 +32,8 @@ export const scrollToBottom = () => {
       const messagesEndRef = document.querySelector('[data-messages-end]');
       messagesEndRef?.scrollIntoView({
         behavior: 'smooth',
-        block: 'end'
+        block: 'end',
+        inline: 'nearest'
       });
     }
   }, 10);
@@ -58,47 +66,21 @@ export const copyToClipboard = async (content: string): Promise<void> => {
 };
 
 /**
- * Simplified stakeholder detection - primarily rely on LLM backend analysis
- * This is now a fallback function - the primary stakeholder detection happens in the backend via LLM
+ * 🚨 DEPRECATED: Stakeholder detection - backend LLM handles this now
+ * This is a fallback function that should rarely be used
+ * The primary stakeholder detection happens in the backend via LLM
  */
 export const detectMultipleStakeholders = (context: any, conversationMessages?: Message[]) => {
-  const businessIdea = context.businessIdea?.toLowerCase() || '';
-  const targetCustomer = context.targetCustomer?.toLowerCase() || '';
-  const problem = context.problem?.toLowerCase() || '';
+  console.warn('🚨 DEPRECATED: detectMultipleStakeholders called - backend LLM should handle stakeholder detection');
 
-  // Simple fallback detection for when LLM analysis is not available
-  if (businessIdea.includes('ux') || businessIdea.includes('research') || businessIdea.includes('design')) {
-    return {
-      detected: true,
-      stakeholders: {
-        primary: ['UX Researchers', 'Product Managers'],
-        secondary: ['Research Operations', 'Design Teams'],
-        industry: 'ux_research',
-        reasoning: 'Fallback detection based on UX/research keywords'
-      }
-    };
-  }
-
-  if (businessIdea.includes('healthcare') || businessIdea.includes('medical') || businessIdea.includes('patient')) {
-    return {
-      detected: true,
-      stakeholders: {
-        primary: ['Healthcare Providers', 'Patients'],
-        secondary: ['Hospital Administrators', 'Insurance Companies'],
-        industry: 'healthcare',
-        reasoning: 'Fallback detection based on healthcare keywords'
-      }
-    };
-  }
-
-  // Default fallback
+  // Return generic fallback - backend LLM should handle all stakeholder detection
   return {
     detected: true,
     stakeholders: {
-      primary: ['Decision Makers', 'End Users'],
-      secondary: ['IT Teams', 'Support Staff'],
+      primary: ['Primary Stakeholders'],
+      secondary: ['Secondary Stakeholders'],
       industry: 'general',
-      reasoning: 'Generic fallback stakeholders'
+      reasoning: 'Frontend fallback - backend LLM should handle stakeholder detection'
     }
   };
 };
@@ -298,108 +280,28 @@ export const logSuggestionsDebug = (suggestions: string[], data: any, context: a
 };
 
 /**
- * Generate stakeholder-specific research questions with industry-specific templates
+ * 🚨 DEPRECATED: Generate stakeholder-specific research questions using LLM
+ * This function is deprecated - all question generation now happens in the backend via LLM
+ * Kept only for backward compatibility
  */
 export const generateStakeholderQuestions = (stakeholders: any[], businessContext: string, industry: string) => {
-  // Industry-specific question templates
-  const getIndustrySpecificQuestions = (stakeholderName: string, businessContext: string, industry: string) => {
-    const lowerStakeholder = stakeholderName.toLowerCase();
-    const lowerBusiness = businessContext.toLowerCase();
-    const lowerIndustry = industry.toLowerCase();
+  console.warn('🚨 DEPRECATED: generateStakeholderQuestions called - all question generation should be done by backend LLM');
 
-    // Detect business type for more specific questions
-    const isB2B = lowerBusiness.includes('manufacturer') || lowerBusiness.includes('enterprise') || lowerBusiness.includes('business') || lowerBusiness.includes('company');
-    const isB2C = lowerBusiness.includes('consumer') || lowerBusiness.includes('customer') || lowerBusiness.includes('user') || lowerBusiness.includes('individual');
-    const isTech = lowerBusiness.includes('software') || lowerBusiness.includes('app') || lowerBusiness.includes('platform') || lowerBusiness.includes('digital') || lowerBusiness.includes('api');
-    const isHealthcare = lowerBusiness.includes('medical') || lowerBusiness.includes('health') || lowerBusiness.includes('patient') || lowerBusiness.includes('clinical');
-    const isManufacturing = lowerBusiness.includes('manufacturing') || lowerBusiness.includes('production') || lowerBusiness.includes('factory') || lowerBusiness.includes('material');
-    const isFintech = lowerBusiness.includes('financial') || lowerBusiness.includes('payment') || lowerBusiness.includes('banking') || lowerBusiness.includes('fintech');
-    const isEcommerce = lowerBusiness.includes('ecommerce') || lowerBusiness.includes('marketplace') || lowerBusiness.includes('retail') || lowerBusiness.includes('shopping');
-    const isEducation = lowerBusiness.includes('education') || lowerBusiness.includes('learning') || lowerBusiness.includes('training') || lowerBusiness.includes('course');
-
-    let discoveryQuestions = [];
-    let validationQuestions = [];
-    let followUpQuestions = [];
-
-    if (isHealthcare) {
-      discoveryQuestions = [
-        `How do ${lowerStakeholder} currently manage ${lowerBusiness} in their daily practice?`,
-        `What regulatory or compliance challenges do ${lowerStakeholder} face with current solutions?`,
-        `How do ${lowerStakeholder} ensure patient safety and data privacy in their current workflow?`,
-        `What are the most time-consuming aspects of ${lowerStakeholder}'s current process?`,
-        `How do ${lowerStakeholder} stay updated with medical standards and best practices?`
-      ];
-      validationQuestions = [
-        `Would a solution that improves patient outcomes be valuable to ${lowerStakeholder}?`,
-        `How important is regulatory compliance (FDA, HIPAA) in ${lowerStakeholder}'s decision-making?`,
-        `What evidence would ${lowerStakeholder} need to see before adopting a new medical solution?`,
-        `How do ${lowerStakeholder} typically evaluate the clinical effectiveness of new tools?`,
-        `What concerns would ${lowerStakeholder} have about patient data security?`
-      ];
-    } else if (isTech) {
-      discoveryQuestions = [
-        `How do ${lowerStakeholder} currently integrate ${lowerBusiness} into their existing tech stack?`,
-        `What are the biggest technical challenges ${lowerStakeholder} face with current solutions?`,
-        `How do ${lowerStakeholder} handle scalability and performance requirements?`,
-        `What development or implementation resources do ${lowerStakeholder} typically allocate?`,
-        `How do ${lowerStakeholder} evaluate technical documentation and developer experience?`
-      ];
-      validationQuestions = [
-        `Would a solution that reduces development time be valuable to ${lowerStakeholder}?`,
-        `How important are API reliability and uptime to ${lowerStakeholder}?`,
-        `What technical specifications would ${lowerStakeholder} need before implementation?`,
-        `How do ${lowerStakeholder} typically test and validate new technical solutions?`,
-        `What concerns would ${lowerStakeholder} have about system integration and security?`
-      ];
-    } else {
-      // Generic business questions as fallback
-      discoveryQuestions = [
-        `How do ${lowerStakeholder} currently handle challenges related to ${lowerBusiness}?`,
-        `What are the biggest pain points ${lowerStakeholder} face in their current workflow?`,
-        `How much time do ${lowerStakeholder} typically spend on tasks related to this area?`,
-        `What happens when current processes don't work as expected for ${lowerStakeholder}?`,
-        `How do ${lowerStakeholder} currently make decisions in this space?`
-      ];
-      validationQuestions = [
-        `Would a solution addressing these challenges be valuable to ${lowerStakeholder}?`,
-        `What features would be most important to ${lowerStakeholder} in an ideal solution?`,
-        `How would ${lowerStakeholder} evaluate the success of a new solution?`,
-        `What concerns would ${lowerStakeholder} have about adopting a new approach?`,
-        `How do ${lowerStakeholder} typically assess new solutions or vendors?`
-      ];
-    }
-
-    // Common follow-up questions that work across industries
-    followUpQuestions = [
-      `Who else would ${lowerStakeholder} involve in the decision-making process?`,
-      `What budget considerations would ${lowerStakeholder} have for this type of solution?`,
-      `How would ${lowerStakeholder} measure ROI or success metrics?`,
-      `What timeline would ${lowerStakeholder} expect for implementation and results?`,
-      `What ongoing support or training would ${lowerStakeholder} need?`
-    ];
-
-    return {
-      discovery: discoveryQuestions,
-      validation: validationQuestions,
-      followUp: followUpQuestions
-    };
-  };
-
-  const generateQuestionsForStakeholder = (stakeholderName: string, description: string, type: 'primary' | 'secondary') => {
-    const industryQuestions = getIndustrySpecificQuestions(stakeholderName, businessContext, industry);
-
-    return {
-      name: stakeholderName,
-      description: description || `Key stakeholder in ${businessContext}`,
-      type,
-      questions: industryQuestions
-    };
-  };
-
+  // Return minimal fallback to prevent errors - this should not be used in production
   return stakeholders.map(stakeholder => {
     const name = getStakeholderName(stakeholder);
     const description = getStakeholderDescription(stakeholder);
     const type = stakeholder.type || 'primary';
-    return generateQuestionsForStakeholder(name, description, type);
+
+    return {
+      name,
+      description: description || `Key stakeholder in ${businessContext}`,
+      type,
+      questions: {
+        discovery: [`Questions for ${name} will be generated by backend LLM`],
+        validation: [`Backend LLM handles all question generation`],
+        followUp: [`This frontend function is deprecated`]
+      }
+    };
   });
 };

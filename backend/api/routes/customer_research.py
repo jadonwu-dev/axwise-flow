@@ -994,109 +994,40 @@ def detect_stakeholders_fallback(
 
     all_text = f"{business_idea} {target_customer} {problem}".lower()
 
-    # Simple keyword-based detection as fallback with name/description structure
-    if any(word in all_text for word in ["ux", "user research", "design", "product"]):
-        return {
-            "primary": [
-                {
-                    "name": "UX Researchers",
-                    "description": "Conduct user research and usability testing",
-                },
-                {
-                    "name": "Product Managers",
-                    "description": "Define product strategy and requirements",
-                },
-                {
-                    "name": "Designers",
-                    "description": "Create user interfaces and experiences",
-                },
-            ],
-            "secondary": [
-                {
-                    "name": "Research Operations",
-                    "description": "Coordinate and scale research activities",
-                },
-                {
-                    "name": "Engineering Teams",
-                    "description": "Develop technical solutions",
-                },
-            ],
-            "industry": "ux_research",
-            "reasoning": "Detected UX/Product context from keywords",
-        }
-    elif any(
-        word in all_text for word in ["healthcare", "medical", "patient", "doctor"]
-    ):
-        return {
-            "primary": [
-                {
-                    "name": "Healthcare Providers",
-                    "description": "Deliver medical care and treatment to patients",
-                },
-                {
-                    "name": "Patients",
-                    "description": "Receive medical care and treatment",
-                },
-            ],
-            "secondary": [
-                {
-                    "name": "Hospital Administrators",
-                    "description": "Manage hospital operations and resources",
-                },
-                {
-                    "name": "Insurance Companies",
-                    "description": "Provide healthcare coverage and reimbursement",
-                },
-            ],
-            "industry": "healthcare",
-            "reasoning": "Detected healthcare context from keywords",
-        }
-    elif any(
-        word in all_text for word in ["education", "teacher", "student", "school"]
-    ):
-        return {
-            "primary": [
-                {
-                    "name": "Teachers",
-                    "description": "Educate students and manage classroom activities",
-                },
-                {
-                    "name": "Students",
-                    "description": "Learn and participate in educational activities",
-                },
-            ],
-            "secondary": [
-                {
-                    "name": "School Administrators",
-                    "description": "Manage school operations and policies",
-                },
-                {
-                    "name": "Parents",
-                    "description": "Support student learning and school involvement",
-                },
-            ],
-            "industry": "education",
-            "reasoning": "Detected education context from keywords",
-        }
-    else:
-        return {
-            "primary": [
-                {
-                    "name": "Decision Makers",
-                    "description": "Evaluate and approve new solutions",
-                },
-                {
-                    "name": "End Users",
-                    "description": "Use the product in their daily work",
-                },
-            ],
-            "secondary": [
-                {"name": "IT Teams", "description": "Manage technology infrastructure"},
-                {"name": "Support Staff", "description": "Provide customer assistance"},
-            ],
-            "industry": "general",
-            "reasoning": "General business stakeholders (fallback)",
-        }
+    # 🚨 HARDCODED NLP DETECTED: This keyword-based detection should be replaced with LLM analysis
+    logger.warning(
+        "Using hardcoded keyword-based stakeholder detection - should be replaced with LLM"
+    )
+
+    # TODO: Replace this entire section with LLM-based stakeholder generation
+    # The LLM should analyze the business context and generate appropriate stakeholders
+    # without any hardcoded keyword matching
+
+    # TEMPORARY FALLBACK - Return minimal structure to prevent errors
+    return {
+        "primary": [
+            {
+                "name": "Primary Users",
+                "description": "Main users who will directly interact with the solution",
+            },
+            {
+                "name": "Decision Makers",
+                "description": "People who make purchasing or adoption decisions",
+            },
+        ],
+        "secondary": [
+            {
+                "name": "Influencers",
+                "description": "People who influence the decision-making process",
+            },
+            {
+                "name": "Support Team",
+                "description": "People who provide ongoing support and maintenance",
+            },
+        ],
+        "industry": "general",
+        "reasoning": "Using generic fallback - LLM analysis should replace this",
+    }
 
 
 async def generate_comprehensive_research_questions(
@@ -2195,39 +2126,21 @@ def classify_industry_fallback(conversation_context: str, latest_input: str) -> 
 
     combined_text = f"{conversation_context} {latest_input}".lower()
 
-    # Simple keyword-based detection as fallback
-    if any(
-        word in combined_text for word in ["ux", "user research", "design", "usability"]
-    ):
-        return {
-            "industry": "ux_research",
-            "confidence": 0.7,
-            "reasoning": "Detected UX/design keywords in conversation",
-            "sub_categories": ["user research", "design"],
-        }
-    elif any(word in combined_text for word in ["product", "feature", "roadmap"]):
-        return {
-            "industry": "product_management",
-            "confidence": 0.7,
-            "reasoning": "Detected product management keywords",
-            "sub_categories": ["product development", "features"],
-        }
-    elif any(
-        word in combined_text for word in ["healthcare", "medical", "patient", "doctor"]
-    ):
-        return {
-            "industry": "healthcare",
-            "confidence": 0.8,
-            "reasoning": "Detected healthcare keywords",
-            "sub_categories": ["medical", "patient care"],
-        }
-    else:
-        return {
-            "industry": "general",
-            "confidence": 0.5,
-            "reasoning": "Could not determine specific industry from conversation",
-            "sub_categories": ["business", "general"],
-        }
+    # 🚨 HARDCODED NLP DETECTED: This keyword-based industry detection should be replaced with LLM analysis
+    logger.warning(
+        "Using hardcoded keyword-based industry detection - should be replaced with LLM"
+    )
+
+    # TODO: Replace this entire section with LLM-based industry analysis
+    # The LLM should analyze the business context and determine industry without keyword matching
+
+    # TEMPORARY FALLBACK - Return generic industry to prevent errors
+    return {
+        "industry": "general",
+        "confidence": 0.3,
+        "reasoning": "Using generic fallback - LLM analysis should replace this hardcoded detection",
+        "sub_categories": ["business", "general"],
+    }
 
 
 async def analyze_user_intent_with_llm(
@@ -2397,48 +2310,56 @@ Latest user input: "{latest_input}"
 Evaluate the conversation and return ONLY valid JSON:
 
 {{
-  "ready_for_questions": true,
+  "ready_for_questions": false,
   "confidence": 0.85,
   "reasoning": "Detailed explanation of readiness assessment",
   "missing_elements": ["element1", "element2"],
-  "conversation_quality": "high",
+  "conversation_quality": "low",
   "business_clarity": {{
-    "idea_clarity": 0.9,
-    "customer_clarity": 0.8,
-    "problem_clarity": 0.7
+    "idea_clarity": 0.3,
+    "customer_clarity": 0.2,
+    "problem_clarity": 0.1
   }},
   "recommendations": ["suggestion1", "suggestion2"]
 }}
 
-Assessment criteria for CONFIRMATION readiness (not final question generation):
-1. Business idea clarity - Is there a clear, specific understanding of what they're building?
-2. Target customer definition - Are the target users/customers clearly identified with specific roles/personas?
-3. Problem articulation - Is the specific problem they're solving clearly explained?
-4. Content completeness - Is there enough detail about each element to create meaningful research questions?
-5. Context depth - Do we understand the business context, not just surface-level information?
+STRICT Assessment criteria for CONFIRMATION readiness:
+1. Business idea SPECIFICITY - Must be a detailed, specific business concept (not just "coffee shop" but "specialty coffee shop targeting remote workers with co-working space")
+2. Target customer PRECISION - Must identify specific customer segments with clear characteristics (not just "customers" but "remote workers aged 25-40 who need quiet workspace")
+3. Problem ARTICULATION - Must explain the specific problem being solved with context (not just "need coffee" but "remote workers struggle to find quiet, professional spaces with good wifi")
+4. Business context DEPTH - Must show understanding of market, competition, or unique value proposition
+5. Conversation SUBSTANCE - Must contain substantive information, not just agreement or requests for examples
 
-Rules:
-- ready_for_questions: true only if ready to SHOW CONFIRMATION SUMMARY (not generate final questions)
-- This means we have enough detailed info to summarize their business idea, customers, and problem
-- The user will still need to confirm "Yes, that's correct" before actual question generation
-- Focus on CONTENT QUALITY and COMPLETENESS, not conversation length
-- A user could provide complete information in 1-2 detailed messages or 10+ short messages
-- confidence: 0.0-1.0 (how certain you are about the readiness for confirmation)
-- missing_elements: list specific information still needed (empty array if ready for confirmation)
-- conversation_quality: "low", "medium", "high" based on detail depth and specificity
-- clarity scores: 0.0-1.0 for each business aspect
-- recommendations: actionable suggestions for improvement (empty if ready for confirmation)
+CRITICAL RULES - BE VERY STRICT:
+- ready_for_questions: true ONLY if ALL THREE elements are SPECIFICALLY defined with SUBSTANTIAL detail
+- If user is asking for examples, clarification, or saying "I'm not sure" → ready_for_questions: false
+- If user just agrees to hear examples ("yes, those sound good") → ready_for_questions: false
+- If business idea is generic (just "coffee shop", "app", "service") → ready_for_questions: false
+- If customers are vague ("customers", "people", "users") → ready_for_questions: false
+- If no specific problem is articulated → ready_for_questions: false
+- confidence: 0.0-1.0 (be conservative - require 0.8+ confidence for ready_for_questions: true)
+- missing_elements: list specific information still needed
+- conversation_quality: "low" unless substantial detail provided
+- clarity scores: be strict - 0.8+ only for very specific, detailed information
 
-Examples of READY for confirmation:
-- "I want to build a Google Forms automation tool for UX researchers and product managers to create questionnaires faster because manual creation takes too long"
-- Clear business idea ✓, specific customers ✓, defined problem ✓
+Examples of READY for confirmation (ALL required):
+✓ "I want to build a telemedicine platform for elderly patients in rural areas who struggle to access specialists, because current healthcare requires long travel times and many can't afford to miss work"
+- Specific business: telemedicine platform with rural focus ✓
+- Specific customers: elderly patients in rural areas ✓
+- Specific problem: difficulty accessing specialists, travel barriers ✓
 
-Examples of NOT READY:
-- "I have a business idea for customers" (too vague)
-- "I want to help people with their problems" (no specifics)
+✓ "I'm developing a project management tool for small marketing agencies who need better client collaboration, because current tools are too complex and clients get confused by the interfaces"
+- Specific business: project management tool for agencies ✓
+- Specific customers: small marketing agencies ✓
+- Specific problem: current tools too complex for client collaboration ✓
 
-Be conservative but focus on content completeness, not message count.
-The user must still explicitly confirm before questions are generated."""
+Examples of NOT READY (missing specifics):
+✗ "I want to start a business" (too generic)
+✗ "I'm not sure yet, can you give me examples" (asking for help, not providing info)
+✗ "Yes, those sound like good starting points" (just agreeing, no new info)
+✗ "Doctors, patients, healthcare workers" (listing without context or specifics)
+
+BE EXTREMELY CONSERVATIVE. Only mark ready_for_questions: true if you have SUBSTANTIAL, SPECIFIC information about business idea, target customers, AND the problem being solved."""
 
     try:
         response = await llm_service.generate_text(
@@ -2465,136 +2386,51 @@ The user must still explicitly confirm before questions are generated."""
 
     except Exception as e:
         logger.error(f"Error validating business readiness with LLM: {str(e)}")
-        # Fallback to simple validation
-        return validate_business_readiness_fallback(conversation_context, latest_input)
+        # 🚨 CRITICAL FIX: Don't use hardcoded NLP fallback - let LLM generation proceed
+        logger.warning(
+            "LLM validation failed, but allowing question generation to proceed (no NLP blocking)"
+        )
+        return {
+            "ready_for_questions": True,  # Let LLM question generation decide
+            "confidence": 0.7,
+            "reasoning": "LLM validation failed, allowing question generation to proceed without NLP blocking",
+            "conversation_quality": "medium",
+            "business_clarity": {
+                "idea_clarity": 0.7,
+                "customer_clarity": 0.7,
+                "problem_clarity": 0.7,
+            },
+            "missing_elements": [],
+            "recommendations": [],
+        }
 
 
 def validate_business_readiness_fallback(
     conversation_context: str, latest_input: str
 ) -> dict:
-    """Fallback business validation when LLM fails."""
+    """
+    🚨 DEPRECATED: This hardcoded NLP validation should not be used.
+    The LLM-based validation should handle all cases.
+    This function is kept only for backward compatibility.
+    """
 
-    context_lower = conversation_context.lower()
-
-    # Check for specific, detailed business elements (not just keywords)
-    has_specific_business_idea = any(
-        word in context_lower
-        for word in [
-            "app",
-            "platform",
-            "tool",
-            "service",
-            "product",
-            "system",
-            "software",
-            "api",
-            "dashboard",
-        ]
-    ) and any(
-        word in context_lower
-        for word in [
-            "build",
-            "create",
-            "develop",
-            "make",
-            "design",
-            "automation",
-            "management",
-        ]
+    logger.warning(
+        "🚨 DEPRECATED NLP FALLBACK CALLED - This should be replaced with LLM validation"
     )
 
-    has_specific_customers = any(
-        word in context_lower
-        for word in [
-            "researcher",
-            "manager",
-            "developer",
-            "designer",
-            "team",
-            "company",
-            "business",
-            "organization",
-        ]
-    ) or (
-        any(word in context_lower for word in ["customer", "user", "client"])
-        and any(word in context_lower for word in ["who", "target", "specific", "type"])
-    )
-
-    has_specific_problem = any(
-        word in context_lower
-        for word in [
-            "manual",
-            "time consuming",
-            "difficult",
-            "hard",
-            "slow",
-            "inefficient",
-            "frustrating",
-        ]
-    ) or (
-        any(word in context_lower for word in ["problem", "challenge", "pain"])
-        and any(
-            word in context_lower
-            for word in ["because", "since", "takes", "costs", "waste"]
-        )
-    )
-
-    # Check for content depth indicators
-    has_detail_indicators = any(
-        phrase in context_lower
-        for phrase in [
-            "because",
-            "since",
-            "currently",
-            "right now",
-            "takes too long",
-            "hard to",
-            "difficult to",
-            "specifically",
-            "particularly",
-            "especially",
-            "for example",
-            "such as",
-        ]
-    )
-
-    # Focus on content completeness, not conversation length
-    ready = (
-        has_specific_business_idea
-        and has_specific_customers
-        and has_specific_problem
-        and has_detail_indicators
-    )
-
+    # Return permissive validation to not block LLM question generation
     return {
-        "ready_for_questions": ready,
-        "confidence": 0.6,
-        "reasoning": f"Content-based validation: specific_business_idea={has_specific_business_idea}, specific_customers={has_specific_customers}, specific_problem={has_specific_problem}, detail_indicators={has_detail_indicators}",
-        "missing_elements": [
-            elem
-            for elem, present in [
-                ("specific_business_idea", has_specific_business_idea),
-                ("specific_target_customers", has_specific_customers),
-                ("specific_problem_definition", has_specific_problem),
-                ("contextual_details", has_detail_indicators),
-            ]
-            if not present
-        ],
-        "conversation_quality": "medium" if ready else "low",
+        "ready_for_questions": True,  # Always allow LLM to decide
+        "confidence": 0.5,
+        "reasoning": "Using deprecated NLP fallback - LLM should handle validation",
+        "conversation_quality": "medium",
         "business_clarity": {
-            "idea_clarity": 0.7 if has_specific_business_idea else 0.3,
-            "customer_clarity": 0.7 if has_specific_customers else 0.3,
-            "problem_clarity": 0.7 if has_specific_problem else 0.3,
+            "idea_clarity": 0.5,
+            "customer_clarity": 0.5,
+            "problem_clarity": 0.5,
         },
-        "recommendations": (
-            []
-            if ready
-            else [
-                "Provide more specific details about what you're building",
-                "Identify specific customer roles or personas",
-                "Explain the specific problem and why it matters",
-            ]
-        ),
+        "missing_elements": [],
+        "recommendations": ["Use LLM-based validation instead of hardcoded NLP"],
     }
 
 

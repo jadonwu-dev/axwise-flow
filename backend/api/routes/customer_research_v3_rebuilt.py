@@ -717,79 +717,35 @@ class CustomerResearchServiceV3Rebuilt:
             logger.info(f"   Condition 2 (user_confirmed): {condition2}")
             logger.info(f"   Both conditions met: {condition1 and condition2}")
 
-            # CRITICAL FIX: Only treat as confirmation if user explicitly confirms
-            # Don't auto-confirm based on phrases unless it's a direct response to a confirmation request
+            # LLM-BASED FIX: Use existing LLM intent analysis instead of hardcoded phrases
+            # Trust the LLM's analysis of user intent completely
 
-            # Check if the previous assistant message was asking for confirmation
-            previous_assistant_message = None
-            for msg in reversed(request.messages):
-                if msg.role == "assistant":
-                    previous_assistant_message = msg.content
-                    break
+            # Get LLM-determined user intent
+            user_intent = intent_analysis.get("intent", "")
 
-            was_asking_for_confirmation = previous_assistant_message and any(
-                phrase in previous_assistant_message.lower()
-                for phrase in [
-                    "would you like me to generate",
-                    "shall i generate",
-                    "ready to generate",
-                    "confirm",
-                    "is this correct",
-                    "does this sound right",
-                ]
+            # Use LLM-based user confirmation analysis if available
+            llm_user_confirmed = (
+                user_confirmed.get("is_confirmation", False)
+                if user_confirmed
+                else False
             )
 
-            # Only use phrase detection if we were explicitly asking for confirmation
-            confirmation_phrases = [
-                "perfect",
-                "generate",
-                "questions",
-                "proceed",
-                "ready",
-                "correct",
-                "yes",
-                "that's right",
-                "sounds good",
-                "let's go",
-                "create",
-                "okay, go ahead",
-            ]
-
-            user_input_lower = request.input.lower()
-            has_confirmation_phrase = any(
-                phrase in user_input_lower for phrase in confirmation_phrases
-            )
-
+            # SIMPLIFIED LLM-BASED LOGIC: Generate questions if LLM detects:
+            # 1. Question request intent, OR
+            # 2. Confirmation intent, OR
+            # 3. Ready for questions AND LLM confirms user confirmation
             is_user_confirmed = (
-                (
-                    user_confirmed.get("is_confirmation", False)
-                    if user_confirmed
-                    else False
-                )
-                or intent_analysis.get("intent") in ["question_request", "confirmation"]
-                or (
-                    was_asking_for_confirmation
-                    and has_confirmation_phrase
-                    and len(user_input_lower) > 5
-                )
+                user_intent
+                in ["question_request", "confirmation", "generate_questions"]
+                or llm_user_confirmed
+                or (ready_for_questions and llm_user_confirmed)
             )
 
-            logger.info(f"🔧 CRITICAL FIX: is_user_confirmed = {is_user_confirmed}")
-            logger.info(
-                f"🔧 Original user_confirmed: {user_confirmed.get('is_confirmation', False) if user_confirmed else False}"
-            )
-            logger.info(
-                f"🔧 Intent is question_request: {intent_analysis.get('intent') == 'question_request'}"
-            )
-            logger.info(f"🔧 User input: '{request.input}'")
-            logger.info(f"🔧 Has confirmation phrase: {has_confirmation_phrase}")
+            logger.info(f"🔧 LLM-BASED FIX: is_user_confirmed = {is_user_confirmed}")
+            logger.info(f"🔧 User intent from LLM: {user_intent}")
+            logger.info(f"🔧 LLM user confirmed: {llm_user_confirmed}")
             logger.info(f"🔧 Ready for questions: {ready_for_questions}")
-            logger.info(
-                f"🔧 Was asking for confirmation: {was_asking_for_confirmation}"
-            )
-            logger.info(
-                f"🔧 Previous assistant message: '{previous_assistant_message[:100] if previous_assistant_message else None}...'"
-            )
+            logger.info(f"🔧 User input: '{request.input}'")
 
             if ready_for_questions and is_user_confirmed:
                 logger.info(
@@ -960,15 +916,14 @@ class CustomerResearchServiceV3Rebuilt:
                             + len(questions.get("solutionValidation", []))
                             + len(questions.get("followUp", []))
                         )
-                        questions["estimatedTime"] = {
-                            "min": max(
-                                15, total_questions * 2
-                            ),  # 2 minutes per question minimum
-                            "max": max(
-                                20, total_questions * 4
-                            ),  # 4 minutes per question maximum
-                            "totalQuestions": total_questions,
-                        }
+                        # Use proper stakeholder-separated time estimates
+                        questions["estimatedTime"] = (
+                            self._calculate_stakeholder_time_estimates(
+                                questions.get(
+                                    "stakeholders", {"primary": [], "secondary": []}
+                                )
+                            )
+                        )
 
                     logger.info(
                         f"🎯 FINAL STAKEHOLDERS: {len(questions.get('stakeholders', {}).get('primary', []))}"
@@ -1089,15 +1044,14 @@ class CustomerResearchServiceV3Rebuilt:
                             + len(questions.get("solutionValidation", []))
                             + len(questions.get("followUp", []))
                         )
-                        questions["estimatedTime"] = {
-                            "min": max(
-                                15, total_questions * 2
-                            ),  # 2 minutes per question minimum
-                            "max": max(
-                                20, total_questions * 4
-                            ),  # 4 minutes per question maximum
-                            "totalQuestions": total_questions,
-                        }
+                        # Use proper stakeholder-separated time estimates
+                        questions["estimatedTime"] = (
+                            self._calculate_stakeholder_time_estimates(
+                                questions.get(
+                                    "stakeholders", {"primary": [], "secondary": []}
+                                )
+                            )
+                        )
                 else:
                     # Questions is a Pydantic object, convert to dict and add fields
                     questions_dict = {
@@ -1127,15 +1081,14 @@ class CustomerResearchServiceV3Rebuilt:
                         + len(questions_dict["solutionValidation"])
                         + len(questions_dict["followUp"])
                     )
-                    questions_dict["estimatedTime"] = {
-                        "min": max(
-                            15, total_questions * 2
-                        ),  # 2 minutes per question minimum
-                        "max": max(
-                            20, total_questions * 4
-                        ),  # 4 minutes per question maximum
-                        "totalQuestions": total_questions,
-                    }
+                    # Use proper stakeholder-separated time estimates
+                    questions_dict["estimatedTime"] = (
+                        self._calculate_stakeholder_time_estimates(
+                            questions_dict.get(
+                                "stakeholders", {"primary": [], "secondary": []}
+                            )
+                        )
+                    )
 
                     questions = questions_dict
 
@@ -1215,15 +1168,10 @@ class CustomerResearchServiceV3Rebuilt:
                         + len(questions_dict.get("followUp", []))
                     )
 
-                questions_dict["estimatedTime"] = {
-                    "min": max(
-                        15, total_questions * 2
-                    ),  # 2 minutes per question minimum
-                    "max": max(
-                        20, total_questions * 4
-                    ),  # 4 minutes per question maximum
-                    "totalQuestions": total_questions,
-                }
+                # Use proper stakeholder-separated time estimates
+                questions_dict["estimatedTime"] = (
+                    self._calculate_stakeholder_time_estimates(dynamic_stakeholders)
+                )
 
                 questions = questions_dict
 

@@ -282,3 +282,150 @@ h1 span.bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
     transform: translateY(0);
   }
 }
+
+/* Mobile Chat Interface Optimizations */
+
+/* Desktop default - maintain existing behavior */
+.chat-container {
+  height: calc(100vh - 120px); /* Even more space for input field + help text */
+  overflow: hidden;
+}
+
+/* Ensure proper flex layout for chat card */
+.chat-container .lg\\:col-span-2 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Ensure ScrollArea doesn't take all space */
+.chat-container [data-radix-scroll-area-viewport] {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Ensure input container is always visible on desktop */
+@media screen and (min-width: 769px) {
+  .chat-input-container {
+    position: relative;
+    background: transparent;
+    backdrop-filter: none;
+    flex-shrink: 0; /* Prevent input from being compressed */
+  }
+}
+
+/* Mobile viewport height handling */
+@media screen and (max-width: 768px) {
+  .chat-container {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for modern browsers */
+  }
+
+  /* iOS specific styles */
+  @supports (-webkit-touch-callout: none) {
+    .chat-container {
+      height: 100vh;
+      height: -webkit-fill-available;
+    }
+  }
+}
+
+/* Mobile-only input optimizations */
+@media screen and (max-width: 768px) {
+  /* Prevent zoom on input focus (iOS) */
+  .chat-input {
+    font-size: 16px !important;
+    -webkit-appearance: none;
+    border-radius: 8px;
+  }
+}
+
+/* Mobile keyboard handling */
+@media screen and (max-width: 768px) {
+  /* Ensure input stays visible when keyboard appears */
+  .chat-input-container {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  /* Dark mode support */
+  .dark .chat-input-container {
+    background: rgba(0, 0, 0, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Desktop styling moved above to consolidate */
+
+/* Mobile-specific styles */
+@media screen and (max-width: 768px) {
+  /* Adjust scroll area for mobile */
+  .chat-messages-area {
+    padding-bottom: 20px;
+    scroll-padding-bottom: 100px;
+  }
+
+  /* Mobile-specific input styling */
+  .chat-input {
+    min-height: 44px; /* iOS touch target minimum */
+    font-size: 16px; /* Prevents zoom */
+  }
+
+  /* Mobile send button */
+  .chat-send-button {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+}
+
+/* Landscape mobile handling */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  .chat-container {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Reduce padding in landscape to maximize space */
+  .chat-input-container {
+    padding: 8px 12px;
+  }
+
+  /* Hide help text in landscape to save space */
+  .chat-help-text {
+    display: none;
+  }
+}
+
+/* Desktop scrolling behavior */
+.chat-messages-area {
+  scroll-behavior: smooth;
+}
+
+/* Mobile-specific optimizations */
+@media screen and (max-width: 768px) {
+  /* Prevent horizontal scroll on mobile */
+  .chat-container,
+  .chat-messages-area {
+    overflow-x: hidden;
+  }
+
+  /* iOS momentum scrolling */
+  .chat-messages-area {
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  /* Safe area handling for devices with notches */
+  @supports (padding: max(0px)) {
+    .chat-input-container {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+  }
+}

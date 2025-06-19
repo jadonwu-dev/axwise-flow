@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -16,7 +17,7 @@ import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
 import { StakeholderAlert } from './StakeholderAlert';
 
 import { useResearch } from '@/hooks/use-research';
-
+import { useChatMobileOptimization } from '@/hooks/useMobileViewport';
 
 // Import modular components
 import { ChatInterfaceProps } from './types';
@@ -83,6 +84,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     updateQuestions,
     exportQuestions,
     continueToAnalysis,
+    clearAllData,
   } = useResearch();
 
   // Use modular hooks for state management
@@ -90,6 +92,9 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   const { messagesEndRef } = useScrollManagement(state.messages);
   const { copyMessage } = useClipboard();
   const formattedElapsedTime = useLoadingTimer(state.isLoading);
+
+  // Mobile optimization hooks
+  const { handleMessageSent, handleNewMessage, ensureInputVisible } = useChatMobileOptimization();
 
   const { handleClearClick, clearChat: originalClearChat } = useChatClear(
     state.messages,
@@ -112,27 +117,27 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   // FIXED: Add proper handler functions for broken buttons
   const handleContinueWithCurrent = () => {
     // Continue with current stakeholder configuration
-    actions.sendMessage("Let's proceed with the current stakeholder configuration.");
+    handleSendLocal("Let's proceed with the current stakeholder configuration.");
   };
 
   const handleViewDetailedPlan = () => {
     // Show detailed research plan
-    actions.sendMessage("Please show me a detailed research plan for these stakeholders.");
+    handleSendLocal("Please show me a detailed research plan for these stakeholders.");
   };
 
   const handleViewPlan = () => {
     // Show research plan
-    actions.sendMessage("Can you show me the research plan?");
+    handleSendLocal("Can you show me the research plan?");
   };
 
   const handleDismissAlert = () => {
     // Dismiss the stakeholder alert
-    actions.sendMessage("I understand. Let's continue with the current approach.");
+    handleSendLocal("I understand. Let's continue with the current approach.");
   };
 
   const handleViewMultiStakeholder = () => {
     // View multi-stakeholder options
-    actions.sendMessage("Please show me multi-stakeholder research options.");
+    handleSendLocal("Please show me multi-stakeholder research options.");
   };
 
   // Create handlers using modular functions
@@ -146,6 +151,9 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
       updateQuestions,
       onComplete
     );
+
+    // Handle mobile optimization after sending message
+    handleMessageSent();
   };
 
   const handleSuggestionClickLocal = (suggestion: string) => {
@@ -182,6 +190,13 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
   // Session loading hook
   useSessionLoading(loadSessionId, loadSessionLocal);
+
+  // Handle new messages for mobile optimization
+  React.useEffect(() => {
+    if (state.messages.length > 0) {
+      handleNewMessage();
+    }
+  }, [state.messages.length, handleNewMessage]);
 
   // Helper function to normalize timeEstimate for ComprehensiveQuestionsComponent
   const normalizeTimeEstimate = (timeEstimate: any) => {
@@ -307,10 +322,10 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
   };
 
   return (
-    <div className="w-full h-screen flex flex-col">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 flex-1 p-4 min-h-0">
+    <div className="w-full chat-container flex flex-col overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 flex-1 p-4 min-h-0 overflow-hidden">
         {/* Chat Interface */}
-        <Card className="lg:col-span-2 flex flex-col h-full min-h-0">
+        <Card className="lg:col-span-2 flex flex-col h-full min-h-0 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-3 lg:p-4 border-b flex-shrink-0">
             <div className="flex items-center gap-2">
@@ -347,8 +362,8 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
           </div>
 
           {/* Messages */}
-          <ScrollArea className="flex-1 p-3 lg:p-4">
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 p-3 lg:p-4 overflow-y-auto chat-messages-area">
+            <div className="space-y-4 pb-4">
               {state.messages.map((message, index) => (
                 <div key={message.id}>
                   <div
@@ -558,26 +573,32 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
             <div ref={messagesEndRef} />
           </ScrollArea>
 
-          {/* Input */}
-          <div className="p-3 lg:p-4 border-t flex-shrink-0">
-            <div className="flex gap-2">
+          {/* Input - Fixed at bottom with mobile optimization */}
+          <div className="p-3 lg:p-4 border-t flex-shrink-0 chat-input-container">
+            <div className="flex gap-2 items-end">
               <Input
                 value={state.input}
                 onChange={(e) => actions.setInput(e.target.value)}
                 onKeyDown={handleKeyDownLocal}
+                onFocus={ensureInputVisible}
                 placeholder="Describe your business idea or ask for help..."
                 disabled={state.isLoading}
-                className="flex-1 text-sm lg:text-base"
+                className="flex-1 text-sm lg:text-base min-h-[44px] resize-none chat-input"
+                style={{
+                  fontSize: '16px', // Prevents zoom on iOS
+                  WebkitAppearance: 'none' // Removes iOS styling
+                }}
               />
               <Button
                 onClick={() => handleSendLocal()}
                 disabled={!state.input.trim() || state.isLoading}
                 size="sm"
+                className="h-[44px] w-[44px] flex-shrink-0 chat-send-button"
               >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2 hidden sm:block chat-help-text">
               Press Enter to send, Shift+Enter for new line
             </p>
           </div>

@@ -35,7 +35,7 @@ export function NextStepsChatMessage({
   // Calculate realistic per-stakeholder conversation timing
   const getTimingRecommendation = () => {
     if (!timeEstimate || timeEstimate.totalQuestions === 0) {
-      return "30-45 minute conversations"; // Realistic fallback
+      return "25-43 minute conversations"; // Consistent with user expectation
     }
 
     // Calculate per-stakeholder time (assuming questions are split between stakeholders)
@@ -44,9 +44,10 @@ export function NextStepsChatMessage({
     const baseTimePerStakeholder = questionsPerStakeholder * 2; // 2 min per question
     const maxTimePerStakeholder = questionsPerStakeholder * 4; // 4 min per question
 
-    // Add conversation buffer (intro, transitions, follow-ups)
-    const recommendedMin = Math.max(25, baseTimePerStakeholder + 10);
-    const recommendedMax = Math.max(35, maxTimePerStakeholder + 15);
+    // Add conversation buffer (intro, transitions, follow-ups) - dynamic based on question count
+    const conversationBuffer = Math.max(5, Math.ceil(questionsPerStakeholder * 0.5)); // 0.5 min buffer per question, minimum 5 min
+    const recommendedMin = Math.max(10, baseTimePerStakeholder + conversationBuffer);
+    const recommendedMax = Math.max(15, maxTimePerStakeholder + conversationBuffer + 3);
 
     return `${recommendedMin}-${recommendedMax} minute conversations`;
   };

@@ -6,6 +6,16 @@ export const dynamic = 'force-dynamic';
 
 async function getToken(): Promise<string | null> {
   try {
+    // Check if we're in development mode with Clerk validation disabled
+    const isProduction = process.env.NODE_ENV === 'production';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+
+    if (!isProduction && !enableClerkValidation) {
+      // Development mode with Clerk validation disabled
+      console.log('Using development token (Clerk validation disabled)');
+      return 'dev_test_token_DEV_TOKEN_REDACTED';
+    }
+
     // Get the authentication context from Clerk
     const { userId, getToken } = await auth();
 
@@ -47,7 +57,8 @@ export async function GET(request: NextRequest) {
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-    console.log('Subscription Status API: Using Clerk JWT token');
+    const isUsingDevToken = token === 'dev_test_token_DEV_TOKEN_REDACTED';
+    console.log(`Subscription Status API: Using ${isUsingDevToken ? 'development' : 'Clerk JWT'} token`);
     console.log('Proxying to backend:', `${backendUrl}/api/subscription/status`);
 
     // Forward the request to the Python backend

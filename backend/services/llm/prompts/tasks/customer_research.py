@@ -14,21 +14,21 @@ class CustomerResearchPrompts:
     def get_prompt(request: Dict[str, Any]) -> str:
         """
         Generate customer research prompt based on request parameters.
-        
+
         Args:
             request: Dictionary containing research context and parameters
-            
+
         Returns:
             Formatted prompt string for customer research
         """
-        
+
         # Extract context from request
         business_idea = request.get("business_idea", "")
         target_customer = request.get("target_customer", "")
         problem = request.get("problem", "")
         industry = request.get("industry", "general")
         conversation_context = request.get("conversation_context", "")
-        
+
         # Base prompt for customer research
         prompt = f"""You are an expert customer research consultant helping entrepreneurs validate their business ideas through structured customer research.
 
@@ -66,14 +66,14 @@ Remember: The goal is to help them validate their business idea through real cus
     def get_context_extraction_prompt(conversation_history: str) -> str:
         """
         Generate prompt for extracting structured context from conversation.
-        
+
         Args:
             conversation_history: Full conversation history as string
-            
+
         Returns:
             Prompt for context extraction
         """
-        
+
         return f"""Analyze the following customer research conversation and extract key information.
 
 CONVERSATION HISTORY:
@@ -102,20 +102,20 @@ Return only the JSON object, no additional text."""
     def get_question_generation_prompt(context: Dict[str, Any]) -> str:
         """
         Generate prompt for creating research questions.
-        
+
         Args:
             context: Dictionary with business context
-            
+
         Returns:
             Prompt for generating research questions
         """
-        
+
         business_idea = context.get("business_idea", "")
         target_customer = context.get("target_customer", "")
         problem = context.get("problem", "")
         industry = context.get("industry", "general")
-        
-        return f"""Generate a comprehensive set of customer research questions based on the following business context:
+
+        return f"""You are an expert UX researcher creating discovery questions for customer interviews. Generate research questions that follow UX research best practices.
 
 BUSINESS CONTEXT:
 - Business Idea: {business_idea}
@@ -123,44 +123,68 @@ BUSINESS CONTEXT:
 - Problem: {problem}
 - Industry: {industry}
 
-Create research questions that will help validate:
-1. Problem validation - Does this problem really exist and matter to customers?
-2. Solution validation - Would customers want this specific solution?
-3. Market validation - Is there a viable market for this solution?
-4. Customer behavior - How do customers currently handle this problem?
+CRITICAL UX RESEARCH PRINCIPLES:
+1. DISCOVERY FIRST: Focus on understanding current behavior, not validating solutions
+2. BEHAVIORAL QUESTIONS: Ask about actual experiences, not opinions or hypotheticals
+3. STORY-BASED: Get people to tell stories about real situations
+4. EMOTIONAL CONTEXT: Understand feelings and motivations
+5. NON-LEADING: Don't assume the problem exists or that your solution is needed
+
+Create research questions using these UX research question types:
+
+BEHAVIORAL QUESTIONS (What people actually do):
+- "Tell me about the last time you..."
+- "Walk me through how you currently..."
+- "Describe a typical day when you..."
+
+STORY-BASED QUESTIONS (Real experiences):
+- "Can you tell me about a time when..."
+- "What happened the last time..."
+- "Describe a situation where..."
+
+EMOTIONAL/MOTIVATIONAL QUESTIONS:
+- "How did that make you feel?"
+- "What's most frustrating about..."
+- "What would make your day easier?"
+
+CURRENT STATE EXPLORATION:
+- "How do you currently handle..."
+- "What tools/methods do you use for..."
+- "Who else is involved when..."
 
 Return a JSON object with this structure:
 {{
     "primary_research": {{
-        "problem_validation": [
-            "List of 5-7 questions to validate the problem exists and matters"
+        "current_behavior": [
+            "5-7 behavioral questions about how they currently handle related tasks"
         ],
-        "solution_validation": [
-            "List of 5-7 questions to validate the proposed solution"
+        "pain_discovery": [
+            "5-7 story-based questions to discover real pain points and frustrations"
         ],
-        "customer_behavior": [
-            "List of 5-7 questions about current customer behavior and workflows"
+        "context_understanding": [
+            "5-7 questions to understand their environment, constraints, and motivations"
         ]
     }},
     "secondary_research": {{
-        "market_research": [
-            "List of 3-5 questions for market size and competition research"
+        "decision_making": [
+            "3-5 questions about how they make decisions in this area"
         ],
-        "industry_trends": [
-            "List of 3-5 questions about industry trends and opportunities"
+        "ecosystem_mapping": [
+            "3-5 questions about other people, tools, and processes involved"
         ]
     }},
     "interview_tips": [
-        "List of 5-7 practical tips for conducting customer interviews"
+        "5-7 UX research best practices for conducting these interviews"
     ]
 }}
 
-QUESTION GUIDELINES:
-- Make questions open-ended and non-leading
-- Focus on understanding current behavior, not hypothetical scenarios
-- Include questions about pain points, current solutions, and decision-making processes
-- Avoid questions that can be answered with simple yes/no
-- Make questions specific to the industry and customer type
-- Include follow-up question suggestions where appropriate
+QUESTION QUALITY REQUIREMENTS:
+- NO leading questions that assume problems exist
+- NO solution validation questions (save for later interviews)
+- NO hypothetical "would you" questions
+- YES to "tell me about the last time" questions
+- YES to "walk me through" questions
+- YES to emotional and contextual questions
+- Focus on DISCOVERY and UNDERSTANDING, not validation
 
 Return only the JSON object."""
