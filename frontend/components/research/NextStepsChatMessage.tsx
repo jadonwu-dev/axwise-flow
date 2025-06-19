@@ -32,20 +32,33 @@ export function NextStepsChatMessage({
   onStartResearch,
   timeEstimate
 }: NextStepsChatMessageProps) {
-  // Calculate dynamic timing recommendations
+  // Calculate realistic per-stakeholder conversation timing
   const getTimingRecommendation = () => {
     if (!timeEstimate || timeEstimate.totalQuestions === 0) {
-      return "15-20 minute conversations"; // Fallback for legacy cases
+      return "30-45 minute conversations"; // Realistic fallback
     }
 
-    const baseTime = timeEstimate.breakdown.baseTime;
-    const withBuffer = timeEstimate.breakdown.withBuffer;
+    // Calculate per-stakeholder time (assuming questions are split between stakeholders)
+    // Most interviews will be with individual stakeholders, not all questions at once
+    const questionsPerStakeholder = Math.ceil(timeEstimate.totalQuestions / 2); // Rough estimate
+    const baseTimePerStakeholder = questionsPerStakeholder * 2; // 2 min per question
+    const maxTimePerStakeholder = questionsPerStakeholder * 4; // 4 min per question
 
-    // Add 5-10 minutes buffer for conversation flow, introductions, etc.
-    const recommendedMin = Math.max(15, baseTime + 5);
-    const recommendedMax = Math.max(20, withBuffer + 10);
+    // Add conversation buffer (intro, transitions, follow-ups)
+    const recommendedMin = Math.max(25, baseTimePerStakeholder + 10);
+    const recommendedMax = Math.max(35, maxTimePerStakeholder + 15);
 
     return `${recommendedMin}-${recommendedMax} minute conversations`;
+  };
+
+  // Calculate realistic description for scheduling
+  const getSchedulingDescription = () => {
+    if (!timeEstimate || timeEstimate.totalQuestions === 0) {
+      return "Keep them focused and manageable - people are more likely to participate";
+    }
+
+    const questionsPerStakeholder = Math.ceil(timeEstimate.totalQuestions / 2);
+    return `Based on ~${questionsPerStakeholder} questions per stakeholder plus conversation buffer`;
   };
   return (
     <Card className="border-green-200 bg-green-50 max-w-none">
@@ -78,10 +91,7 @@ export function NextStepsChatMessage({
             <div className="flex-1">
               <div className="font-medium text-sm">Schedule {getTimingRecommendation()}</div>
               <div className="text-xs text-gray-600 mt-1">
-                {timeEstimate ?
-                  `Based on ${timeEstimate.totalQuestions} questions (${timeEstimate.estimatedMinutes} min) plus conversation buffer` :
-                  'Keep them short and focused - people are more likely to participate'
-                }
+                {getSchedulingDescription()}
               </div>
             </div>
             <Calendar className="h-4 w-4 text-blue-600 mt-1" />

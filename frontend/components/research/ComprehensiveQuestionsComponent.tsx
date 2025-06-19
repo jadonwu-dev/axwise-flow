@@ -99,9 +99,9 @@ export function ComprehensiveQuestionsComponent({
         (questions.followUp?.length || 0);
     }, 0);
 
-    const perQuestionTime = actualTimeEstimate.breakdown?.perQuestion || 3.0;
-    const minTime = Math.round(totalQuestions * perQuestionTime * 0.8); // 80% of base time
-    const maxTime = Math.round(totalQuestions * perQuestionTime * 1.2); // 120% of base time
+    // FIXED: Use consistent 2-4 minutes per question range
+    const minTime = Math.max(10, totalQuestions * 2); // 2 minutes per question minimum
+    const maxTime = Math.max(15, totalQuestions * 4); // 4 minutes per question maximum
 
     return {
       questions: totalQuestions,
@@ -301,14 +301,24 @@ ${(questions.followUp || []).map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
           <Users className="h-6 w-6 text-primary" />
           <h2 className="text-xl font-bold">📋 Your Research Questionnaire</h2>
         </div>
-        <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
-            <MessageCircle className="h-4 w-4" />
-            <span>{actualTimeEstimate.totalQuestions} questions</span>
+            <Target className="h-4 w-4 text-blue-600" />
+            <span className="font-medium">{primaryEstimate.questions} primary</span>
+          </div>
+          {safeSecondaryStakeholders.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Users className="h-4 w-4 text-purple-600" />
+              <span className="font-medium">{secondaryEstimate.questions} secondary</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <MessageCircle className="h-4 w-4 text-gray-600" />
+            <span>{actualTimeEstimate.totalQuestions} total questions</span>
           </div>
           <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            <span>Estimated time: {actualTimeEstimate.estimatedMinutes} minutes</span>
+            <Clock className="h-4 w-4 text-green-600" />
+            <span>{actualTimeEstimate.estimatedMinutes} minutes</span>
           </div>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
