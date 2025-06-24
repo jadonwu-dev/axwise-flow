@@ -17,9 +17,12 @@ import re
 
 # Import enhanced JSON parsing
 from backend.utils.json.enhanced_json_repair import EnhancedJSONRepair
-from backend.services.processing.persona_formation_service_enhanced import parse_llm_json_response_enhanced
+from backend.services.processing.persona_formation_service_enhanced import (
+    parse_llm_json_response_enhanced,
+)
 from backend.services.llm.instructor_gemini_client import InstructorGeminiClient
 from domain.models.persona_schema import Persona as PersonaModel
+
 # Import new Instructor-based parser
 from backend.utils.json.instructor_parser import parse_llm_json_response_with_instructor
 
@@ -52,35 +55,49 @@ except ImportError:
             async def generate_response(self, *args, **kwargs):
                 raise NotImplementedError("This is a minimal interface")
 
+
 # Add error handling for event imports
 try:
     from backend.infrastructure.events.event_manager import event_manager, EventType
+
     logger = logging.getLogger(__name__)
-    logger.info("Successfully imported event_manager from backend.infrastructure.events")
+    logger.info(
+        "Successfully imported event_manager from backend.infrastructure.events"
+    )
 except ImportError:
     try:
         from infrastructure.events.event_manager import event_manager, EventType
+
         logger = logging.getLogger(__name__)
         logger.info("Successfully imported event_manager from infrastructure.events")
     except ImportError:
         # Use the fallback events implementation
         try:
             from backend.infrastructure.state.events import event_manager, EventType
+
             logger = logging.getLogger(__name__)
-            logger.info("Using fallback event_manager from backend.infrastructure.state.events")
+            logger.info(
+                "Using fallback event_manager from backend.infrastructure.state.events"
+            )
         except ImportError:
             try:
                 from infrastructure.state.events import event_manager, EventType
+
                 logger = logging.getLogger(__name__)
-                logger.info("Using fallback event_manager from infrastructure.state.events")
+                logger.info(
+                    "Using fallback event_manager from infrastructure.state.events"
+                )
             except ImportError:
                 # Create minimal event system if all imports fail
                 logger = logging.getLogger(__name__)
-                logger.error("Failed to import events system, using minimal event logging")
+                logger.error(
+                    "Failed to import events system, using minimal event logging"
+                )
                 from enum import Enum
 
                 class EventType(Enum):
                     """Minimal event types for error handling"""
+
                     PROCESSING_STATUS = "PROCESSING_STATUS"
                     PROCESSING_ERROR = "PROCESSING_ERROR"
                     PROCESSING_STEP = "PROCESSING_STEP"
@@ -88,6 +105,7 @@ except ImportError:
 
                 class MinimalEventManager:
                     """Minimal event manager for logging only"""
+
                     async def emit(self, event_type, payload=None):
                         logger.info(f"Event: {event_type}, Payload: {payload}")
 
@@ -140,9 +158,13 @@ class PersonaFormationService:
         logger.info("Using TraitFormattingService for improved trait value formatting")
         logger.info("Using Instructor for structured outputs from LLMs")
 
-        logger.info(f"Initialized PersonaFormationService with {llm_service.__class__.__name__}")
+        logger.info(
+            f"Initialized PersonaFormationService with {llm_service.__class__.__name__}"
+        )
 
-    async def form_personas(self, patterns: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def form_personas(
+        self, patterns: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Form personas from identified patterns.
 
@@ -163,7 +185,9 @@ class PersonaFormationService:
 
             # Group patterns by similarity
             grouped_patterns = self._group_patterns(patterns)
-            logger.info(f"Grouped patterns into {len(grouped_patterns)} potential personas")
+            logger.info(
+                f"Grouped patterns into {len(grouped_patterns)} potential personas"
+            )
 
             # Form a persona from each group
             personas = []
@@ -172,23 +196,41 @@ class PersonaFormationService:
                 try:
                     # Convert the group to a persona
                     attributes = await self._analyze_patterns_for_persona(group)
-                    logger.debug(f"[form_personas] Attributes received from LLM for group {i}: {attributes}")
+                    logger.debug(
+                        f"[form_personas] Attributes received from LLM for group {i}: {attributes}"
+                    )
 
-                    if attributes and isinstance(attributes, dict) and attributes.get("confidence", 0) >= self.validation_threshold:
+                    if (
+                        attributes
+                        and isinstance(attributes, dict)
+                        and attributes.get("confidence", 0) >= self.validation_threshold
+                    ):
                         try:
                             # Build persona from attributes
-                            persona = self.persona_builder.build_persona_from_attributes(attributes)
+                            persona = (
+                                self.persona_builder.build_persona_from_attributes(
+                                    attributes
+                                )
+                            )
                             personas.append(persona)
-                            logger.info(f"Created persona: {persona.name} with confidence {persona.confidence}")
+                            logger.info(
+                                f"Created persona: {persona.name} with confidence {persona.confidence}"
+                            )
                         except Exception as persona_creation_error:
-                            logger.error(f"Error creating Persona object for group {i}: {persona_creation_error}", exc_info=True)
+                            logger.error(
+                                f"Error creating Persona object for group {i}: {persona_creation_error}",
+                                exc_info=True,
+                            )
                     else:
                         logger.warning(
                             f"Skipping persona creation for group {i} - confidence {attributes.get('confidence', 0)} "
                             f"below threshold {self.validation_threshold} or attributes invalid."
                         )
                 except Exception as attr_error:
-                    logger.error(f"Error analyzing persona attributes for group {i}: {str(attr_error)}", exc_info=True)
+                    logger.error(
+                        f"Error analyzing persona attributes for group {i}: {str(attr_error)}",
+                        exc_info=True,
+                    )
 
                 # Emit event for tracking
                 try:
@@ -204,11 +246,15 @@ class PersonaFormationService:
                         },
                     )
                 except Exception as event_error:
-                    logger.warning(f"Could not emit processing step event: {str(event_error)}")
+                    logger.warning(
+                        f"Could not emit processing step event: {str(event_error)}"
+                    )
 
             # If no personas were created, try to create a default one
             if not personas:
-                logger.warning("No personas created from patterns, creating default persona")
+                logger.warning(
+                    "No personas created from patterns, creating default persona"
+                )
                 personas = await self._create_default_persona(context)
 
             logger.info(f"[form_personas] Returning {len(personas)} personas.")
@@ -225,7 +271,9 @@ class PersonaFormationService:
             return []
 
     async def generate_persona_from_text(
-        self, text: Union[str, List[Dict[str, Any]]], context: Optional[Dict[str, Any]] = None
+        self,
+        text: Union[str, List[Dict[str, Any]]],
+        context: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate persona directly from raw interview text.
@@ -244,12 +292,16 @@ class PersonaFormationService:
             if isinstance(text, str) and (not text or len(text.strip()) < 10):
                 logger.warning("Text is empty or too short for persona generation")
                 # Return a fallback persona
-                fallback_persona = self.persona_builder.create_fallback_persona("Participant")
+                fallback_persona = self.persona_builder.create_fallback_persona(
+                    "Participant"
+                )
                 return [persona_to_dict(fallback_persona)]
             elif isinstance(text, list) and (not text or len(text) == 0):
                 logger.warning("Structured transcript is empty")
                 # Return a fallback persona
-                fallback_persona = self.persona_builder.create_fallback_persona("Participant")
+                fallback_persona = self.persona_builder.create_fallback_persona(
+                    "Participant"
+                )
                 return [persona_to_dict(fallback_persona)]
 
             # Log the length of the text for debugging
@@ -262,7 +314,10 @@ class PersonaFormationService:
             is_structured_transcript = False
             if isinstance(text, list) and len(text) > 0:
                 # Check if it has the expected structure
-                if all(isinstance(item, dict) and "speaker" in item and "text" in item for item in text):
+                if all(
+                    isinstance(item, dict) and "speaker" in item and "text" in item
+                    for item in text
+                ):
                     is_structured_transcript = True
                     logger.info("Input is already a structured transcript")
                     # Log a sample of the structured transcript
@@ -274,7 +329,9 @@ class PersonaFormationService:
 
             # If we still don't have a structured transcript, use our LLM-powered transcript structuring
             if isinstance(text, str) and not is_structured_transcript:
-                logger.info("No structured format detected, using LLM-powered transcript structuring")
+                logger.info(
+                    "No structured format detected, using LLM-powered transcript structuring"
+                )
 
                 # Log a sample of the text for debugging
                 logger.info(f"Text sample: {text[:200]}...")
@@ -284,40 +341,55 @@ class PersonaFormationService:
                 filename = None
                 if context and "filename" in context:
                     filename = context.get("filename")
-                    logger.info(f"Using filename from context for transcript structuring: {filename}")
+                    logger.info(
+                        f"Using filename from context for transcript structuring: {filename}"
+                    )
 
-                structured_transcript = await self.transcript_structuring_service.structure_transcript(text, filename=filename)
+                structured_transcript = (
+                    await self.transcript_structuring_service.structure_transcript(
+                        text, filename=filename
+                    )
+                )
 
                 if structured_transcript and len(structured_transcript) > 0:
-                    logger.info(f"Successfully structured transcript using LLM: {len(structured_transcript)} segments")
+                    logger.info(
+                        f"Successfully structured transcript using LLM: {len(structured_transcript)} segments"
+                    )
                     # Log a sample of the structured transcript
                     logger.info(f"Sample segment: {structured_transcript[0]}")
-                    return await self.form_personas_from_transcript(structured_transcript, context=context)
+                    return await self.form_personas_from_transcript(
+                        structured_transcript, context=context
+                    )
 
             # If LLM structuring fails, we will now rely on robust error handling
             # or return empty/fallback personas rather than using regex.
-            logger.warning("LLM-based transcript structuring failed or returned empty. No regex fallback implemented.")
+            logger.warning(
+                "LLM-based transcript structuring failed or returned empty. No regex fallback implemented."
+            )
             # Consider what to return here: an empty list, a specific error, or a generic fallback persona.
             # For now, let's return an empty list, which will propagate up.
             # A fallback persona could also be generated here if desired.
             # fallback_persona = self.persona_builder.create_fallback_persona("Participant", "Transcript structuring failed")
             # return [persona_to_dict(fallback_persona)]
-            return [] # Returning empty list if structuring fails
+            return []  # Returning empty list if structuring fails
 
         except Exception as e:
-            logger.error(f"Error in generate_persona_from_text: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error in generate_persona_from_text: {str(e)}", exc_info=True
+            )
             # Consider emitting an error event here if you have an event system
             # from backend.services.event_manager import event_manager
             # try:
             #     await event_manager.emit_error(e, {"stage": "generate_persona_from_text"})
             # except Exception as event_error:
             #     logger.warning(f"Could not emit error event: {str(event_error)}")
-            return [] # Return empty list to prevent analysis failure
+            return []  # Return empty list to prevent analysis failure
 
     async def form_personas_from_transcript(
-        self, transcript: List[Dict[str, Any]],
+        self,
+        transcript: List[Dict[str, Any]],
         participants: Optional[List[Dict[str, Any]]] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate personas from a structured transcript with speaker identification.
@@ -331,7 +403,9 @@ class PersonaFormationService:
             List of persona dictionaries
         """
         try:
-            logger.info(f"Forming personas from transcript with {len(transcript)} entries")
+            logger.info(
+                f"Forming personas from transcript with {len(transcript)} entries"
+            )
 
             # Log a sample of the transcript for debugging
             if transcript and len(transcript) > 0:
@@ -344,7 +418,9 @@ class PersonaFormationService:
             # Handle both old and new transcript formats
             for turn in transcript:
                 # Extract speaker ID (handle both old and new formats)
-                speaker_id = turn.get("speaker_id", turn.get("speaker", "Unknown Speaker"))
+                speaker_id = turn.get(
+                    "speaker_id", turn.get("speaker", "Unknown Speaker")
+                )
 
                 # Extract dialogue/text (handle both old and new formats)
                 dialogue = turn.get("dialogue", turn.get("text", ""))
@@ -355,7 +431,9 @@ class PersonaFormationService:
                 # Initialize speaker entry if not exists
                 if speaker_id not in speaker_dialogues:
                     speaker_dialogues[speaker_id] = []
-                    speaker_roles_map[speaker_id] = role  # Store the first inferred role
+                    speaker_roles_map[speaker_id] = (
+                        role  # Store the first inferred role
+                    )
 
                 # Add this dialogue to the speaker's collection
                 speaker_dialogues[speaker_id].append(dialogue)
@@ -370,7 +448,9 @@ class PersonaFormationService:
 
             # Log the speakers and text lengths for debugging
             for speaker, text in speaker_texts.items():
-                logger.info(f"Speaker: {speaker}, Role: {speaker_roles_map.get(speaker, 'Unknown')}, Text length: {len(text)} chars")
+                logger.info(
+                    f"Speaker: {speaker}, Role: {speaker_roles_map.get(speaker, 'Unknown')}, Text length: {len(text)} chars"
+                )
 
             # Override with provided participant roles if available
             if participants and isinstance(participants, list):
@@ -379,7 +459,9 @@ class PersonaFormationService:
                         speaker_name = participant["name"]
                         if speaker_name in speaker_roles_map:
                             speaker_roles_map[speaker_name] = participant["role"]
-                            logger.info(f"Overriding role for {speaker_name} to {participant['role']}")
+                            logger.info(
+                                f"Overriding role for {speaker_name} to {participant['role']}"
+                            )
 
                 logger.info(f"Applied {len(participants)} provided participant roles")
 
@@ -388,39 +470,47 @@ class PersonaFormationService:
 
             # Process speakers in order of text length (most text first)
             sorted_speakers = sorted(
-                speaker_texts.items(),
-                key=lambda x: len(x[1]),
-                reverse=True
+                speaker_texts.items(), key=lambda x: len(x[1]), reverse=True
             )
 
             for i, (speaker, text) in enumerate(sorted_speakers):
                 try:
                     # Get the role for this speaker from our consolidated role mapping
                     role = speaker_roles_map.get(speaker, "Participant")
-                    logger.info(f"Generating persona for {speaker} with role {role}, text length: {len(text)} chars")
+                    logger.info(
+                        f"Generating persona for {speaker} with role {role}, text length: {len(text)} chars"
+                    )
 
                     # Skip if text is too short (likely noise)
                     if len(text) < 100:
-                        logger.warning(f"Skipping persona generation for {speaker} - text too short ({len(text)} chars)")
+                        logger.warning(
+                            f"Skipping persona generation for {speaker} - text too short ({len(text)} chars)"
+                        )
                         continue
 
                     # Create a context object for this speaker
                     speaker_context = {
                         "speaker": speaker,
                         "role": role,
-                        **(context or {})
+                        **(context or {}),
                     }
 
                     # Create a prompt based on the role using simplified format
-                    prompt = self.prompt_generator.create_simplified_persona_prompt(text, role)
+                    prompt = self.prompt_generator.create_simplified_persona_prompt(
+                        text, role
+                    )
 
                     # Log the prompt length for debugging
-                    logger.info(f"Created simplified prompt for {speaker} with length: {len(prompt)} chars")
+                    logger.info(
+                        f"Created simplified prompt for {speaker} with length: {len(prompt)} chars"
+                    )
 
                     # Call LLM to generate persona
                     # Use the full text for analysis with Gemini 2.5 Flash's large context window
                     text_to_analyze = text  # Use the full text without truncation
-                    logger.info(f"Using full text of {len(text_to_analyze)} chars for {speaker}")
+                    logger.info(
+                        f"Using full text of {len(text_to_analyze)} chars for {speaker}"
+                    )
 
                     # Add more context to the request
                     request_data = {
@@ -430,60 +520,89 @@ class PersonaFormationService:
                         "enforce_json": True,  # Flag to enforce JSON output using response_mime_type
                         "response_mime_type": "application/json",  # Explicitly request JSON response
                         "speaker": speaker,
-                        "role": role
+                        "role": role,
                     }
 
                     # Call LLM to generate persona
                     llm_response = await self.llm_service.analyze(request_data)
 
                     # --- ADD DETAILED LOGGING HERE ---
-                    logger.info(f"[PersonaFormationService] Raw LLM response for persona_formation (first 500 chars): {str(llm_response)[:500]}")
+                    logger.info(
+                        f"[PersonaFormationService] Raw LLM response for persona_formation (first 500 chars): {str(llm_response)[:500]}"
+                    )
                     # If it's a string, log the full string for debugging if it's not too long
                     if isinstance(llm_response, str) and len(llm_response) < 2000:
-                        logger.debug(f"[PersonaFormationService] Full raw LLM response string: {llm_response}")
+                        logger.debug(
+                            f"[PersonaFormationService] Full raw LLM response string: {llm_response}"
+                        )
                     # --- END DETAILED LOGGING ---
 
                     # Parse the response
-                    persona_data = self._parse_llm_json_response(llm_response, f"form_personas_from_transcript for {speaker}")
+                    persona_data = self._parse_llm_json_response(
+                        llm_response, f"form_personas_from_transcript for {speaker}"
+                    )
 
                     # Log the persona data keys for debugging
                     if persona_data and isinstance(persona_data, dict):
-                        logger.info(f"Persona data keys for {speaker}: {list(persona_data.keys())}")
+                        logger.info(
+                            f"Persona data keys for {speaker}: {list(persona_data.keys())}"
+                        )
                     else:
                         logger.warning(f"No valid persona data for {speaker}")
 
                     if persona_data and isinstance(persona_data, dict):
                         # Use the speaker ID from the transcript as the default/override name
                         name_override = speaker
-                        logger.info(f"Using speaker ID from transcript as name_override: {name_override}")
+                        logger.info(
+                            f"Using speaker ID from transcript as name_override: {name_override}"
+                        )
 
                         # If the persona data doesn't have a name, use the speaker name (which is now name_override)
                         if "name" not in persona_data or not persona_data["name"]:
                             persona_data["name"] = name_override
-                            logger.info(f"Using speaker name as persona name: {name_override}")
-                        elif name_override and name_override != persona_data.get("name"):
+                            logger.info(
+                                f"Using speaker name as persona name: {name_override}"
+                            )
+                        elif name_override and name_override != persona_data.get(
+                            "name"
+                        ):
                             # This case might be if we want to enforce the transcript speaker_id as the primary name
                             # For now, let's log if the LLM provided a different name than the speaker_id
-                            logger.info(f"LLM provided name '{persona_data.get('name')}' differs from transcript speaker_id '{name_override}'. Using LLM name for now.")
+                            logger.info(
+                                f"LLM provided name '{persona_data.get('name')}' differs from transcript speaker_id '{name_override}'. Using LLM name for now."
+                            )
 
                         # Build persona from attributes
                         # The 'role' here is the role determined earlier for this speaker
-                        persona = self.persona_builder.build_persona_from_attributes(persona_data, persona_data.get("name", name_override), role)
+                        persona = self.persona_builder.build_persona_from_attributes(
+                            persona_data, persona_data.get("name", name_override), role
+                        )
                         personas.append(persona_to_dict(persona))
-                        logger.info(f"Successfully created persona for {speaker}: {persona.name}")
+                        logger.info(
+                            f"Successfully created persona for {speaker}: {persona.name}"
+                        )
                     else:
-                        logger.warning(f"Failed to generate valid persona data for {speaker}")
+                        logger.warning(
+                            f"Failed to generate valid persona data for {speaker}"
+                        )
                         # Create a minimal persona for this speaker
-                        minimal_persona = self.persona_builder.create_fallback_persona(role, speaker)
+                        minimal_persona = self.persona_builder.create_fallback_persona(
+                            role, speaker
+                        )
                         personas.append(persona_to_dict(minimal_persona))
                         logger.info(f"Created fallback persona for {speaker}")
 
                 except Exception as e:
-                    logger.error(f"Error generating persona for speaker {speaker}: {str(e)}", exc_info=True)
+                    logger.error(
+                        f"Error generating persona for speaker {speaker}: {str(e)}",
+                        exc_info=True,
+                    )
                     # Create a minimal persona for this speaker with speaker and role information
                     # Use speaker_roles_map which is defined in this scope
                     role_for_fallback = speaker_roles_map.get(speaker, "Participant")
-                    minimal_persona = self.persona_builder.create_fallback_persona(role_for_fallback, speaker)
+                    minimal_persona = self.persona_builder.create_fallback_persona(
+                        role_for_fallback, speaker
+                    )
                     personas.append(persona_to_dict(minimal_persona))
                     logger.info(f"Created error fallback persona for {speaker}")
 
@@ -501,21 +620,29 @@ class PersonaFormationService:
                         },
                     )
                 except Exception as event_error:
-                    logger.warning(f"Could not emit processing step event: {str(event_error)}")
+                    logger.warning(
+                        f"Could not emit processing step event: {str(event_error)}"
+                    )
 
             logger.info(f"Returning {len(personas)} personas from transcript")
             return personas
 
         except Exception as e:
-            logger.error(f"Error forming personas from transcript: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error forming personas from transcript: {str(e)}", exc_info=True
+            )
             try:
-                await event_manager.emit_error(e, {"stage": "form_personas_from_transcript"})
+                await event_manager.emit_error(
+                    e, {"stage": "form_personas_from_transcript"}
+                )
             except Exception as event_error:
                 logger.warning(f"Could not emit error event: {str(event_error)}")
             # Return empty list instead of raising to prevent analysis failure
             return []
 
-    async def _analyze_patterns_for_persona(self, patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _analyze_patterns_for_persona(
+        self, patterns: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Analyze patterns to extract persona attributes.
 
@@ -529,11 +656,13 @@ class PersonaFormationService:
             logger.info(f"Analyzing {len(patterns)} patterns for persona attributes")
 
             # Convert patterns to a string representation for the prompt
-            pattern_descriptions = "\n".join([
-                f"Pattern {i+1}: {p.get('name', 'Unnamed')} - {p.get('description', 'No description')} "
-                f"(Evidence: {', '.join(p.get('evidence', [])[:3])})"
-                for i, p in enumerate(patterns)
-            ])
+            pattern_descriptions = "\n".join(
+                [
+                    f"Pattern {i+1}: {p.get('name', 'Unnamed')} - {p.get('description', 'No description')} "
+                    f"(Evidence: {', '.join(p.get('evidence', [])[:3])})"
+                    for i, p in enumerate(patterns)
+                ]
+            )
 
             # Create a prompt for pattern-based persona formation
             prompt = self.prompt_generator.create_pattern_prompt(pattern_descriptions)
@@ -557,20 +686,24 @@ class PersonaFormationService:
                         temperature=0.0,  # Use deterministic output for structured data
                         system_instruction=system_instruction,
                         max_output_tokens=65536,  # Use large token limit for detailed personas
-                        response_mime_type="application/json"  # Force JSON output
+                        response_mime_type="application/json",  # Force JSON output
                     )
                 except Exception as e:
-                    logger.error(f"Error using Instructor for pattern-based persona formation: {str(e)}", exc_info=True)
+                    logger.error(
+                        f"Error using Instructor for pattern-based persona formation: {str(e)}",
+                        exc_info=True,
+                    )
                     # Try one more time with even more strict settings
                     persona_response = await self.instructor_client.generate_with_model_async(
                         prompt=prompt,
                         model_class=PersonaModel,
                         temperature=0.0,
-                        system_instruction=system_instruction + "\nYou MUST output valid JSON that conforms to the schema.",
+                        system_instruction=system_instruction
+                        + "\nYou MUST output valid JSON that conforms to the schema.",
                         max_output_tokens=65536,
                         response_mime_type="application/json",
                         top_p=1.0,
-                        top_k=1
+                        top_k=1,
                     )
 
                 logger.info("Received structured persona response from Instructor")
@@ -578,11 +711,18 @@ class PersonaFormationService:
                 # Convert Pydantic model to dictionary
                 attributes = persona_response.model_dump()
 
-                logger.info(f"Successfully generated persona '{attributes.get('name', 'Unnamed')}' from patterns using Instructor")
+                logger.info(
+                    f"Successfully generated persona '{attributes.get('name', 'Unnamed')}' from patterns using Instructor"
+                )
                 return attributes
             except Exception as instructor_error:
-                logger.error(f"Error using Instructor for pattern-based persona formation: {str(instructor_error)}", exc_info=True)
-                logger.info("Falling back to original method for pattern-based persona formation")
+                logger.error(
+                    f"Error using Instructor for pattern-based persona formation: {str(instructor_error)}",
+                    exc_info=True,
+                )
+                logger.info(
+                    "Falling back to original method for pattern-based persona formation"
+                )
 
                 # Fall back to original implementation
                 # Import Pydantic model for response schema
@@ -600,59 +740,82 @@ class PersonaFormationService:
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
                         },
                         "goals_and_motivations": {
                             "type": "object",
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
                         },
                         "challenges_and_frustrations": {
                             "type": "object",
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
-                        }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                        },
                     },
-                    "required": ["name", "description"]
+                    "required": ["name", "description"],
                 }
 
                 # Call LLM to analyze patterns
-                llm_response = await self.llm_service.analyze({
-                    "task": "persona_formation",
-                    "text": pattern_descriptions,
-                    "prompt": prompt,
-                    "enforce_json": True,
-                    "temperature": 0.0,
-                    "response_mime_type": "application/json",
-                    "response_schema": response_schema
-                })
+                llm_response = await self.llm_service.analyze(
+                    {
+                        "task": "persona_formation",
+                        "text": pattern_descriptions,
+                        "prompt": prompt,
+                        "enforce_json": True,
+                        "temperature": 0.0,
+                        "response_mime_type": "application/json",
+                        "response_schema": response_schema,
+                    }
+                )
 
                 # --- ADD DETAILED LOGGING HERE ---
-                logger.info(f"[_analyze_patterns_for_persona] Raw LLM response (first 500 chars): {str(llm_response)[:500]}")
+                logger.info(
+                    f"[_analyze_patterns_for_persona] Raw LLM response (first 500 chars): {str(llm_response)[:500]}"
+                )
                 # If it's a string, log the full string for debugging if it's not too long
                 if isinstance(llm_response, str) and len(llm_response) < 2000:
-                    logger.debug(f"[_analyze_patterns_for_persona] Full raw LLM response string: {llm_response}")
+                    logger.debug(
+                        f"[_analyze_patterns_for_persona] Full raw LLM response string: {llm_response}"
+                    )
                 # --- END DETAILED LOGGING ---
 
                 # Parse the response
-                attributes = self._parse_llm_json_response(llm_response, "_analyze_patterns_for_persona")
+                attributes = self._parse_llm_json_response(
+                    llm_response, "_analyze_patterns_for_persona"
+                )
 
                 if attributes and isinstance(attributes, dict):
-                    logger.info(f"Successfully parsed persona attributes from patterns.")
+                    logger.info(
+                        f"Successfully parsed persona attributes from patterns."
+                    )
                     return attributes
                 else:
-                    logger.warning("Failed to parse valid JSON attributes from LLM for pattern analysis.")
+                    logger.warning(
+                        "Failed to parse valid JSON attributes from LLM for pattern analysis."
+                    )
                     return self._create_fallback_attributes(patterns)
 
         except Exception as e:
-            logger.error(f"Error analyzing patterns for persona: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error analyzing patterns for persona: {str(e)}", exc_info=True
+            )
             return self._create_fallback_attributes(patterns)
 
     async def _convert_free_text_to_structured_transcript(
@@ -680,7 +843,9 @@ class PersonaFormationService:
             prompt = self.prompt_generator.create_transcript_structuring_prompt(text)
 
             # Import constants for LLM configuration
-            from infrastructure.constants.llm_constants import PERSONA_FORMATION_TEMPERATURE
+            from infrastructure.constants.llm_constants import (
+                PERSONA_FORMATION_TEMPERATURE,
+            )
 
             # Create a response schema for structured output
             response_schema = {
@@ -690,37 +855,48 @@ class PersonaFormationService:
                     "properties": {
                         "speaker": {"type": "string"},
                         "text": {"type": "string"},
-                        "role": {"type": "string"}
+                        "role": {"type": "string"},
                     },
-                    "required": ["speaker", "text"]
-                }
+                    "required": ["speaker", "text"],
+                },
             }
 
             # Call LLM to convert text to structured format
-            llm_response = await self.llm_service.analyze({
-                "task": "persona_formation",
-                "prompt": prompt,
-                "is_json_task": True,
-                "temperature": PERSONA_FORMATION_TEMPERATURE,
-                "response_mime_type": "application/json",
-                "response_schema": response_schema
-            })
+            llm_response = await self.llm_service.analyze(
+                {
+                    "task": "persona_formation",
+                    "prompt": prompt,
+                    "is_json_task": True,
+                    "temperature": PERSONA_FORMATION_TEMPERATURE,
+                    "response_mime_type": "application/json",
+                    "response_schema": response_schema,
+                }
+            )
 
             # Parse the response
-            structured_data = self._parse_llm_json_response(llm_response, "convert_free_text_to_structured_transcript")
+            structured_data = self._parse_llm_json_response(
+                llm_response, "convert_free_text_to_structured_transcript"
+            )
 
             if structured_data and isinstance(structured_data, list):
-                logger.info(f"Successfully converted free-text to structured format with {len(structured_data)} speakers")
+                logger.info(
+                    f"Successfully converted free-text to structured format with {len(structured_data)} speakers"
+                )
                 return structured_data
             else:
                 logger.warning("Failed to convert free-text to structured format")
                 return []
 
         except Exception as e:
-            logger.error(f"Error converting free-text to structured transcript: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error converting free-text to structured transcript: {str(e)}",
+                exc_info=True,
+            )
             return []
 
-    async def _create_default_persona(self, context: Optional[Dict[str, Any]] = None) -> List[Persona]:
+    async def _create_default_persona(
+        self, context: Optional[Dict[str, Any]] = None
+    ) -> List[Persona]:
         """
         Create a default persona when no patterns are available.
 
@@ -739,16 +915,22 @@ class PersonaFormationService:
                 original_text = context["original_text"]
                 if isinstance(original_text, list):
                     # If it's a structured transcript, convert to text
-                    original_text = "\n".join([
-                        f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}"
-                        for entry in original_text
-                    ])
+                    original_text = "\n".join(
+                        [
+                            f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}"
+                            for entry in original_text
+                        ]
+                    )
 
-                logger.info(f"Using original text from context ({len(original_text)} chars)")
+                logger.info(
+                    f"Using original text from context ({len(original_text)} chars)"
+                )
 
                 # Check if text is empty or too short
                 if not original_text or len(original_text.strip()) < 10:
-                    logger.warning("Original text is empty or too short for persona creation")
+                    logger.warning(
+                        "Original text is empty or too short for persona creation"
+                    )
                     return [self.persona_builder.create_fallback_persona()]
 
                 # Create a prompt for persona formation
@@ -769,46 +951,61 @@ class PersonaFormationService:
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
                         },
                         "goals_and_motivations": {
                             "type": "object",
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
                         },
                         "challenges_and_frustrations": {
                             "type": "object",
                             "properties": {
                                 "value": {"type": "string"},
                                 "confidence": {"type": "number"},
-                                "evidence": {"type": "array", "items": {"type": "string"}}
-                            }
-                        }
+                                "evidence": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                        },
                     },
-                    "required": ["name", "description"]
+                    "required": ["name", "description"],
                 }
 
                 # Call LLM for persona creation
-                llm_response = await self.llm_service.analyze({
-                    "task": "persona_formation",
-                    "text": original_text,
-                    "prompt": prompt,
-                    "enforce_json": True,
-                    "temperature": 0.0,
-                    "response_mime_type": "application/json",
-                    "response_schema": response_schema
-                })
+                llm_response = await self.llm_service.analyze(
+                    {
+                        "task": "persona_formation",
+                        "text": original_text,
+                        "prompt": prompt,
+                        "enforce_json": True,
+                        "temperature": 0.0,
+                        "response_mime_type": "application/json",
+                        "response_schema": response_schema,
+                    }
+                )
 
                 # Parse the response
-                persona_data = self._parse_llm_json_response(llm_response, "_create_default_persona")
+                persona_data = self._parse_llm_json_response(
+                    llm_response, "_create_default_persona"
+                )
 
                 if persona_data and isinstance(persona_data, dict):
                     # Build persona from attributes
-                    persona = self.persona_builder.build_persona_from_attributes(persona_data)
+                    persona = self.persona_builder.build_persona_from_attributes(
+                        persona_data
+                    )
                     return [persona]
 
             # If we don't have original text or persona creation failed, create a fallback persona
@@ -819,7 +1016,9 @@ class PersonaFormationService:
             logger.error(f"Error creating default persona: {str(e)}", exc_info=True)
             return [self.persona_builder.create_fallback_persona()]
 
-    def _create_fallback_attributes(self, patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _create_fallback_attributes(
+        self, patterns: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Create fallback attributes when pattern analysis fails.
 
@@ -835,7 +1034,7 @@ class PersonaFormationService:
         default_trait = {
             "value": "Unknown",
             "confidence": 0.3,
-            "evidence": ["Fallback due to analysis error"]
+            "evidence": ["Fallback due to analysis error"],
         }
 
         # Extract pattern descriptions for evidence
@@ -872,7 +1071,7 @@ class PersonaFormationService:
             # Overall persona information
             "patterns": pattern_descriptions[:5],
             "confidence": 0.3,
-            "evidence": ["Fallback due to analysis error"]
+            "evidence": ["Fallback due to analysis error"],
         }
 
     @property
@@ -893,7 +1092,9 @@ class PersonaFormationService:
             logger.info(f"Initialized InstructorGeminiClient")
         return self._instructor_client
 
-    async def _generate_persona_from_attributes_with_instructor(self, attributes: Dict[str, Any], transcript_id: str) -> Dict[str, Any]:
+    async def _generate_persona_from_attributes_with_instructor(
+        self, attributes: Dict[str, Any], transcript_id: str
+    ) -> Dict[str, Any]:
         """
         Generate a persona from extracted attributes using Instructor.
 
@@ -904,14 +1105,18 @@ class PersonaFormationService:
         Returns:
             Persona dictionary
         """
-        logger.info(f"Generating persona from attributes using Instructor for transcript {transcript_id}")
+        logger.info(
+            f"Generating persona from attributes using Instructor for transcript {transcript_id}"
+        )
 
         # Prepare the prompt for persona formation
         prompt = self._prepare_persona_formation_prompt(attributes)
 
         # Generate the persona using Instructor
         try:
-            logger.info(f"Calling Instructor for persona formation for transcript {transcript_id}")
+            logger.info(
+                f"Calling Instructor for persona formation for transcript {transcript_id}"
+            )
 
             # Add specific instructions for JSON formatting
             system_instruction = """
@@ -928,37 +1133,56 @@ class PersonaFormationService:
                     temperature=0.0,  # Use deterministic output for structured data
                     system_instruction=system_instruction,
                     max_output_tokens=65536,  # Use large token limit for detailed personas
-                    response_mime_type="application/json"  # Force JSON output
+                    response_mime_type="application/json",  # Force JSON output
                 )
             except Exception as e:
-                logger.error(f"Error using Instructor for persona formation: {str(e)}", exc_info=True)
+                logger.error(
+                    f"Error using Instructor for persona formation: {str(e)}",
+                    exc_info=True,
+                )
                 # Try one more time with even more strict settings
-                persona_response = await self.instructor_client.generate_with_model_async(
-                    prompt=prompt,
-                    model_class=PersonaModel,
-                    temperature=0.0,
-                    system_instruction=system_instruction + "\nYou MUST output valid JSON that conforms to the schema.",
-                    max_output_tokens=65536,
-                    response_mime_type="application/json",
-                    top_p=1.0,
-                    top_k=1
+                persona_response = (
+                    await self.instructor_client.generate_with_model_async(
+                        prompt=prompt,
+                        model_class=PersonaModel,
+                        temperature=0.0,
+                        system_instruction=system_instruction
+                        + "\nYou MUST output valid JSON that conforms to the schema.",
+                        max_output_tokens=65536,
+                        response_mime_type="application/json",
+                        top_p=1.0,
+                        top_k=1,
+                    )
                 )
 
-            logger.info(f"Received structured persona response for transcript {transcript_id}")
+            logger.info(
+                f"Received structured persona response for transcript {transcript_id}"
+            )
 
             # Convert Pydantic model to dictionary
             persona = persona_response.model_dump()
 
-            logger.info(f"Successfully generated persona '{persona.get('name', 'Unnamed')}' for transcript {transcript_id}")
+            logger.info(
+                f"Successfully generated persona '{persona.get('name', 'Unnamed')}' for transcript {transcript_id}"
+            )
             return persona
         except Exception as e:
-            logger.error(f"Error generating persona with Instructor for transcript {transcript_id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating persona with Instructor for transcript {transcript_id}: {str(e)}",
+                exc_info=True,
+            )
 
             # Fall back to the original method
-            logger.info(f"Falling back to original method for transcript {transcript_id}")
-            return await self._generate_persona_from_attributes_original(attributes, transcript_id)
+            logger.info(
+                f"Falling back to original method for transcript {transcript_id}"
+            )
+            return await self._generate_persona_from_attributes_original(
+                attributes, transcript_id
+            )
 
-    async def _generate_persona_from_attributes_original(self, attributes: Dict[str, Any], transcript_id: str) -> Dict[str, Any]:
+    async def _generate_persona_from_attributes_original(
+        self, attributes: Dict[str, Any], transcript_id: str
+    ) -> Dict[str, Any]:
         """
         Original implementation of persona generation for fallback.
 
@@ -974,31 +1198,45 @@ class PersonaFormationService:
 
         # Call LLM to generate persona
         try:
-            logger.info(f"Calling LLM for persona formation for transcript {transcript_id}")
+            logger.info(
+                f"Calling LLM for persona formation for transcript {transcript_id}"
+            )
 
             # Call LLM for persona formation
-            llm_response = await self.llm_service.analyze({
-                "task": "persona_formation",
-                "prompt": prompt,
-                "is_json_task": True,
-                "temperature": 0.0,
-                "response_mime_type": "application/json"
-            })
+            llm_response = await self.llm_service.analyze(
+                {
+                    "task": "persona_formation",
+                    "prompt": prompt,
+                    "is_json_task": True,
+                    "temperature": 0.0,
+                }
+            )
 
             # Parse the response
-            persona_data = self._parse_llm_json_response(llm_response, f"persona_formation_{transcript_id}")
+            persona_data = self._parse_llm_json_response(
+                llm_response, f"persona_formation_{transcript_id}"
+            )
 
             if persona_data and isinstance(persona_data, dict):
-                logger.info(f"Successfully generated persona for transcript {transcript_id}")
+                logger.info(
+                    f"Successfully generated persona for transcript {transcript_id}"
+                )
                 return persona_data
             else:
-                logger.warning(f"Failed to generate valid persona data for transcript {transcript_id}")
+                logger.warning(
+                    f"Failed to generate valid persona data for transcript {transcript_id}"
+                )
                 return self._create_fallback_persona(transcript_id)
         except Exception as e:
-            logger.error(f"Error generating persona for transcript {transcript_id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating persona for transcript {transcript_id}: {str(e)}",
+                exc_info=True,
+            )
             return self._create_fallback_persona(transcript_id)
 
-    def _parse_llm_json_response(self, response: Union[str, Dict[str, Any]], context: str = "") -> Dict[str, Any]:
+    def _parse_llm_json_response(
+        self, response: Union[str, Dict[str, Any]], context: str = ""
+    ) -> Dict[str, Any]:
         """
         Parse JSON response from LLM with enhanced error recovery.
 
@@ -1013,9 +1251,7 @@ class PersonaFormationService:
         try:
             # Use the Instructor-based parser with task-specific handling
             result = parse_llm_json_response_with_instructor(
-                response,
-                context=context,
-                task="persona_formation"
+                response, context=context, task="persona_formation"
             )
 
             # If we got a valid result, return it
@@ -1030,7 +1266,9 @@ class PersonaFormationService:
         logger.info(f"Falling back to enhanced JSON parsing in {context}")
         return parse_llm_json_response_enhanced(response, context)
 
-    def _group_patterns(self, patterns: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    def _group_patterns(
+        self, patterns: List[Dict[str, Any]]
+    ) -> List[List[Dict[str, Any]]]:
         """
         Group patterns by similarity.
 
@@ -1043,7 +1281,9 @@ class PersonaFormationService:
         # Simple grouping by pattern type
         grouped = {}
         for pattern in patterns:
-            pattern_type = pattern.get("type", "unknown")  # Use 'type' if available, else 'category'
+            pattern_type = pattern.get(
+                "type", "unknown"
+            )  # Use 'type' if available, else 'category'
             if not pattern_type or pattern_type == "unknown":
                 pattern_type = pattern.get("category", "unknown")
 
