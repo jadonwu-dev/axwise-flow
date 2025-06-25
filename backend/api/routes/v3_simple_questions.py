@@ -135,7 +135,7 @@ async def _generate_comprehensive_questions(
         from backend.services.llm import LLMServiceFactory
 
         # Create LLM service
-        llm_service = LLMServiceFactory.create("gemini")
+        llm_service = LLMServiceFactory.create("enhanced_gemini")
 
         # Convert context to V1 format
         business_idea = context_analysis.get("businessIdea") or context_analysis.get(
@@ -282,7 +282,7 @@ async def _generate_contextual_questions_with_llm(
     try:
         from backend.services.llm import LLMServiceFactory
 
-        llm_service = LLMServiceFactory.create("gemini")
+        llm_service = LLMServiceFactory.create("enhanced_gemini")
 
         # Enhanced LLM prompt that clearly differentiates stakeholder types
         prompt = f"""
@@ -461,7 +461,7 @@ async def _generate_guidance_response(
             generate_research_response_with_retry,
         )
 
-        llm_service = LLMServiceFactory.create("gemini")
+        llm_service = LLMServiceFactory.create("enhanced_gemini")
 
         # Convert to V1 format for proven response generation
         business_idea = context_analysis.get("businessIdea") or context_analysis.get(

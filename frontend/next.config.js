@@ -209,11 +209,11 @@ const nextConfig = {
       // Blog routing
       {
         source: '/blog',
-        destination: '/blog/index.html',
+        destination: '/api/blog',
       },
       {
         source: '/blog/:path*',
-        destination: '/blog/:path*',
+        destination: '/api/blog/:path*',
       },
       // Business plan routing
       {

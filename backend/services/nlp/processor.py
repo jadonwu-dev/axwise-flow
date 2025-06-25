@@ -941,6 +941,27 @@ class NLPProcessor:
                 }
             }
 
+            # Call extract_insights to generate personas and additional insights
+            logger.info(
+                "Calling extract_insights to generate personas and additional insights"
+            )
+            try:
+                # Pass progress_callback in config if available
+                extract_config = config.copy() if config else {}
+                if progress_callback:
+                    extract_config["progress_callback"] = progress_callback
+
+                results = await self.extract_insights(
+                    results, llm_service, extract_config
+                )
+                logger.info("Successfully completed extract_insights processing")
+            except Exception as e:
+                logger.error(f"Error in extract_insights: {str(e)}")
+                # Continue with results even if extract_insights fails
+                # Initialize empty personas if not already present
+                if "personas" not in results:
+                    results["personas"] = []
+
             return results
 
         except Exception as e:
@@ -1158,33 +1179,56 @@ class NLPProcessor:
             logger.info("Generating personas from interview text")
 
             try:
-                # Generate personas using the LLM service directly
-                logger.info("Generating personas using LLM service")
+                # Generate personas using PydanticAI/Instructor (same as pattern generation)
+                logger.info("Generating personas using PydanticAI/Instructor")
 
                 # Get the raw text from the original source if available
                 raw_text = results.get("original_text", combined_text)
 
-                # Call the LLM service to generate personas
+                # Call PydanticAI/Instructor to generate personas (same approach as patterns)
                 logger.info(
-                    f"Calling LLM service for persona formation with {len(raw_text[:100])}... chars"
+                    f"Calling PydanticAI for persona formation with {len(raw_text[:100])}... chars"
                 )
 
-                # Use the same LLM service that was used for the rest of the analysis
-                persona_result = await llm_service.analyze(
-                    {
-                        "task": "persona_formation",
-                        "text": raw_text,
-                        "enforce_json": True,
-                        "industry": results.get("industry", "general"),
-                    }
+                # Import the persona formation service that uses PydanticAI
+                from backend.services.processing.persona_formation_service import (
+                    PersonaFormationService,
                 )
 
-                # Extract personas from the result
-                if persona_result and isinstance(persona_result, dict):
-                    personas = persona_result.get("personas", [])
-                    if not personas and "name" in persona_result:
-                        # Handle case where a single persona is returned directly
-                        personas = [persona_result]
+                # Create a minimal config for the persona service
+                class MinimalConfig:
+                    def __init__(self):
+                        self.validation = type(
+                            "obj", (object,), {"min_confidence": 0.4}
+                        )
+                        self.llm = type("obj", (object,), {"api_key": None})
+
+                # Create persona service with proper constructor
+                config = MinimalConfig()
+                persona_service = PersonaFormationService(config, llm_service)
+
+                # Use the PydanticAI approach for persona formation
+                personas_list = await persona_service.generate_persona_from_text(
+                    text=raw_text,
+                    context={"industry": results.get("industry", "general")},
+                )
+
+                # Extract the first persona from the list
+                persona_result = personas_list[0] if personas_list else None
+
+                # Extract personas from the PydanticAI result
+                if persona_result:
+                    # PersonaFormationService.generate_persona_from_text returns a list of dicts
+                    if isinstance(persona_result, dict):
+                        personas = [persona_result]  # Single persona in list format
+                        logger.info(
+                            f"Successfully generated persona using PydanticAI: {persona_result.get('name', 'Unnamed')}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Unexpected persona result type: {type(persona_result)}"
+                        )
+                        personas = []
 
                     # Validate personas
                     if personas and isinstance(personas, list) and len(personas) > 0:
@@ -1245,14 +1289,32 @@ class NLPProcessor:
                     )
                 else:
                     logger.warning("Persona formation returned invalid result")
-                    results["personas"] = []
 
-                    # Update progress with error information
-                    await update_progress(
-                        "PERSONA_FORMATION",
-                        0.95,
-                        "Persona formation returned invalid result, continuing with empty personas",
+                    # Try contextual fallback as per implementation guide
+                    logger.info("Attempting contextual fallback for persona generation")
+                    fallback_personas = self._generate_contextual_persona_fallback(
+                        raw_text, results.get("industry", "general")
                     )
+                    results["personas"] = fallback_personas
+
+                    if fallback_personas:
+                        logger.info(
+                            f"Generated {len(fallback_personas)} personas using contextual fallback"
+                        )
+                        await update_progress(
+                            "PERSONA_FORMATION",
+                            0.95,
+                            f"Generated {len(fallback_personas)} personas using fallback",
+                        )
+                    else:
+                        logger.warning(
+                            "Contextual fallback also failed, continuing with empty personas"
+                        )
+                        await update_progress(
+                            "PERSONA_FORMATION",
+                            0.95,
+                            "Persona formation failed, continuing with empty personas",
+                        )
             except Exception as persona_err:
                 # Log the error but continue processing
                 logger.error(f"Error generating personas: {str(persona_err)}")

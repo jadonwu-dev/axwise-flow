@@ -35,8 +35,8 @@ export function PersonaGenerationExample() {
     try {
       // Call the API with returnAllPersonas set to true
       const generatedPersonas = await apiClient.generatePersonaFromText(text, {
-        llmProvider: 'gemini',
-        llmModel: 'gemini-2.5-pro-preview-03-25',
+        llmProvider: 'enhanced_gemini',
+        llmModel: 'models/gemini-2.5-flash',
         returnAllPersonas: true // This is the key option to get all personas
       });
 

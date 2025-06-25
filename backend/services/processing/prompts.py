@@ -22,6 +22,38 @@ class PromptGenerator:
         """Initialize the prompt generator."""
         logger.info("Initialized PromptGenerator")
 
+    def create_simplified_persona_prompt(
+        self, text: str, role: str = "Participant", industry: str = None
+    ) -> str:
+        """
+        Create a simplified prompt for persona formation using the SimplifiedPersonaFormationPrompts.
+
+        Args:
+            text: Text to analyze
+            role: Role of the person (Interviewer, Interviewee, Participant)
+            industry: Optional industry context
+
+        Returns:
+            Simplified prompt string
+        """
+        # Import the simplified persona formation prompts
+        from backend.services.llm.prompts.tasks.simplified_persona_formation import (
+            SimplifiedPersonaFormationPrompts,
+        )
+
+        # Create a data dictionary for the prompt generator
+        data = {"text": text, "role": role}
+
+        # Add industry if provided
+        if industry:
+            data["industry"] = industry
+
+        # Get the simplified prompt
+        logger.info(
+            f"Using simplified persona formation prompt for {role} in {industry or 'general'} context"
+        )
+        return SimplifiedPersonaFormationPrompts.get_prompt(data)
+
     def create_persona_prompt(self, text: str, role: str = "Participant") -> str:
         """
         Create a prompt for persona formation.

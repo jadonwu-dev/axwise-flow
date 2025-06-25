@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   '/roadmap',
   '/onepager-presentation(.*)',
   '/workshop-designthinking(.*)',
+  '/blog(.*)', // Allow blog access
   '/customer-research(.*)', // Allow customer research feature
   '/research-dashboard(.*)', // Allow research dashboard
   '/api/webhook(.*)', // Allow webhooks
@@ -24,6 +25,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/history', // Allow history API route (handles auth internally)
   '/api/results(.*)', // Allow results API routes (handles auth internally)
   '/api/analysis(.*)', // Allow analysis API routes (handles auth internally)
+  '/api/blog(.*)', // Allow blog API routes
   '/api/health', // Allow health check
   '/api/protected', // Allow protected route (handles auth internally)
 ]);

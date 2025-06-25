@@ -31,7 +31,7 @@ class SimplifiedResearchService:
     """
 
     # Class-level registry for active instances (for progressive updates)
-    _active_instances: Dict[str, 'SimplifiedResearchService'] = {}
+    _active_instances: Dict[str, "SimplifiedResearchService"] = {}
 
     def __init__(self, config: Optional[SimplifiedConfig] = None):
         """Initialize the simplified research service."""
@@ -59,7 +59,9 @@ class SimplifiedResearchService:
 
         # Store instance in global registry for progressive updates
         SimplifiedResearchService._active_instances[self.request_id] = self
-        logger.debug(f"Added instance {self.request_id} to registry. Total active instances: {len(SimplifiedResearchService._active_instances)}")
+        logger.debug(
+            f"Added instance {self.request_id} to registry. Total active instances: {len(SimplifiedResearchService._active_instances)}"
+        )
 
         logger.info(f"Initialized SimplifiedResearchService {self.request_id}")
 
@@ -68,17 +70,27 @@ class SimplifiedResearchService:
         if self._llm_client is None:
             # Import the proven LLM service factory from V1/V2
             from backend.services.llm import LLMServiceFactory
-            self._llm_client = LLMServiceFactory.create("gemini")
+
+            self._llm_client = LLMServiceFactory.create("enhanced_gemini")
         return self._llm_client
 
     def _get_instructor_client(self):
         """Get or create Instructor client for structured output (V1 sustainability pattern)."""
         if self._instructor_client is None:
-            from backend.services.llm.instructor_gemini_client import InstructorGeminiClient
+            from backend.services.llm.instructor_gemini_client import (
+                InstructorGeminiClient,
+            )
+
             self._instructor_client = InstructorGeminiClient()
         return self._instructor_client
 
-    def _add_thinking_step(self, step: str, status: str = "in_progress", details: str = "", duration_ms: int = 0):
+    def _add_thinking_step(
+        self,
+        step: str,
+        status: str = "in_progress",
+        details: str = "",
+        duration_ms: int = 0,
+    ):
         """Add or update a thinking step with memory management."""
         try:
             # Check if this step already exists (to update instead of duplicate)
@@ -93,7 +105,7 @@ class SimplifiedResearchService:
                 "status": status,
                 "details": details,
                 "duration_ms": duration_ms,
-                "timestamp": int(time.time() * 1000)
+                "timestamp": int(time.time() * 1000),
             }
 
             if existing_step_index is not None:
@@ -105,13 +117,23 @@ class SimplifiedResearchService:
 
             # Memory management: keep only recent steps
             if len(self.thinking_steps) > self.config.max_thinking_steps:
-                self.thinking_steps = self.thinking_steps[-self.config.max_thinking_steps:]
+                self.thinking_steps = self.thinking_steps[
+                    -self.config.max_thinking_steps :
+                ]
 
-            logger.debug(f"{'Updated' if existing_step_index is not None else 'Added'} thinking step: {step}")
+            logger.debug(
+                f"{'Updated' if existing_step_index is not None else 'Added'} thinking step: {step}"
+            )
         except Exception as e:
             logger.warning(f"Failed to add thinking step: {e}")
 
-    def _capture_llm_interaction(self, operation_name: str, prompt: str, response: str, metadata: Dict[str, Any] = None):
+    def _capture_llm_interaction(
+        self,
+        operation_name: str,
+        prompt: str,
+        response: str,
+        metadata: Dict[str, Any] = None,
+    ):
         """Capture raw LLM interactions for transparent thinking process."""
         try:
             interaction = {
@@ -119,7 +141,7 @@ class SimplifiedResearchService:
                 "timestamp": int(time.time() * 1000),
                 "prompt": prompt,
                 "response": response,
-                "metadata": metadata or {}
+                "metadata": metadata or {},
             }
             self.llm_interactions.append(interaction)
 
@@ -139,9 +161,13 @@ class SimplifiedResearchService:
         """Clean up instance from registry."""
         if self.request_id in SimplifiedResearchService._active_instances:
             del SimplifiedResearchService._active_instances[self.request_id]
-            logger.debug(f"Removed instance {self.request_id} from registry. Remaining active instances: {len(SimplifiedResearchService._active_instances)}")
+            logger.debug(
+                f"Removed instance {self.request_id} from registry. Remaining active instances: {len(SimplifiedResearchService._active_instances)}"
+            )
         else:
-            logger.warning(f"Instance {self.request_id} not found in registry during cleanup")
+            logger.warning(
+                f"Instance {self.request_id} not found in registry during cleanup"
+            )
 
     def _get_cache_key(self, operation: str, context_hash: str) -> str:
         """Generate cache key for operation."""
@@ -172,7 +198,9 @@ class SimplifiedResearchService:
 
         # TODO: Add Redis cache integration here
 
-    async def _execute_with_monitoring(self, operation_name: str, operation_func, *args, **kwargs) -> Any:
+    async def _execute_with_monitoring(
+        self, operation_name: str, operation_func, *args, **kwargs
+    ) -> Any:
         """Execute operation with monitoring and error handling."""
 
         start_time = time.time()
@@ -180,32 +208,40 @@ class SimplifiedResearchService:
         try:
             # Add initial thinking step with more descriptive content
             if self.config.enable_thinking_process:
-                initial_description = get_operation_description(operation_name, "starting")
-                self._add_thinking_step(operation_name, "in_progress", initial_description)
+                initial_description = get_operation_description(
+                    operation_name, "starting"
+                )
+                self._add_thinking_step(
+                    operation_name, "in_progress", initial_description
+                )
 
             # Execute with timeout
             result = await asyncio.wait_for(
                 operation_func(*args, **kwargs),
-                timeout=self.config.request_timeout_seconds
+                timeout=self.config.request_timeout_seconds,
             )
 
             # Calculate duration
             duration_ms = int((time.time() - start_time) * 1000)
 
             # Update metrics
-            setattr(self.metrics, f"{operation_name.lower().replace(' ', '_')}_ms", duration_ms)
+            setattr(
+                self.metrics,
+                f"{operation_name.lower().replace(' ', '_')}_ms",
+                duration_ms,
+            )
 
             # Update thinking step to completed with detailed results
             if self.config.enable_thinking_process:
                 completion_description = get_operation_description(
-                    operation_name, "completed", result, duration_ms,
-                    self.llm_interactions
-                )
-                self._add_thinking_step(
                     operation_name,
                     "completed",
-                    completion_description,
-                    duration_ms
+                    result,
+                    duration_ms,
+                    self.llm_interactions,
+                )
+                self._add_thinking_step(
+                    operation_name, "completed", completion_description, duration_ms
                 )
 
             logger.debug(f"{operation_name} completed in {duration_ms}ms")
@@ -218,7 +254,9 @@ class SimplifiedResearchService:
             self.metrics.errors_encountered.append(error_msg)
 
             if self.config.enable_thinking_process:
-                self._add_thinking_step(operation_name, "failed", error_msg, duration_ms)
+                self._add_thinking_step(
+                    operation_name, "failed", error_msg, duration_ms
+                )
 
             logger.warning(error_msg)
             raise
@@ -230,7 +268,9 @@ class SimplifiedResearchService:
             self.metrics.errors_encountered.append(error_msg)
 
             if self.config.enable_thinking_process:
-                self._add_thinking_step(operation_name, "failed", error_msg, duration_ms)
+                self._add_thinking_step(
+                    operation_name, "failed", error_msg, duration_ms
+                )
 
             logger.error(error_msg)
             raise
@@ -240,7 +280,7 @@ class SimplifiedResearchService:
         conversation_context: str,
         latest_input: str,
         messages: List[Dict[str, Any]],
-        existing_context: Optional[Dict[str, Any]] = None
+        existing_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Perform comprehensive research analysis using all V3 features with V1/V2 stability.
@@ -263,7 +303,7 @@ class SimplifiedResearchService:
                 validate_business_readiness,
                 analyze_industry_enhanced,
                 detect_stakeholders_enhanced,
-                analyze_conversation_flow
+                analyze_conversation_flow,
             )
             from .v3_simple_questions import generate_response_enhanced
 
@@ -271,47 +311,69 @@ class SimplifiedResearchService:
             context_analysis = await self._execute_with_monitoring(
                 "Context Analysis",
                 analyze_context_enhanced,
-                self, conversation_context, latest_input, existing_context
+                self,
+                conversation_context,
+                latest_input,
+                existing_context,
             )
 
             intent_analysis = await self._execute_with_monitoring(
                 "Intent Analysis",
                 analyze_intent_enhanced,
-                self, conversation_context, latest_input, messages
+                self,
+                conversation_context,
+                latest_input,
+                messages,
             )
 
             business_validation = await self._execute_with_monitoring(
                 "Business Validation",
                 validate_business_readiness,
-                self, conversation_context, latest_input
+                self,
+                conversation_context,
+                latest_input,
             )
 
             # Phase 2: Enhanced Analysis (V3 features with caching)
             industry_analysis = await self._execute_with_monitoring(
                 "Industry Analysis",
                 analyze_industry_enhanced,
-                self, conversation_context, context_analysis
+                self,
+                conversation_context,
+                context_analysis,
             )
 
             stakeholder_detection = await self._execute_with_monitoring(
                 "Stakeholder Detection",
                 detect_stakeholders_enhanced,
-                self, conversation_context, context_analysis, industry_analysis
+                self,
+                conversation_context,
+                context_analysis,
+                industry_analysis,
             )
 
             conversation_flow = await self._execute_with_monitoring(
                 "Conversation Flow",
                 analyze_conversation_flow,
-                self, messages, context_analysis, intent_analysis
+                self,
+                messages,
+                context_analysis,
+                intent_analysis,
             )
 
             # Phase 3: Response Generation
             response_generation = await self._execute_with_monitoring(
                 "Response Generation",
                 generate_response_enhanced,
-                self, conversation_context, latest_input, context_analysis,
-                intent_analysis, business_validation, industry_analysis,
-                stakeholder_detection, conversation_flow
+                self,
+                conversation_context,
+                latest_input,
+                context_analysis,
+                intent_analysis,
+                business_validation,
+                industry_analysis,
+                stakeholder_detection,
+                conversation_flow,
             )
 
             # Compile final results
@@ -337,18 +399,24 @@ class SimplifiedResearchService:
                         "industry_analysis_ms": self.metrics.industry_analysis_ms,
                         "stakeholder_detection_ms": self.metrics.stakeholder_detection_ms,
                         "conversation_flow_ms": self.metrics.conversation_flow_ms,
-                        "response_generation_ms": self.metrics.response_generation_ms
-                    }
-                }
+                        "response_generation_ms": self.metrics.response_generation_ms,
+                    },
+                },
             }
 
             # Mark metrics as completed
             self.metrics.end_time = time.time()
 
-            logger.info(f"Comprehensive analysis completed for request {self.request_id} in {self.metrics.total_duration_ms}ms")
+            logger.info(
+                f"Comprehensive analysis completed for request {self.request_id} in {self.metrics.total_duration_ms}ms"
+            )
             return final_result
 
         except Exception as e:
-            logger.error(f"Comprehensive analysis failed for request {self.request_id}: {str(e)}")
-            self.metrics.errors_encountered.append(f"Comprehensive analysis failed: {str(e)}")
+            logger.error(
+                f"Comprehensive analysis failed for request {self.request_id}: {str(e)}"
+            )
+            self.metrics.errors_encountered.append(
+                f"Comprehensive analysis failed: {str(e)}"
+            )
             raise

@@ -8,6 +8,7 @@ reliable for LLMs like Gemini 2.5 Flash.
 from typing import Dict, Any
 from backend.services.llm.prompts.industry_guidance import IndustryGuidance
 
+
 class SimplifiedPersonaFormationPrompts:
     """
     Simplified persona formation prompt templates.
@@ -36,18 +37,24 @@ class SimplifiedPersonaFormationPrompts:
         role = data.get("role", "Participant")
 
         # Limit sample size
-        text_sample = data.get("text", "")[:8000]  # Using more text with Gemini 1.5 Flash
+        text_sample = data.get("text", "")[
+            :8000
+        ]  # Using more text with Gemini 1.5 Flash
 
         # Get industry-specific guidance if available
         if industry:
             industry_guidance = IndustryGuidance.get_persona_guidance(industry)
-            return SimplifiedPersonaFormationPrompts.industry_specific_prompt(industry, industry_guidance, text_sample, role)
+            return SimplifiedPersonaFormationPrompts.industry_specific_prompt(
+                industry, industry_guidance, text_sample, role
+            )
 
         # Fallback to standard persona formation prompt if no specific prompt provided
         return SimplifiedPersonaFormationPrompts.standard_prompt(text_sample, role)
 
     @staticmethod
-    def industry_specific_prompt(industry: str, industry_guidance: str, text_sample: str, role: str) -> str:
+    def industry_specific_prompt(
+        industry: str, industry_guidance: str, text_sample: str, role: str
+    ) -> str:
         """
         Get industry-specific simplified persona formation prompt.
 
@@ -220,7 +227,7 @@ INSTRUCTIONS:
 
 FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
 
-{{
+{{{{
   "name": "A descriptive name for this {role}",
   "description": "A brief overview of the persona",
   "archetype": "A general category this persona falls into",
@@ -231,94 +238,58 @@ FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
   // The "evidence" field should be a list of direct quotes (strings) from the transcript
   // EXCEPTION: "key_quotes" and "patterns" have different structures (see below)
 
-  "demographics": {
-    "value": "Age, experience level, etc. (if mentioned)",
+  "demographics": {{
+    "value": "Age, experience level, role, responsibilities, and background (if mentioned)",
     "confidence": 0.85,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-  "goals_and_motivations": {
-    "value": "Primary objectives and driving factors",
+  }},
+  "goals_and_motivations": {{
+    "value": "Primary objectives, driving factors, needs, and desires",
     "confidence": 0.9,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-  "skills_and_expertise": {
+  }},
+  "skills_and_expertise": {{
     "value": "Technical and soft skills",
     "confidence": 0.8,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-  "workflow_and_environment": {
+  }},
+  "workflow_and_environment": {{
     "value": "Work processes and context",
     "confidence": 0.75,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-  "challenges_and_frustrations": {
-    "value": "Obstacles and sources of frustration",
+  }},
+  "challenges_and_frustrations": {{
+    "value": "Systemic obstacles and ongoing sources of frustration",
     "confidence": 0.9,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-  "needs_and_desires": {
-    "value": "Specific needs and wants",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "technology_and_tools": {
-    "value": "Software and hardware used",
+  }},
+  "technology_and_tools": {{
+    "value": "Software, hardware, tools, and technology used including any mentioned AI/automation tools and attitudes towards technology",
     "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "attitude_towards_research": {
-    "value": "Views on research and data",
-    "confidence": 0.7,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "attitude_towards_ai": {
-    "value": "Perspective on AI and automation",
+    "evidence": ["Quote 1", "Quote 2", "Quote 3"]
+  }},
+  "collaboration_style": {{
+    "value": "How they work with others, approach problems, and handle analysis",
     "confidence": 0.75,
     "evidence": ["Quote 1", "Quote 2"]
-  },
-
-  "role_context": {
-    "value": "How this person functions in their {role} capacity",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "key_responsibilities": {
-    "value": "Main duties and responsibilities",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "tools_used": {
-    "value": "Specific tools or methods used",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "collaboration_style": {
-    "value": "How they work with others",
-    "confidence": 0.75,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "analysis_approach": {
-    "value": "How they approach problems/analysis",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "pain_points": {
+  }},
+  "pain_points": {{
     "value": "Specific challenges mentioned",
     "confidence": 0.9,
     "evidence": ["Quote 1", "Quote 2"]
-  },
+  }},
 
-  "key_quotes": {
+  "key_quotes": {{
     "value": "Representative quotes that capture the persona's authentic voice",
     "confidence": 0.95,
     "evidence": ["Actual quote 1 from transcript", "Actual quote 2 from transcript", "Actual quote 3 from transcript", "Actual quote 4 from transcript", "Actual quote 5 from transcript"]
-  },
+  }},
 
   // "patterns" should be a DIRECT LIST of strings.
   "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
 
   "overall_confidence_score": 0.85
-}}
+}}}}
 
 IMPORTANT:
 - Include ONLY information that can be reasonably inferred from the text.

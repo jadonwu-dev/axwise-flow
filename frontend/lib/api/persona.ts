@@ -8,7 +8,7 @@ import { generateMockPersonas } from './mocks';
 
 /**
  * Generate personas from free text
- * 
+ *
  * @param text The text to generate personas from
  * @param options Options for persona generation
  * @returns A promise that resolves to the generated personas
@@ -23,7 +23,7 @@ export async function generatePersonaFromText(
     // Prepare request data
     const requestData = {
       text,
-      llm_provider: options.llmProvider || 'gemini',
+      llm_provider: options.llmProvider || 'enhanced_gemini',
       llm_model: options.llmModel || undefined,
       return_all_personas: options.returnAllPersonas || false
     };
@@ -48,13 +48,13 @@ export async function generatePersonaFromText(
     return response.data;
   } catch (error: Error | unknown) {
     console.error('Error generating personas:', error);
-    
+
     // In development mode, return mock data
     if (process.env.NODE_ENV === 'development') {
       console.log('Returning mock personas in development mode');
       return { personas: generateMockPersonas() };
     }
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Failed to generate personas: ${errorMessage}`);
   }

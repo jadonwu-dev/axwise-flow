@@ -15,8 +15,12 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from .v3_simple_types import (
-    ChatRequest, ChatResponse, HealthResponse,
-    GenerateQuestionsRequest, ResearchQuestions, SimplifiedConfig
+    ChatRequest,
+    ChatResponse,
+    HealthResponse,
+    GenerateQuestionsRequest,
+    ResearchQuestions,
+    SimplifiedConfig,
 )
 from .v3_simple_service import SimplifiedResearchService
 
@@ -26,23 +30,27 @@ logger = logging.getLogger(__name__)
 async def delayed_cleanup(service: SimplifiedResearchService, delay_seconds: int = 30):
     """Clean up service instance after a delay to allow frontend polling."""
     try:
-        logger.debug(f"Scheduling cleanup for service {service.request_id} in {delay_seconds} seconds")
+        logger.debug(
+            f"Scheduling cleanup for service {service.request_id} in {delay_seconds} seconds"
+        )
         await asyncio.sleep(delay_seconds)
 
-        if hasattr(service, 'cleanup'):
+        if hasattr(service, "cleanup"):
             service.cleanup()
             logger.debug(f"Delayed cleanup completed for service {service.request_id}")
         else:
             logger.warning(f"Service {service.request_id} has no cleanup method")
 
     except Exception as e:
-        logger.error(f"Error during delayed cleanup for service {getattr(service, 'request_id', 'unknown')}: {e}")
+        logger.error(
+            f"Error during delayed cleanup for service {getattr(service, 'request_id', 'unknown')}: {e}"
+        )
 
 
 async def chat_v3_simple(
     request: ChatRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     V3 Simplified customer research chat endpoint.
@@ -57,14 +65,22 @@ async def chat_v3_simple(
     """
 
     try:
-        logger.info(f"V3 Simple chat request from user {request.user_id if request.user_id else 'anonymous'}")
+        logger.info(
+            f"V3 Simple chat request from user {request.user_id if request.user_id else 'anonymous'}"
+        )
 
         # Validate request (optional - skip if validation module not available)
         try:
-            from backend.utils.research_validation import validate_research_request, ValidationError as ResearchValidationError
+            from backend.utils.research_validation import (
+                validate_research_request,
+                ValidationError as ResearchValidationError,
+            )
+
             validate_research_request(request.model_dump())
         except ImportError:
-            logger.debug("Research validation module not available - skipping validation")
+            logger.debug(
+                "Research validation module not available - skipping validation"
+            )
         except Exception as e:
             logger.warning(f"Request validation warning: {e}")
             # Continue with warning for research chat
@@ -100,7 +116,9 @@ async def chat_v3_simple(
             logger.warning(f"Error building conversation context: {e}")
             conversation_context = f"user: {request.input or 'Hello'}\n"
 
-        logger.info(f"Processing conversation context: {len(conversation_context)} characters")
+        logger.info(
+            f"Processing conversation context: {len(conversation_context)} characters"
+        )
         logger.debug(f"Conversation context preview: {conversation_context[:200]}...")
 
         # Perform comprehensive analysis
@@ -108,7 +126,7 @@ async def chat_v3_simple(
             conversation_context=conversation_context,
             latest_input=request.input,
             messages=[msg.model_dump() for msg in request.messages],
-            existing_context=request.context.model_dump() if request.context else None
+            existing_context=request.context.model_dump() if request.context else None,
         )
 
         # Build response with proper metadata including suggestions
@@ -116,7 +134,9 @@ async def chat_v3_simple(
         response_data = analysis_result.get("response", {})
 
         # Ensure suggestions are in metadata from response or analysis result
-        suggestions = response_data.get("suggestions") or analysis_result.get("suggestions", [])
+        suggestions = response_data.get("suggestions") or analysis_result.get(
+            "suggestions", []
+        )
         if suggestions:
             metadata["suggestions"] = suggestions
             metadata["contextual_suggestions"] = suggestions
@@ -133,20 +153,27 @@ async def chat_v3_simple(
 
         # Return plain dictionary to avoid Pydantic validation issues
         response = {
-            "content": response_data.get("content", "I'd be happy to help you with your research."),
+            "content": response_data.get(
+                "content", "I'd be happy to help you with your research."
+            ),
             "metadata": metadata,
-            "questions": response_data.get("questions") or analysis_result.get("questions"),
+            "questions": response_data.get("questions")
+            or analysis_result.get("questions"),
             "session_id": request.session_id,
             "thinking_process": analysis_result.get("thinking_process", []),
             "performance_metrics": analysis_result.get("performance_metrics"),
-            "api_version": "v3-simple"
+            "api_version": "v3-simple",
         }
 
-        logger.info(f"V3 Simple chat completed successfully in {analysis_result.get('performance_metrics', {}).get('total_duration_ms', 0)}ms")
+        logger.info(
+            f"V3 Simple chat completed successfully in {analysis_result.get('performance_metrics', {}).get('total_duration_ms', 0)}ms"
+        )
 
         # Schedule delayed cleanup to allow frontend polling
         # Don't clean up immediately - let frontend poll for thinking progress
-        background_tasks.add_task(delayed_cleanup, service, 30)  # Clean up after 30 seconds
+        background_tasks.add_task(
+            delayed_cleanup, service, 30
+        )  # Clean up after 30 seconds
 
         return response
 
@@ -159,20 +186,26 @@ async def get_thinking_progress(request_id: str):
     """Get current thinking process steps for progressive updates."""
     try:
         logger.debug(f"Polling thinking progress for request_id: {request_id}")
-        logger.debug(f"Active instances: {list(SimplifiedResearchService._active_instances.keys())}")
+        logger.debug(
+            f"Active instances: {list(SimplifiedResearchService._active_instances.keys())}"
+        )
 
         if request_id in SimplifiedResearchService._active_instances:
             service = SimplifiedResearchService._active_instances[request_id]
             current_steps = service.get_current_thinking_steps()
 
-            logger.debug(f"Found active instance {request_id} with {len(current_steps)} steps")
+            logger.debug(
+                f"Found active instance {request_id} with {len(current_steps)} steps"
+            )
 
             return {
                 "request_id": request_id,
                 "thinking_steps": current_steps,
                 "total_steps": len(current_steps),
-                "completed_steps": len([s for s in current_steps if s.get("status") == "completed"]),
-                "is_active": True
+                "completed_steps": len(
+                    [s for s in current_steps if s.get("status") == "completed"]
+                ),
+                "is_active": True,
             }
         else:
             logger.debug(f"Request ID {request_id} not found in active instances")
@@ -181,7 +214,7 @@ async def get_thinking_progress(request_id: str):
                 "thinking_steps": [],
                 "total_steps": 0,
                 "completed_steps": 0,
-                "is_active": False
+                "is_active": False,
             }
     except Exception as e:
         logger.error(f"Error getting thinking progress for {request_id}: {e}")
@@ -191,7 +224,7 @@ async def get_thinking_progress(request_id: str):
             "total_steps": 0,
             "completed_steps": 0,
             "is_active": False,
-            "error": str(e)
+            "error": str(e),
         }
 
 
@@ -215,14 +248,14 @@ async def health_check():
                 "smart_caching",
                 "thinking_process_tracking",
                 "v1_fallback_support",
-                "performance_monitoring"
+                "performance_monitoring",
             ],
             performance={
                 "request_timeout_seconds": 30,
                 "cache_enabled": True,
-                "fallback_enabled": True
+                "fallback_enabled": True,
             },
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
     except Exception as e:
@@ -232,13 +265,12 @@ async def health_check():
             version="v3-simple",
             features=[],
             performance={"error": str(e)},
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
 
 async def generate_questions_v3_simple(
-    request: GenerateQuestionsRequest,
-    db: Session = Depends(get_db)
+    request: GenerateQuestionsRequest, db: Session = Depends(get_db)
 ):
     """
     Generate research questions based on context and conversation history.
@@ -252,26 +284,26 @@ async def generate_questions_v3_simple(
         from backend.services.llm import LLMServiceFactory
 
         # Create LLM service
-        llm_service = LLMServiceFactory.create("gemini")
+        llm_service = LLMServiceFactory.create("enhanced_gemini")
 
         # Generate questions using proven V1/V2 logic
         questions = await generate_research_questions(
             llm_service=llm_service,
             context=request.context,
-            conversation_history=request.conversationHistory
+            conversation_history=request.conversationHistory,
         )
 
         return questions
 
     except Exception as e:
         logger.error(f"Error generating questions: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Question generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Question generation failed: {str(e)}"
+        )
 
 
 async def get_research_sessions_v3_simple(
-    user_id: Optional[str] = None,
-    limit: int = 20,
-    db: Session = Depends(get_db)
+    user_id: Optional[str] = None, limit: int = 20, db: Session = Depends(get_db)
 ):
     """Get research sessions for dashboard (V3 Simple version)."""
     try:

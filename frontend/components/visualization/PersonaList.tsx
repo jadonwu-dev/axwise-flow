@@ -57,8 +57,20 @@ export function PersonaList({ personas, className }: PersonaListProps) {
   // Helper function to render trait values consistently
   const renderTraitValue = (value: any): React.ReactNode => {
     if (typeof value === 'string') {
+      // Handle newline-separated bullet points first
+      if (value.includes('\n') && value.includes('•')) {
+        return value.split('\n').filter(s => s.trim().length > 0).map((line, i) => (
+          <li key={i}>{line.replace(/^•\s*/, '').trim()}</li>
+        ));
+      }
+      // Handle inline bullet points (like "• Item 1 • Item 2")
+      else if (value.includes('•') && !value.includes('\n')) {
+        return value.split('•').filter(s => s.trim().length > 0).map((item, i) => (
+          <li key={i}>{item.trim()}</li>
+        ));
+      }
       // Split string into sentences for list items if it contains periods
-      if (value.includes('. ')) {
+      else if (value.includes('. ')) {
         return value.split('. ').filter(s => s.trim().length > 0).map((sentence, i) => (
           <li key={i}>{sentence.trim()}{value?.endsWith(sentence.trim()) ? '' : '.'}</li>
         ));
@@ -89,6 +101,127 @@ export function PersonaList({ personas, className }: PersonaListProps) {
     }
     // Fallback for null, undefined, or empty values
     return <li className="text-muted-foreground italic">N/A</li>;
+  };
+
+  // Helper function to render key quotes in expanded format
+  const renderExpandedQuotes = (persona: any): React.ReactNode => {
+    const quotes = persona.key_quotes;
+    if (!quotes) return <p className="text-muted-foreground">No quotes available.</p>;
+
+    // Handle different quote formats
+    let quoteList: string[] = [];
+
+    if (typeof quotes === 'string') {
+      // If it's a string, try to split by common delimiters
+      if (quotes.includes('", "') || quotes.includes('\", \"')) {
+        quoteList = quotes.split(/",\s*"/).map(q => q.replace(/^["']|["']$/g, '').trim());
+      } else if (quotes.includes('\n')) {
+        quoteList = quotes.split('\n').filter(q => q.trim().length > 0);
+      } else {
+        quoteList = [quotes];
+      }
+    } else if (Array.isArray(quotes)) {
+      quoteList = quotes.filter(q => typeof q === 'string' && q.trim().length > 0);
+    } else if (typeof quotes === 'object' && quotes.evidence) {
+      // Handle evidence format
+      quoteList = Array.isArray(quotes.evidence) ? quotes.evidence : [quotes.evidence];
+    }
+
+    if (quoteList.length === 0) {
+      return <p className="text-muted-foreground">No quotes available.</p>;
+    }
+
+    return (
+      <div className="space-y-4">
+        {quoteList.map((quote, index) => (
+          <blockquote key={index} className="border-l-4 border-primary pl-4 py-2 bg-muted/30 rounded-r-lg">
+            <p className="text-sm italic">"{quote.replace(/^["']|["']$/g, '').trim()}"</p>
+          </blockquote>
+        ))}
+      </div>
+    );
+  };
+
+  // Helper function to group and render patterns by category
+  const renderGroupedPatterns = (patterns: string[]): React.ReactNode => {
+    // Debug: Log the raw patterns to understand the format
+    console.log('Raw patterns received:', patterns);
+
+    // Define pattern categories
+    const categories = {
+      'Behavioral Patterns': ['preference', 'behavior', 'habit', 'approach', 'style', 'method', 'way', 'tends to', 'always', 'often', 'typically'],
+      'Value Patterns': ['value', 'important', 'priority', 'belief', 'principle', 'standard', 'quality', 'authenticity', 'tradition', 'heritage'],
+      'Goal Patterns': ['goal', 'desire', 'want', 'seek', 'aim', 'objective', 'motivation', 'drive', 'aspiration'],
+      'Challenge Patterns': ['challenge', 'problem', 'issue', 'difficulty', 'struggle', 'obstacle', 'barrier', 'frustration', 'pain'],
+      'Process Patterns': ['process', 'workflow', 'sequence', 'step', 'procedure', 'routine', 'system', 'method', 'approach']
+    };
+
+    // Categorize patterns
+    const categorizedPatterns: Record<string, string[]> = {};
+    const uncategorized: string[] = [];
+
+    patterns.forEach(pattern => {
+      // Clean up the pattern text more thoroughly
+      let cleanPattern = pattern;
+
+      // Remove confidence labels like "Preferences (Medium):", "Goals (High):", etc.
+      cleanPattern = cleanPattern.replace(/^[A-Za-z\s]+\s*\([^)]*\):\s*/, '');
+
+      // Remove any remaining category prefixes that might be concatenated
+      cleanPattern = cleanPattern.replace(/^(Preferences|Goals|General|Behavioral|Value|Challenge|Process)/i, '');
+
+      // Clean up any double spaces or weird formatting
+      cleanPattern = cleanPattern.replace(/\s+/g, ' ').trim();
+
+      // Ensure it starts with a capital letter
+      if (cleanPattern.length > 0) {
+        cleanPattern = cleanPattern.charAt(0).toUpperCase() + cleanPattern.slice(1);
+      }
+
+      // Skip if the pattern is too short or empty after cleaning
+      if (cleanPattern.length < 10) {
+        return;
+      }
+
+      let categorized = false;
+      for (const [categoryName, keywords] of Object.entries(categories)) {
+        if (keywords.some(keyword => cleanPattern.toLowerCase().includes(keyword))) {
+          if (!categorizedPatterns[categoryName]) {
+            categorizedPatterns[categoryName] = [];
+          }
+          categorizedPatterns[categoryName].push(cleanPattern);
+          categorized = true;
+          break;
+        }
+      }
+
+      if (!categorized) {
+        uncategorized.push(cleanPattern);
+      }
+    });
+
+    // Add uncategorized patterns to "Other Patterns" if any exist
+    if (uncategorized.length > 0) {
+      categorizedPatterns['Other Patterns'] = uncategorized;
+    }
+
+    // Render categorized patterns
+    return (
+      <div className="space-y-2">
+        {Object.entries(categorizedPatterns).map(([categoryName, categoryPatterns]) => (
+          <div key={categoryName} className="space-y-1">
+            <h5 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+              {categoryName}
+            </h5>
+            <ul className="list-disc pl-5 text-sm space-y-0">
+              {categoryPatterns.map((pattern, i) => (
+                <li key={i} className="text-foreground leading-relaxed">{pattern}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   // Render a trait card with confidence badge and evidence
@@ -170,34 +303,32 @@ export function PersonaList({ personas, className }: PersonaListProps) {
 
           {personas.map((persona, index) => (
             <TabsContent key={`persona-content-${index}`} value={persona.name} className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
                   <h2 className="text-xl font-bold">{persona.name}</h2>
                   <p className="text-muted-foreground">{persona.description}</p>
                 </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge className={getConfidenceColor(persona.confidence)}>
-                        {Math.round(persona.confidence * 100)}% Overall Confidence
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{getConfidenceTooltip(persona.confidence)}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <div className="flex-shrink-0 self-start">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge className={getConfidenceColor(persona.confidence)}>
+                          {Math.round(persona.confidence * 100)}% Overall Confidence
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{getConfidenceTooltip(persona.confidence)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
 
               {/* Patterns Section (Always Visible) */}
               {persona.patterns && persona.patterns.length > 0 && (
                 <div className="mt-3 mb-2">
                   <h4 className="text-xs font-medium mb-1">Associated Patterns</h4>
-                  <ul className="list-disc pl-5 text-sm">
-                    {persona.patterns.map((pattern, i) => (
-                      <li key={i}>{pattern}</li>
-                    ))}
-                  </ul>
+                  {renderGroupedPatterns(persona.patterns)}
                 </div>
               )}
 
@@ -244,56 +375,39 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               <Tabs defaultValue="detailed" className="w-full mt-4">
                 <TabsList className="mb-4">
                   <TabsTrigger value="detailed">Detailed Profile</TabsTrigger>
-                  <TabsTrigger value="legacy">Legacy Fields</TabsTrigger>
-                  <TabsTrigger value="insights">Insights</TabsTrigger>
+                  <TabsTrigger value="quotes">Key Quotes</TabsTrigger>
                 </TabsList>
 
                 {/* Detailed Profile Tab */}
                 <TabsContent value="detailed" className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderTraitCard('Demographics', persona.demographics)}
-                    {renderTraitCard('Goals & Motivations', persona.goals_and_motivations)}
-                    {renderTraitCard('Skills & Expertise', persona.skills_and_expertise)}
-                    {renderTraitCard('Workflow & Environment', persona.workflow_and_environment)}
-                    {renderTraitCard('Challenges & Frustrations', persona.challenges_and_frustrations)}
-                    {renderTraitCard('Needs & Desires', persona.needs_and_desires)}
-                    {renderTraitCard('Technology & Tools', persona.technology_and_tools)}
-                    {renderTraitCard('Attitude Towards Research', persona.attitude_towards_research)}
-                    {renderTraitCard('Attitude Towards AI', persona.attitude_towards_ai)}
-                    {renderTraitCard('Key Quotes', persona.key_quotes)}
+                    {persona.demographics && renderTraitCard('Demographics', persona.demographics)}
+                    {persona.goals_and_motivations && renderTraitCard('Goals & Motivations', persona.goals_and_motivations)}
+                    {persona.skills_and_expertise && renderTraitCard('Skills & Expertise', persona.skills_and_expertise)}
+                    {persona.workflow_and_environment && renderTraitCard('Workflow & Environment', persona.workflow_and_environment)}
+                    {persona.challenges_and_frustrations && renderTraitCard('Challenges & Frustrations', persona.challenges_and_frustrations)}
+                    {persona.pain_points && renderTraitCard('Pain Points', persona.pain_points)}
+                    {persona.technology_and_tools && renderTraitCard('Technology & Tools', persona.technology_and_tools)}
+                    {persona.collaboration_style && renderTraitCard('Collaboration Style', persona.collaboration_style)}
                   </div>
                 </TabsContent>
 
-                {/* Legacy Fields Tab */}
-                <TabsContent value="legacy" className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderTraitCard('Role Context', persona.role_context)}
-                    {renderTraitCard('Key Responsibilities', persona.key_responsibilities)}
-                    {renderTraitCard('Tools Used', persona.tools_used)}
-                    {renderTraitCard('Collaboration Style', persona.collaboration_style)}
-                    {renderTraitCard('Analysis Approach', persona.analysis_approach)}
-                    {renderTraitCard('Pain Points', persona.pain_points)}
+                {/* Key Quotes Tab */}
+                <TabsContent value="quotes" className="space-y-4">
+                  <div className="border rounded-lg p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Key Quotes</h3>
+                      <Badge variant="outline" className="text-sm">
+                        Authentic Voice
+                      </Badge>
+                    </div>
+                    <div className="mt-4">
+                      {renderExpandedQuotes(persona)}
+                    </div>
                   </div>
                 </TabsContent>
 
-                {/* Insights Tab */}
-                <TabsContent value="insights" className="space-y-4">
-                  {/* Note about patterns & evidence location */}
-                  <div className="p-4 bg-muted/20 rounded-md">
-                    <h3 className="text-sm font-medium mb-2">Patterns & Evidence</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Associated patterns are now visible directly below the persona description. Supporting evidence is available in a collapsible section below the patterns.
-                    </p>
-                  </div>
 
-                  {/* Future insights content placeholder */}
-                  <div className="mt-4">
-                    <h3 className="text-sm font-medium mb-2">Additional Insights</h3>
-                    <p className="text-sm text-muted-foreground">
-                      This tab will be used for additional persona insights in future updates.
-                    </p>
-                  </div>
-                </TabsContent>
               </Tabs>
 
               {/* Metadata */}

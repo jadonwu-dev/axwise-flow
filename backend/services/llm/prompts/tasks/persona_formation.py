@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PersonaFormationPrompts:
     """
     Persona formation prompt templates.
@@ -44,20 +45,28 @@ class PersonaFormationPrompts:
         text_sample = original_text_input[:TEXT_SAMPLE_LIMIT]
 
         if len(original_text_input) > TEXT_SAMPLE_LIMIT:
-            logger.info(f"PersonaFormationPrompts: Using truncated text sample of {TEXT_SAMPLE_LIMIT} chars (original: {len(original_text_input)} chars)")
+            logger.info(
+                f"PersonaFormationPrompts: Using truncated text sample of {TEXT_SAMPLE_LIMIT} chars (original: {len(original_text_input)} chars)"
+            )
         else:
-            logger.info(f"PersonaFormationPrompts: Using full text sample of {len(original_text_input)} chars")
+            logger.info(
+                f"PersonaFormationPrompts: Using full text sample of {len(original_text_input)} chars"
+            )
 
         # Get industry-specific guidance if available
         if industry:
             industry_guidance = IndustryGuidance.get_persona_guidance(industry)
-            return PersonaFormationPrompts.industry_specific_prompt(industry, industry_guidance, text_sample)
+            return PersonaFormationPrompts.industry_specific_prompt(
+                industry, industry_guidance, text_sample
+            )
 
         # Fallback to standard persona formation prompt if no specific prompt provided
         return PersonaFormationPrompts.standard_prompt(text_sample)
 
     @staticmethod
-    def industry_specific_prompt(industry: str, industry_guidance: str, text_sample: str) -> str:
+    def industry_specific_prompt(
+        industry: str, industry_guidance: str, text_sample: str
+    ) -> str:
         """
         Get industry-specific persona formation prompt.
 
@@ -87,7 +96,7 @@ class PersonaFormationPrompts:
         3. description: A brief 1-3 sentence overview of the persona highlighting their role in the {industry.upper()} industry
 
         DETAILED ATTRIBUTES (each with value, confidence score 0.0-1.0, and supporting evidence):
-        4. demographics: Age, gender, education, experience level, and other demographic information
+        4. demographics: ONLY extract demographic information that is explicitly mentioned or clearly supported by evidence. Do NOT infer or assume gender, age, or other demographics without clear evidence.
         5. role_context: Specific organizational context, team structure, and reporting relationships
         6. key_responsibilities: Primary job duties, tasks, and accountabilities in their role
         7. goals_and_motivations: Primary objectives, aspirations, and driving factors specific to their role in the {industry.upper()} industry
@@ -115,7 +124,7 @@ class PersonaFormationPrompts:
           "archetype": "Persona Category",
           "description": "Brief overview of the persona",
           "demographics": {{
-            "value": "Comprehensive demographic information including gender, age range, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression",
+            "value": "ONLY include demographic information that is explicitly mentioned in the text. Include location, industry background, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression. Do NOT include gender, age, or other demographics unless explicitly stated.",
             "confidence": 0.8,
             "evidence": ["Quote 1", "Quote 2"]
           }},
@@ -255,7 +264,7 @@ class PersonaFormationPrompts:
           "archetype": "Persona Category",
           "description": "Brief overview of the persona",
           "demographics": {{
-            "value": "Comprehensive demographic information including gender, age range, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression",
+            "value": "ONLY include demographic information that is explicitly mentioned in the text. Include location, industry background, experience level, specific companies worked for (e.g., 'Volkswagen', 'Google'), roles held, and career progression. Do NOT include gender, age, or other demographics unless explicitly stated.",
             "confidence": 0.8,
             "evidence": ["Quote 1", "Quote 2"]
           }},

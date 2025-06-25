@@ -5,7 +5,9 @@ from typing import Dict, Any, List, Optional
 
 from backend.models import User
 from backend.services.llm import LLMServiceFactory
-from backend.services.processing.persona_formation_service import PersonaFormationService
+from backend.services.processing.persona_formation_service import (
+    PersonaFormationService,
+)
 from infrastructure.config.settings import settings
 
 # Configuration values
@@ -13,6 +15,7 @@ ENABLE_CLERK_...=***REMOVED***"enable_clerk_validation", False)
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
 
 class PersonaService:
     """
@@ -31,11 +34,13 @@ class PersonaService:
         self.user = user
         self._persona_formation_service = None
 
-    async def generate_persona(self,
-                        text: str,
-                        llm_provider: str = "gemini",
-                        llm_model: Optional[str] = None,
-                        filename: Optional[str] = None) -> Dict[str, Any]:
+    async def generate_persona(
+        self,
+        text: str,
+        llm_provider: str = "enhanced_gemini",
+        llm_model: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Generate a persona from interview text.
 
@@ -54,7 +59,9 @@ class PersonaService:
         try:
             # Validate input
             if not text:
-                raise HTTPException(status_code=400, detail="No text provided for persona generation")
+                raise HTTPException(
+                    status_code=400, detail="No text provided for persona generation"
+                )
 
             # Log request
             logger.info(f"Generating persona from text ({len(text)} chars)")
@@ -65,39 +72,45 @@ class PersonaService:
                 return {
                     "success": True,
                     "message": "Mock persona generated successfully",
-                    "persona": self._get_mock_persona()
+                    "persona": self._get_mock_persona(),
                 }
 
             # Initialize persona service if not already done
             if not self._persona_formation_service:
-                self._persona_formation_service = self._create_persona_formation_service(
-                    llm_provider=llm_provider,
-                    llm_model=llm_model or settings.llm_providers[llm_provider]["model"]
+                self._persona_formation_service = (
+                    self._create_persona_formation_service(
+                        llm_provider=llm_provider,
+                        llm_model=llm_model
+                        or settings.llm_providers[llm_provider]["model"],
+                    )
                 )
 
             # Generate personas
-            context = {'original_text': text}
+            context = {"original_text": text}
 
             # Add filename to context if provided
             if filename:
-                context['filename'] = filename
+                context["filename"] = filename
                 logger.info(f"Using filename in persona generation context: {filename}")
 
             personas = await self._persona_formation_service.generate_persona_from_text(
-                text,
-                context
+                text, context
             )
 
             if not personas or len(personas) == 0:
                 logger.error("No personas were generated from text")
-                raise HTTPException(status_code=500, detail="Failed to generate persona from text")
+                raise HTTPException(
+                    status_code=500, detail="Failed to generate persona from text"
+                )
 
             # Return all generated personas
             return {
                 "success": True,
                 "message": f"Generated {len(personas)} personas successfully",
                 "personas": personas,
-                "persona": personas[0] if personas else None  # For backward compatibility
+                "persona": (
+                    personas[0] if personas else None
+                ),  # For backward compatibility
             }
 
         except HTTPException:
@@ -105,12 +118,11 @@ class PersonaService:
             raise
         except Exception as e:
             logger.error(f"Error generating persona: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Server error: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
-    def _create_persona_formation_service(self, llm_provider: str, llm_model: str) -> PersonaFormationService:
+    def _create_persona_formation_service(
+        self, llm_provider: str, llm_model: str
+    ) -> PersonaFormationService:
         """
         Create a properly configured PersonaFormationService.
 
@@ -124,26 +136,29 @@ class PersonaService:
         try:
             # Update this line to use the create_llm_service method correctly
             llm_config = dict(settings.llm_providers[llm_provider])
-            llm_config['model'] = llm_model
+            llm_config["model"] = llm_model
             llm_service = LLMServiceFactory.create(llm_provider, llm_config)
 
             # Create a minimal SystemConfig for the persona formation service
             class MinimalSystemConfig:
                 def __init__(self):
-                    self.llm = type('obj', (object,), {
-                        'provider': llm_provider,
-                        'model': llm_model,
-                        'api_key': settings.llm_providers[llm_provider].get('api_key', ''),
-                        'temperature': 0.3,
-                        'max_tokens': 2000
-                    })
-                    self.processing = type('obj', (object,), {
-                        'batch_size': 10,
-                        'max_tokens': 2000
-                    })
-                    self.validation = type('obj', (object,), {
-                        'min_confidence': 0.4
-                    })
+                    self.llm = type(
+                        "obj",
+                        (object,),
+                        {
+                            "provider": llm_provider,
+                            "model": llm_model,
+                            "api_key": settings.llm_providers[llm_provider].get(
+                                "api_key", ""
+                            ),
+                            "temperature": 0.3,
+                            "max_tokens": 2000,
+                        },
+                    )
+                    self.processing = type(
+                        "obj", (object,), {"batch_size": 10, "max_tokens": 2000}
+                    )
+                    self.validation = type("obj", (object,), {"min_confidence": 0.4})
 
             system_config = MinimalSystemConfig()
             persona_service = PersonaFormationService(system_config, llm_service)
@@ -168,36 +183,54 @@ class PersonaService:
             "confidence": 0.85,
             "evidence": [
                 "Manages UX team of 5-7 designers",
-                "Responsible for design system implementation"
+                "Responsible for design system implementation",
             ],
             "role_context": {
                 "value": "Design team lead at medium-sized technology company",
                 "confidence": 0.9,
-                "evidence": ["Manages UX team of 5-7 designers", "Responsible for design system implementation"]
+                "evidence": [
+                    "Manages UX team of 5-7 designers",
+                    "Responsible for design system implementation",
+                ],
             },
             "key_responsibilities": {
                 "value": "Oversees design system implementation. Manages team of designers. Coordinates with product and engineering",
                 "confidence": 0.85,
-                "evidence": ["Mentioned regular design system review meetings", "Discussed designer performance reviews"]
+                "evidence": [
+                    "Mentioned regular design system review meetings",
+                    "Discussed designer performance reviews",
+                ],
             },
             "tools_used": {
                 "value": "Figma, Sketch, Adobe Creative Suite, Jira, Confluence",
                 "confidence": 0.8,
-                "evidence": ["Referenced Figma components", "Mentioned Jira ticketing system"]
+                "evidence": [
+                    "Referenced Figma components",
+                    "Mentioned Jira ticketing system",
+                ],
             },
             "collaboration_style": {
                 "value": "Cross-functional collaboration with tight integration between design and development",
                 "confidence": 0.75,
-                "evidence": ["Weekly sync meetings with engineering", "Design hand-off process improvements"]
+                "evidence": [
+                    "Weekly sync meetings with engineering",
+                    "Design hand-off process improvements",
+                ],
             },
             "analysis_approach": {
                 "value": "Data-informed design decisions with emphasis on usability testing",
                 "confidence": 0.7,
-                "evidence": ["Conducts regular user testing sessions", "Analyzes usage metrics to inform design"]
+                "evidence": [
+                    "Conducts regular user testing sessions",
+                    "Analyzes usage metrics to inform design",
+                ],
             },
             "pain_points": {
                 "value": "Limited resources for user research. Engineering-driven decision making. Maintaining design quality with tight deadlines",
                 "confidence": 0.9,
-                "evidence": ["Expressed frustration about research budget limitations", "Mentioned quality issues due to rushed timelines"]
-            }
+                "evidence": [
+                    "Expressed frustration about research budget limitations",
+                    "Mentioned quality issues due to rushed timelines",
+                ],
+            },
         }

@@ -36,7 +36,8 @@ class AnalysisRequest(BaseModel):
         False, description="Whether the data is in free-text format"
     )
     industry: Optional[str] = Field(
-        None, description="Industry context for analysis (auto-detected if not provided)"
+        None,
+        description="Industry context for analysis (auto-detected if not provided)",
     )
     # Enhanced theme analysis is now always enabled by default
 
@@ -46,7 +47,7 @@ class AnalysisRequest(BaseModel):
                 "data_id": 1,
                 "llm_provider": "openai",
                 "llm_model": "gpt-4o-2024-08-06",
-                "industry": "healthcare"
+                "industry": "healthcare",
             }
         }
     }
@@ -58,8 +59,8 @@ class PersonaGenerationRequest(BaseModel):
     """
 
     text: str = Field(..., description="Raw interview text to generate persona from")
-    llm_provider: Optional[Literal["openai", "gemini"]] = Field(
-        "gemini", description="LLM provider to use for persona generation"
+    llm_provider: Optional[Literal["openai", "gemini", "enhanced_gemini"]] = Field(
+        "enhanced_gemini", description="LLM provider to use for persona generation"
     )
     llm_model: Optional[str] = Field(
         "models/gemini-2.5-flash-preview-04-17", description="Specific LLM model to use"
@@ -74,7 +75,7 @@ class PersonaGenerationRequest(BaseModel):
                 "text": "I'm a frontend developer working on web applications. I typically use React, TypeScript, and sometimes Angular. My biggest challenge is dealing with legacy code that's poorly documented.",
                 "llm_provider": "gemini",
                 "llm_model": "models/gemini-2.5-flash-preview-04-17",
-                "filename": "Interview_SoftwareTech_Demo.txt"
+                "filename": "Interview_SoftwareTech_Demo.txt",
             }
         }
     }
@@ -121,7 +122,7 @@ class HierarchicalCode(BaseModel):
     code: str
     definition: str
     frequency: float = Field(default=0.5, ge=0.0, le=1.0)
-    sub_codes: List['HierarchicalCode'] = Field(default_factory=list)
+    sub_codes: List["HierarchicalCode"] = Field(default_factory=list)
 
 
 class ReliabilityMetrics(BaseModel):
@@ -154,7 +155,7 @@ class SentimentDistribution(BaseModel):
     neutral: float = Field(default=0.34, ge=0.0, le=1.0)
     negative: float = Field(default=0.33, ge=0.0, le=1.0)
 
-    @field_validator('positive', 'neutral', 'negative')
+    @field_validator("positive", "neutral", "negative")
     def validate_distribution(cls, v, info):
         """Ensure sentiment values are between 0 and 1"""
         if not 0 <= v <= 1:
@@ -237,8 +238,8 @@ class Theme(BaseModel):
                 "sentiment_distribution": {
                     "positive": 0.7,
                     "neutral": 0.2,
-                    "negative": 0.1
-                }
+                    "negative": 0.1,
+                },
             }
         }
     }
@@ -550,7 +551,7 @@ class EnhancedThemeResponse(BaseModel):
 
     enhanced_themes: List[Theme] = Field(
         default_factory=list,
-        description="List of enhanced themes with detailed analysis"
+        description="List of enhanced themes with detailed analysis",
     )
 
     model_config = {
@@ -565,7 +566,7 @@ class EnhancedThemeResponse(BaseModel):
                         "sentiment": -0.3,
                         "statements": [
                             "I find the interface overwhelming with too many options",
-                            "It takes me several clicks to find basic features"
+                            "It takes me several clicks to find basic features",
                         ],
                         "codes": ["UI_COMPLEXITY", "NAVIGATION_ISSUES"],
                         "reliability": 0.85,
@@ -573,8 +574,8 @@ class EnhancedThemeResponse(BaseModel):
                         "sentiment_distribution": {
                             "positive": 0.1,
                             "neutral": 0.3,
-                            "negative": 0.6
-                        }
+                            "negative": 0.6,
+                        },
                     }
                 ]
             }
