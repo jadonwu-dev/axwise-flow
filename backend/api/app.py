@@ -273,18 +273,11 @@ from backend.api.endpoints.debug import router as debug_router
 
 app.include_router(debug_router, prefix="/api")
 
-# Include customer research routers
-from backend.api.routes.customer_research import router as main_customer_research_router
-from backend.api.routes.customer_research_v3_simple_modular import (
-    router as customer_research_router,
-)
-from backend.api.routes.customer_research_v3_rebuilt import (
-    router as customer_research_v3_rebuilt_router,
-)
+# Include modular customer research router (V1 core + V3 enhancements)
+from backend.api.research.research_router import router as modular_research_router
 
-app.include_router(main_customer_research_router)
-app.include_router(customer_research_router)
-app.include_router(customer_research_v3_rebuilt_router)
+# Use clean modular architecture: V1 core (proven) + V3 enhancements (fail-safe)
+app.include_router(modular_research_router)
 
 # Initialize database tables
 create_tables()

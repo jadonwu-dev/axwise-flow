@@ -77,6 +77,16 @@ export function ComprehensiveQuestionsComponent({
   const safePrimaryStakeholders = primaryStakeholders || [];
   const safeSecondaryStakeholders = secondaryStakeholders || [];
 
+  // DEBUG: Log received data
+  console.log('🔧 ComprehensiveQuestionsComponent received:', {
+    primaryStakeholders: primaryStakeholders?.length || 0,
+    secondaryStakeholders: secondaryStakeholders?.length || 0,
+    timeEstimate,
+    businessContext,
+    primaryStakeholdersData: primaryStakeholders,
+    secondaryStakeholdersData: secondaryStakeholders
+  });
+
   // Calculate actual time estimate from stakeholder data if timeEstimate is empty/default
   const calculateActualTimeEstimate = () => {
     const allStakeholders = [...safePrimaryStakeholders, ...safeSecondaryStakeholders];

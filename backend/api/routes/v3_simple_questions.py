@@ -69,31 +69,68 @@ def _should_generate_questions(
     """Determine if we should generate questions (V1 sustainable pattern)."""
 
     try:
-        # V1 SUSTAINABLE PATTERN: Simple intent-based decision
+        # V1 SUSTAINABLE PATTERN: Enhanced intent-based decision
         user_intent = intent_analysis.get("intent", "")
-        user_wants_questions = user_intent in ["question_request", "generate_questions"]
+
+        # ENHANCED: Accept more variations of question requests
+        question_intents = [
+            "question_request",
+            "generate_questions",
+            "ask_question",
+            "create_questions",
+            "research_questions",
+            "questionnaire",
+            "interview_questions",
+        ]
+        user_wants_questions = user_intent in question_intents
+
+        # ENHANCED: Also check for direct keyword matching in latest input
+        # This handles cases where intent classification might miss obvious requests
+        latest_input = conversation_flow.get("latest_input", "").lower()
+        question_keywords = [
+            "questionnaire",
+            "questions",
+            "generate",
+            "create",
+            "interview",
+            "research",
+            "lets go to",
+            "go to questionnaire",
+        ]
+        has_question_keywords = any(
+            keyword in latest_input for keyword in question_keywords
+        )
+
+        # Combined intent detection
+        user_wants_questions = user_wants_questions or has_question_keywords
 
         # V1 SUSTAINABLE PATTERN: Basic context check (not complex multi-condition)
         business_idea_1 = context_analysis.get("businessIdea")
         business_idea_2 = context_analysis.get("business_idea")
         has_business_context = bool(business_idea_1 or business_idea_2)
 
-        # SIMPLE DECISION: User wants questions + has some business context
-        should_generate = user_wants_questions and has_business_context
+        # ENHANCED: Also check business validation readiness
+        business_ready = business_validation.get("ready_for_questions", False)
+
+        # SIMPLE DECISION: User wants questions + (has business context OR business is ready)
+        should_generate = user_wants_questions and (
+            has_business_context or business_ready
+        )
 
         logger.info(f"🎯 V1 Sustainable Question Decision: {should_generate}")
         logger.info(
             f"  - User wants questions: {user_wants_questions} (intent: {user_intent})"
         )
+        logger.info(
+            f"  - Has question keywords: {has_question_keywords} (input: '{latest_input}')"
+        )
         logger.info(f"  - Has business context: {has_business_context}")
+        logger.info(f"  - Business ready: {business_ready}")
         logger.info(f"  - businessIdea: {business_idea_1}")
         logger.info(f"  - business_idea: {business_idea_2}")
         logger.info(f"  - context_analysis keys: {list(context_analysis.keys())}")
 
-        # Log additional context for debugging (but don't use in decision)
-        logger.debug(
-            f"  - Business ready: {business_validation.get('ready_for_questions', False)}"
-        )
+        # Log additional context for debugging
         logger.debug(
             f"  - Conversation ready: {conversation_flow.get('readiness_for_questions', False)}"
         )
@@ -154,12 +191,143 @@ async def _generate_comprehensive_questions(
         logger.info(
             "🎯 V3 SUSTAINABLE: Using V1 proven question generation with Pydantic models"
         )
-        comprehensive_questions = await generate_comprehensive_research_questions(
+        v1_questions = await generate_comprehensive_research_questions(
             llm_service=llm_service,
             context=v1_context,
             conversation_history=[],  # V3 doesn't use conversation history for questions
             stakeholder_data=stakeholder_detection,  # Pass V3 stakeholder data if available
         )
+
+        # CRITICAL FIX: Convert V1 ResearchQuestions format to V3 ComprehensiveQuestions format
+        logger.info("🔄 Converting V1 format to V3 format for frontend compatibility")
+
+        # Handle both dict and Pydantic model formats
+        if hasattr(v1_questions, "model_dump"):
+            v1_data = v1_questions.model_dump()
+        elif isinstance(v1_questions, dict):
+            v1_data = v1_questions
+        else:
+            # Fallback: convert to dict manually
+            v1_data = {
+                "problemDiscovery": getattr(v1_questions, "problemDiscovery", []),
+                "solutionValidation": getattr(v1_questions, "solutionValidation", []),
+                "followUp": getattr(v1_questions, "followUp", []),
+                "stakeholders": getattr(
+                    v1_questions, "stakeholders", {"primary": [], "secondary": []}
+                ),
+                "estimatedTime": getattr(
+                    v1_questions, "estimatedTime", "25-40 minutes"
+                ),
+            }
+
+        # ENHANCED: Check if we have V3 enhancement service stakeholder data (which is richer)
+        enhanced_stakeholders = None
+        if stakeholder_detection and isinstance(stakeholder_detection, dict):
+            if stakeholder_detection.get("primary") or stakeholder_detection.get(
+                "secondary"
+            ):
+                logger.info(
+                    "🎯 Using V3 enhancement service stakeholder data (richer format)"
+                )
+                enhanced_stakeholders = stakeholder_detection
+
+        # Use enhanced stakeholders if available, otherwise fall back to V1 data
+        if enhanced_stakeholders:
+            stakeholder_source = enhanced_stakeholders
+            logger.info(
+                f"📊 Enhanced stakeholders: {len(stakeholder_source.get('primary', []))} primary, {len(stakeholder_source.get('secondary', []))} secondary"
+            )
+        else:
+            stakeholder_source = v1_data.get(
+                "stakeholders", {"primary": [], "secondary": []}
+            )
+            logger.info(
+                f"📊 V1 stakeholders: {len(stakeholder_source.get('primary', []))} primary, {len(stakeholder_source.get('secondary', []))} secondary"
+            )
+
+        # Convert stakeholder format: {"primary": [...], "secondary": [...]} -> {primaryStakeholders: [...], secondaryStakeholders: [...]}
+        primary_stakeholders = []
+        secondary_stakeholders = []
+
+        # Process primary stakeholders
+        for stakeholder in stakeholder_source.get("primary", []):
+            if isinstance(stakeholder, dict) and "name" in stakeholder:
+                # V3 enhancement service format - already has questions
+                primary_stakeholders.append(stakeholder)
+            elif isinstance(stakeholder, str):
+                # V1 format - convert string to stakeholder object
+                primary_stakeholders.append(
+                    {
+                        "name": stakeholder,
+                        "description": f"Primary stakeholder: {stakeholder}",
+                        "questions": {
+                            "problemDiscovery": v1_data.get("problemDiscovery", [])[:3],
+                            "solutionValidation": v1_data.get("solutionValidation", [])[
+                                :3
+                            ],
+                            "followUp": v1_data.get("followUp", [])[:2],
+                        },
+                    }
+                )
+
+        # Process secondary stakeholders
+        for stakeholder in stakeholder_source.get("secondary", []):
+            if isinstance(stakeholder, dict) and "name" in stakeholder:
+                # V3 enhancement service format - already has questions
+                secondary_stakeholders.append(stakeholder)
+            elif isinstance(stakeholder, str):
+                # V1 format - convert string to stakeholder object
+                secondary_stakeholders.append(
+                    {
+                        "name": stakeholder,
+                        "description": f"Secondary stakeholder: {stakeholder}",
+                        "questions": {
+                            "problemDiscovery": v1_data.get("problemDiscovery", [])[:2],
+                            "solutionValidation": v1_data.get("solutionValidation", [])[
+                                :2
+                            ],
+                            "followUp": v1_data.get("followUp", [])[:1],
+                        },
+                    }
+                )
+
+        # Calculate total questions from stakeholders (more accurate for V3 enhanced data)
+        total_stakeholder_questions = 0
+        for stakeholder in primary_stakeholders + secondary_stakeholders:
+            if isinstance(stakeholder, dict) and "questions" in stakeholder:
+                questions = stakeholder["questions"]
+                total_stakeholder_questions += (
+                    len(questions.get("problemDiscovery", []))
+                    + len(questions.get("solutionValidation", []))
+                    + len(questions.get("followUp", []))
+                )
+
+        # Use stakeholder question count if available, otherwise fall back to V1 data
+        if total_stakeholder_questions > 0:
+            total_questions_final = total_stakeholder_questions
+            logger.info(f"📊 Using stakeholder question count: {total_questions_final}")
+        else:
+            total_questions_final = (
+                len(v1_data.get("problemDiscovery", []))
+                + len(v1_data.get("solutionValidation", []))
+                + len(v1_data.get("followUp", []))
+            )
+            logger.info(f"📊 Using V1 question count: {total_questions_final}")
+
+        # Create V3 comprehensive questions format
+        comprehensive_questions = {
+            "primaryStakeholders": primary_stakeholders,
+            "secondaryStakeholders": secondary_stakeholders,
+            "timeEstimate": {
+                "totalQuestions": total_questions_final,
+                "estimatedMinutes": v1_data.get("estimatedTime", "25-40 minutes"),
+                "breakdown": {
+                    "primary": len(primary_stakeholders),
+                    "secondary": len(secondary_stakeholders),
+                    "perQuestion": 3,
+                },
+            },
+        }
 
         # Extract key metrics for logging and frontend display
         primary_count = len(comprehensive_questions.get("primaryStakeholders", []))
@@ -172,8 +340,24 @@ async def _generate_comprehensive_questions(
             f"✅ V1 Instructor generated comprehensive questions: {primary_count} primary, {secondary_count} secondary stakeholders, {total_questions} total questions, {estimated_minutes} minutes"
         )
 
+        # DEBUG: Log the exact structure being sent to frontend
+        logger.info(f"🔧 FRONTEND DEBUG: Sending comprehensive_questions structure:")
+        logger.info(f"   - Type: {type(comprehensive_questions)}")
+        logger.info(
+            f"   - Keys: {list(comprehensive_questions.keys()) if isinstance(comprehensive_questions, dict) else 'Not a dict'}"
+        )
+        logger.info(
+            f"   - Primary stakeholders count: {len(comprehensive_questions.get('primaryStakeholders', []))}"
+        )
+        logger.info(
+            f"   - Secondary stakeholders count: {len(comprehensive_questions.get('secondaryStakeholders', []))}"
+        )
+        logger.info(
+            f"   - Time estimate: {comprehensive_questions.get('timeEstimate', {})}"
+        )
+
         # Return response with comprehensive questions and all metadata
-        return {
+        response = {
             "content": f"Perfect! I've generated comprehensive research questions for your {business_idea}. These questions will help you validate the market need and refine your solution.",
             "questions": comprehensive_questions,
             "suggestions": [],
@@ -194,6 +378,14 @@ async def _generate_comprehensive_questions(
                 },
             },
         }
+
+        logger.info(f"🔧 FRONTEND DEBUG: Final response structure:")
+        logger.info(f"   - response.questions type: {type(response['questions'])}")
+        logger.info(
+            f"   - response.questions keys: {list(response['questions'].keys()) if isinstance(response['questions'], dict) else 'Not a dict'}"
+        )
+
+        return response
 
     except Exception as e:
         logger.error(f"Comprehensive question generation failed: {e}")

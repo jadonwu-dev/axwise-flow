@@ -359,6 +359,7 @@ class SimplifiedResearchService:
                 messages,
                 context_analysis,
                 intent_analysis,
+                latest_input,
             )
 
             # Phase 3: Response Generation

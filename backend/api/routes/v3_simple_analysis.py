@@ -469,23 +469,42 @@ async def detect_stakeholders_enhanced(
             logger.debug("Stakeholder detection cache hit")
             return cached_result
 
-        # Use direct LLM-based stakeholder detection (V3 implementation)
+        # FIXED: Use V3 Enhancement Service's stakeholder detector (richer format)
+        logger.info(
+            "🎯 Using V3 Enhancement Service stakeholder detector for rich stakeholder data"
+        )
+
+        from backend.api.research.v3_enhancements.stakeholder_detector import (
+            StakeholderDetector,
+        )
         from backend.services.llm import LLMServiceFactory
 
         llm_service = LLMServiceFactory.create("enhanced_gemini")
-        stakeholder_result = await _detect_stakeholders_with_llm(
-            llm_service, conversation_context, context_analysis, industry_analysis
+        stakeholder_detector = StakeholderDetector()
+
+        # Convert context for V3 Enhancement Service format
+        messages = (
+            []
+        )  # V3 Enhancement Service expects messages but we can pass empty for now
+        problem = context_analysis.get("problem", "")
+
+        # Use V3 Enhancement Service's rich stakeholder generation
+        stakeholder_result = await stakeholder_detector.generate_dynamic_stakeholders_with_unique_questions(
+            llm_service=llm_service,
+            context_analysis=context_analysis,
+            messages=messages,
+            business_idea=business_idea,
+            target_customer=target_customer,
+            problem=problem,
         )
 
-        # V3 Enhancement: Add stakeholder prioritization
+        # V3 Enhancement Service returns format: {primary: [...], secondary: [...]}
+        # This is exactly what the question generation expects!
         if stakeholder_result:
-            prioritized_stakeholders = _prioritize_stakeholders(
-                stakeholder_result, context_analysis
-            )
-            stakeholder_result.update(prioritized_stakeholders)
-
-            # Add confidence scoring
-            confidence_score = _calculate_stakeholder_confidence(stakeholder_result)
+            # Add confidence scoring for V3 format
+            primary_count = len(stakeholder_result.get("primary", []))
+            secondary_count = len(stakeholder_result.get("secondary", []))
+            confidence_score = min(0.9, 0.5 + (primary_count + secondary_count) * 0.1)
             stakeholder_result["confidence"] = confidence_score
 
             # Store confidence in metrics
@@ -493,16 +512,50 @@ async def detect_stakeholders_enhanced(
                 confidence_score
             )
 
+            logger.info(
+                f"✅ V3 Enhancement Service generated {primary_count} primary, {secondary_count} secondary stakeholders"
+            )
+
         # Store in cache
         service._store_in_cache(cache_key, stakeholder_result)
 
         logger.debug(
-            f"Stakeholder detection completed: {len(stakeholder_result.get('stakeholders', [])) if stakeholder_result else 0} stakeholders found"
+            f"V3 Enhanced stakeholder detection completed: {len(stakeholder_result.get('primary', [])) + len(stakeholder_result.get('secondary', [])) if stakeholder_result else 0} total stakeholders found"
         )
         return stakeholder_result
 
     except Exception as e:
-        logger.error(f"Stakeholder detection failed: {e}")
+        logger.error(f"V3 Enhancement Service stakeholder detection failed: {e}")
+        logger.warning("Falling back to legacy stakeholder detection")
+
+        # Fallback to legacy detection if V3 Enhancement Service fails
+        try:
+            from backend.services.llm import LLMServiceFactory
+
+            llm_service = LLMServiceFactory.create("enhanced_gemini")
+            legacy_result = await _detect_stakeholders_with_llm(
+                llm_service, conversation_context, context_analysis, industry_analysis
+            )
+
+            # Convert legacy format to V3 format
+            if legacy_result and "stakeholders" in legacy_result:
+                stakeholders = legacy_result["stakeholders"]
+                converted_result = {
+                    "primary": stakeholders.get("primary", []),
+                    "secondary": stakeholders.get("secondary", []),
+                    "confidence": legacy_result.get("confidence", 0.5),
+                    "fallback_used": True,
+                }
+                logger.info(
+                    f"✅ Legacy fallback converted to V3 format: {len(converted_result.get('primary', []))} primary, {len(converted_result.get('secondary', []))} secondary stakeholders"
+                )
+                return converted_result
+
+        except Exception as fallback_error:
+            logger.error(
+                f"Legacy stakeholder detection fallback also failed: {fallback_error}"
+            )
+
         return None
 
 
@@ -511,18 +564,19 @@ async def analyze_conversation_flow(
     messages: List[Dict[str, Any]],
     context_analysis: Dict[str, Any],
     intent_analysis: Dict[str, Any],
+    latest_input: str = "",
 ) -> Dict[str, Any]:
     """Analyze conversation flow and determine next steps."""
 
     if not service.config.enable_conversation_flow:
-        return {}
+        return {"latest_input": latest_input}  # Always include latest_input
 
     try:
         # Create cache key based on message count and latest intent
         message_count = len(messages)
         latest_intent = intent_analysis.get("intent", "unknown")
         context_hash = hashlib.md5(
-            f"flow:{message_count}:{latest_intent}".encode()
+            f"flow:{message_count}:{latest_intent}:{latest_input}".encode()
         ).hexdigest()
         cache_key = service._get_cache_key("conversation_flow", context_hash)
 
@@ -530,6 +584,8 @@ async def analyze_conversation_flow(
         cached_result = service._get_from_cache(cache_key)
         if cached_result:
             logger.debug("Conversation flow cache hit")
+            # Ensure latest_input is always included
+            cached_result["latest_input"] = latest_input
             return cached_result
 
         # Analyze conversation progression
@@ -550,6 +606,7 @@ async def analyze_conversation_flow(
                 [msg for msg in messages if msg.get("role") == "user"]
             ),
             "engagement_level": _assess_engagement_level(messages),
+            "latest_input": latest_input,  # CRITICAL: Include latest_input for keyword detection
         }
 
         # Add confidence scoring
@@ -948,10 +1005,12 @@ Conversation context:
 Latest input: "{latest_input}"
 
 Determine the user's intent and return ONLY a JSON object with:
-- intent: Primary intent (clarify_business, define_customers, validate_problem, generate_questions, other)
+- intent: Primary intent (clarify_business, define_customers, validate_problem, generate_questions, questionnaire, other)
 - confidence: Confidence level (0.0-1.0)
 - next_step: What should happen next (ask_business_idea, ask_target_customer, ask_problem, generate_questions)
 - readiness_score: How ready are they for question generation? (0.0-1.0)
+
+IMPORTANT: If the user says anything like "questionnaire", "questions", "generate questions", "lets go to questionnaire", "create questions", "interview questions", or similar, set intent to "generate_questions" or "questionnaire".
 
 Return only valid JSON, no other text."""
 

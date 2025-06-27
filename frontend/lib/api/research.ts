@@ -1,13 +1,14 @@
 /**
- * Research API Client - V3 Rebuilt
+ * Research API Client - Modular V1+V3 Architecture
  * Handles all customer research related API calls with local storage for anonymous users
  *
- * MIGRATED TO V3 REBUILT: Now uses /api/research/v3-rebuilt/chat endpoint
+ * USING MODULAR ARCHITECTURE: /api/research/chat endpoint
  * - V1 core reliability with V3 enhancements
- * - UX research methodology with "All of the above" and "I don't know" options
- * - Industry classification and enhanced context
+ * - Clean modular architecture (no more dinosaur files!)
+ * - Better conversation flow and UX research methodology
  * - Circuit breaker pattern for enhancement reliability
  * - Automatic fallback to V1 behavior if enhancements fail
+ * - Natural conversation progression to questions
  */
 
 import { RESEARCH_CONFIG, validateMessage, sanitizeInput } from '@/lib/config/research-config';
@@ -63,7 +64,7 @@ export interface ChatRequest {
   context?: ResearchContext;
   session_id?: string;
   user_id?: string;
-  // V3 Rebuilt options
+  // Modular V1+V3 options
   enable_enhanced_analysis?: boolean;
   enable_thinking_process?: boolean;
 }
@@ -226,15 +227,15 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
     input: sanitizedInput,
     session_id: sessionId,
     user_id: anonymousUserId,
-    // V3 Rebuilt uses V1 core with enhancements
+    // V3 Simple with improved conversation flow
     enable_enhanced_analysis: true,
-    enable_thinking_process: false, // Disable for better performance
+    enable_thinking_process: true, // Enable for performance tracking
   };
 
   // Use retry and timeout wrappers
   return await withRetry(async () => {
     return await withTimeout(async () => {
-      const response = await fetch(`${API_BASE_URL}/api/research/v3-rebuilt/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/research/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -303,13 +304,13 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
 
 /**
  * Generate research questions based on context
- * Updated to use V3 Rebuilt endpoint for enhanced reliability
+ * Updated to use modular architecture for optimized performance
  */
 export async function generateResearchQuestions(
   context: ResearchContext,
   conversationHistory: Message[]
 ): Promise<GeneratedQuestions> {
-  const response = await fetch(`${API_BASE_URL}/api/research/v3-rebuilt/questions`, {
+  const response = await fetch(`${API_BASE_URL}/api/research/questions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -10,7 +10,7 @@ import { ContextPanel } from './ContextPanel';
 import { NextStepsChatMessage } from './NextStepsChatMessage';
 
 import { ComprehensiveQuestionsComponent } from './ComprehensiveQuestionsComponent';
-import { FormattedQuestionsComponent } from './FormattedQuestionsComponent';
+
 import { EnhancedMultiStakeholderComponent } from './EnhancedMultiStakeholderComponent';
 import { StakeholderQuestionsComponent } from './StakeholderQuestionsComponent';
 import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
@@ -34,47 +34,7 @@ import {
   loadSession
 } from './chat-handlers';
 
-// Conversion function for ResearchQuestions to FormattedQuestionsComponent format
-const convertResearchQuestionsToArray = (questions: any): Array<{id: string, text: string, category: 'discovery' | 'validation' | 'follow_up'}> => {
-  if (!questions) return [];
-
-  const result: Array<{id: string, text: string, category: 'discovery' | 'validation' | 'follow_up'}> = [];
-
-  // Convert problemDiscovery questions
-  if (questions.problemDiscovery && Array.isArray(questions.problemDiscovery)) {
-    questions.problemDiscovery.forEach((text: string, index: number) => {
-      result.push({
-        id: `discovery_${index}`,
-        text,
-        category: 'discovery' as const
-      });
-    });
-  }
-
-  // Convert solutionValidation questions
-  if (questions.solutionValidation && Array.isArray(questions.solutionValidation)) {
-    questions.solutionValidation.forEach((text: string, index: number) => {
-      result.push({
-        id: `validation_${index}`,
-        text,
-        category: 'validation' as const
-      });
-    });
-  }
-
-  // Convert followUp questions
-  if (questions.followUp && Array.isArray(questions.followUp)) {
-    questions.followUp.forEach((text: string, index: number) => {
-      result.push({
-        id: `follow_up_${index}`,
-        text,
-        category: 'follow_up' as const
-      });
-    });
-  }
-
-  return result;
-};
+// Legacy conversion function removed - V3 Enhanced format only
 
 export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfaceProps) {
   const {
@@ -384,7 +344,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                         message.content === 'MULTI_STAKEHOLDER_COMPONENT' ||
                         message.content === 'NEXT_STEPS_COMPONENT' ||
                         message.content === 'STAKEHOLDER_ALERT_COMPONENT' ||
-                        message.content === 'FORMATTED_QUESTIONS_COMPONENT' ||
+
                         message.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' ||
                         message.content === 'ENHANCED_MULTISTAKEHOLDER_COMPONENT' ||
                         message.content === 'STAKEHOLDER_QUESTIONS_COMPONENT'
@@ -397,32 +357,44 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                       }`}
                     >
                       {/* Component rendering logic */}
-                      {message.content === 'FORMATTED_QUESTIONS_COMPONENT' ? (
-                        <FormattedQuestionsComponent
-                          questions={convertResearchQuestionsToArray(message.metadata?.questions)}
-                          onExport={() => exportQuestions('txt')}
-                          onContinue={continueToAnalysis}
-                        />
-                      ) : message.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' ? (
-                        <ComprehensiveQuestionsComponent
-                          primaryStakeholders={
-                            message.metadata?.comprehensiveQuestions?.primaryStakeholders ||
-                            message.questions?.stakeholders?.primary ||
-                            []
-                          }
-                          secondaryStakeholders={
-                            message.metadata?.comprehensiveQuestions?.secondaryStakeholders ||
-                            message.questions?.stakeholders?.secondary ||
-                            []
-                          }
-                          timeEstimate={normalizeTimeEstimate(
-                            message.metadata?.comprehensiveQuestions?.timeEstimate ||
-                            message.questions?.estimatedTime
-                          )}
-                          businessContext={message.metadata?.businessContext}
-                          onExport={() => exportQuestions('txt')}
-                          onContinue={continueToAnalysis}
-                        />
+                      {message.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' ? (
+                        (() => {
+                          // DEBUG: Log what data is actually available in the message
+                          console.log('🔧 ChatInterface COMPREHENSIVE_QUESTIONS_COMPONENT rendering:', {
+                            messageId: message.id,
+                            hasMetadata: !!message.metadata,
+                            hasComprehensiveQuestions: !!message.metadata?.comprehensiveQuestions,
+                            metadataKeys: message.metadata ? Object.keys(message.metadata) : [],
+                            comprehensiveQuestionsKeys: message.metadata?.comprehensiveQuestions ? Object.keys(message.metadata.comprehensiveQuestions) : [],
+                            primaryStakeholdersCount: message.metadata?.comprehensiveQuestions?.primaryStakeholders?.length || 0,
+                            secondaryStakeholdersCount: message.metadata?.comprehensiveQuestions?.secondaryStakeholders?.length || 0,
+                            timeEstimate: message.metadata?.comprehensiveQuestions?.timeEstimate,
+                            fallbackPrimary: message.questions?.stakeholders?.primary?.length || 0,
+                            fallbackSecondary: message.questions?.stakeholders?.secondary?.length || 0
+                          });
+
+                          return (
+                            <ComprehensiveQuestionsComponent
+                              primaryStakeholders={
+                                message.metadata?.comprehensiveQuestions?.primaryStakeholders ||
+                                message.questions?.stakeholders?.primary ||
+                                []
+                              }
+                              secondaryStakeholders={
+                                message.metadata?.comprehensiveQuestions?.secondaryStakeholders ||
+                                message.questions?.stakeholders?.secondary ||
+                                []
+                              }
+                              timeEstimate={normalizeTimeEstimate(
+                                message.metadata?.comprehensiveQuestions?.timeEstimate ||
+                                message.questions?.estimatedTime
+                              )}
+                              businessContext={message.metadata?.businessContext}
+                              onExport={() => exportQuestions('txt')}
+                              onContinue={continueToAnalysis}
+                            />
+                          );
+                        })()
                       ) : message.content === 'ENHANCED_MULTISTAKEHOLDER_COMPONENT' ? (
                         <EnhancedMultiStakeholderComponent
                           industry={message.metadata?.industry}

@@ -191,232 +191,190 @@ const processGeneratedQuestions = async (
     questionsKeys: data.questions ? Object.keys(data.questions) : []
   });
 
-  // Check if we have comprehensive questions (V3 enhanced format)
-  // Backend returns: { questions: { stakeholders: { primary: [...], secondary: [...] }, estimatedTime: {...} } }
-  if ((data.questions as any).stakeholders || (data.questions as any).estimatedTime) {
-    // V3 Enhanced comprehensive questions format - fix data structure mapping
-    const stakeholders = (data.questions as any).stakeholders || {};
-    const timeEstimate = (data.questions as any).estimatedTime || {};
+  // V3 ENHANCED FORMAT ONLY - Process stakeholder-based questions
+  // Backend returns: { questions: { primaryStakeholders: [...], secondaryStakeholders: [...], timeEstimate: {...} } }
 
-    // FIXED: Map stakeholder data correctly to include questions for each stakeholder
-    const comprehensiveQuestions = {
-      primaryStakeholders: (stakeholders.primary || []).map((stakeholder: any) => ({
-        name: stakeholder.name || 'Primary Stakeholder',
-        description: stakeholder.description || 'Primary stakeholder description',
-        questions: {
-          problemDiscovery: stakeholder.questions?.problemDiscovery || [],
-          solutionValidation: stakeholder.questions?.solutionValidation || [],
-          followUp: stakeholder.questions?.followUp || []
-        }
-      })),
-      secondaryStakeholders: (stakeholders.secondary || []).map((stakeholder: any) => ({
-        name: stakeholder.name || 'Secondary Stakeholder',
-        description: stakeholder.description || 'Secondary stakeholder description',
-        questions: {
-          problemDiscovery: stakeholder.questions?.problemDiscovery || [],
-          solutionValidation: stakeholder.questions?.solutionValidation || [],
-          followUp: stakeholder.questions?.followUp || []
-        }
-      })),
+  console.log('🔧 V3 Enhanced Processing: Backend response received');
+
+  const questionsData = data.questions as any;
+
+  console.log('🔧 V3 Enhanced Processing: Stakeholder data analysis:', {
+    hasPrimaryStakeholders: !!questionsData?.primaryStakeholders,
+    hasSecondaryStakeholders: !!questionsData?.secondaryStakeholders,
+    hasTimeEstimate: !!questionsData?.timeEstimate,
+    hasLegacyStakeholders: !!questionsData?.stakeholders,
+    hasEstimatedTime: !!questionsData?.estimatedTime,
+    primaryStakeholdersLength: questionsData?.primaryStakeholders?.length || 0,
+    secondaryStakeholdersLength: questionsData?.secondaryStakeholders?.length || 0,
+    legacyStakeholdersStructure: questionsData?.stakeholders ? Object.keys(questionsData.stakeholders) : []
+  });
+
+  // Convert legacy format to V3 format if needed
+  let processedQuestionsData = questionsData;
+
+  if (!questionsData?.primaryStakeholders && !questionsData?.secondaryStakeholders && questionsData?.stakeholders) {
+    console.log('🔧 V3 Enhanced Processing: Converting legacy format to V3 format');
+
+    // Convert legacy stakeholders format to V3 format
+    const stakeholders = questionsData.stakeholders;
+    processedQuestionsData = {
+      primaryStakeholders: stakeholders.primary || [],
+      secondaryStakeholders: stakeholders.secondary || [],
       timeEstimate: {
-        totalQuestions: timeEstimate.totalQuestions || 0,
-        estimatedMinutes: timeEstimate.min && timeEstimate.max ? `${timeEstimate.min}-${timeEstimate.max}` : "0-0",
+        totalQuestions: (() => {
+          // Calculate total questions from all stakeholders
+          let total = 0;
+          if (stakeholders.primary) {
+            stakeholders.primary.forEach((stakeholder: any) => {
+              if (stakeholder.questions) {
+                total += (stakeholder.questions.problemDiscovery?.length || 0) +
+                        (stakeholder.questions.solutionValidation?.length || 0) +
+                        (stakeholder.questions.followUp?.length || 0);
+              }
+            });
+          }
+          if (stakeholders.secondary) {
+            stakeholders.secondary.forEach((stakeholder: any) => {
+              if (stakeholder.questions) {
+                total += (stakeholder.questions.problemDiscovery?.length || 0) +
+                        (stakeholder.questions.solutionValidation?.length || 0) +
+                        (stakeholder.questions.followUp?.length || 0);
+              }
+            });
+          }
+          return total;
+        })(),
+        estimatedMinutes: questionsData.estimatedTime || "0-0",
         breakdown: {
-          baseTime: timeEstimate.min || 0,
-          withBuffer: timeEstimate.max || 0,
-          perQuestion: 2.5
+          primary: stakeholders.primary?.length || 0,
+          secondary: stakeholders.secondary?.length || 0,
+          perQuestion: 3
         }
       }
     };
 
-    console.log('🔧 DUPLICATE DEBUG: Adding COMPREHENSIVE_QUESTIONS_COMPONENT with data:', {
-      primaryStakeholdersCount: comprehensiveQuestions.primaryStakeholders.length,
-      secondaryStakeholdersCount: comprehensiveQuestions.secondaryStakeholders.length,
-      totalQuestions: comprehensiveQuestions.timeEstimate.totalQuestions,
-      estimatedMinutes: comprehensiveQuestions.timeEstimate.estimatedMinutes
+    console.log('🔧 V3 Enhanced Processing: Converted to V3 format:', {
+      primaryStakeholders: processedQuestionsData.primaryStakeholders.length,
+      secondaryStakeholders: processedQuestionsData.secondaryStakeholders.length,
+      totalQuestions: processedQuestionsData.timeEstimate.totalQuestions
     });
-
-    // Log whether this has actual questions or not
-    if (comprehensiveQuestions.timeEstimate.totalQuestions === 0) {
-      console.log('🔧 DUPLICATE DEBUG: This is an empty component (totalQuestions=0)');
-    } else {
-      console.log('🔧 DUPLICATE DEBUG: This has actual questions (totalQuestions=' + comprehensiveQuestions.timeEstimate.totalQuestions + ')');
-    }
-
-    // Add comprehensive questions component
-    const messageId = Date.now().toString() + '_comprehensive_questions';
-    const comprehensiveQuestionsMessage: Message = {
-      id: messageId,
-      content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
-      role: 'assistant',
-      timestamp: new Date(),
-      metadata: {
-        type: 'component',
-        comprehensiveQuestions,
-        businessContext: (data as any).context_analysis?.business_idea || context.businessIdea
-      }
-    };
-
-    console.log('🔧 DUPLICATE DEBUG: Adding message with ID:', messageId);
-    actions.setMessages(prev => {
-      console.log('🔧 DUPLICATE DEBUG: Current messages before adding:', prev.map(m => ({ id: m.id, content: m.content })));
-
-      // Check if we already have a COMPREHENSIVE_QUESTIONS_COMPONENT with actual questions
-      const existingComprehensiveComponent = prev.find(m => {
-        if (m.content !== 'COMPREHENSIVE_QUESTIONS_COMPONENT') return false;
-        const existingQuestions = m.metadata?.comprehensiveQuestions?.timeEstimate?.totalQuestions || 0;
-        return existingQuestions > 0; // Only consider it existing if it has actual questions
-      });
-
-      if (existingComprehensiveComponent) {
-        console.log('🔧 DUPLICATE DEBUG: COMPREHENSIVE_QUESTIONS_COMPONENT with actual questions already exists, skipping. Existing ID:', existingComprehensiveComponent.id);
-        return prev; // Return unchanged array
-      }
-
-      // If we have an empty component and this new one has questions, replace the empty one
-      const emptyComprehensiveComponent = prev.find(m => {
-        if (m.content !== 'COMPREHENSIVE_QUESTIONS_COMPONENT') return false;
-        const existingQuestions = m.metadata?.comprehensiveQuestions?.timeEstimate?.totalQuestions || 0;
-        return existingQuestions === 0; // Find empty component
-      });
-
-      if (emptyComprehensiveComponent && comprehensiveQuestions.timeEstimate.totalQuestions > 0) {
-        console.log('🔧 DUPLICATE DEBUG: Replacing empty component with actual questions. Empty ID:', emptyComprehensiveComponent.id);
-        // Remove the empty component and add the new one
-        const filteredMessages = prev.filter(m => m.id !== emptyComprehensiveComponent.id);
-        return [...filteredMessages, comprehensiveQuestionsMessage];
-      }
-
-      const newMessages = [...prev, comprehensiveQuestionsMessage];
-      console.log('🔧 DUPLICATE DEBUG: New messages after adding:', newMessages.map(m => ({ id: m.id, content: m.content })));
-      return newMessages;
-    });
-
-    // Update local questions state for backward compatibility
-    const allQuestions = convertToSimpleQuestions(comprehensiveQuestions);
-
-    actions.setLocalQuestions(allQuestions);
-    updateQuestions(allQuestions);
-    updateContext({ questionsGenerated: true });
-
-    // Always add next steps for comprehensive questions
-    const nextStepsMessage: Message = {
-      id: Date.now().toString() + '_nextsteps',
-      content: 'NEXT_STEPS_COMPONENT',
-      role: 'assistant',
-      timestamp: new Date(),
-      metadata: {
-        type: 'component',
-        timeEstimate: comprehensiveQuestions.timeEstimate
-      }
-    };
-
-    actions.setMessages(prev => [...prev, nextStepsMessage]);
-
-    if (onComplete) {
-      onComplete(allQuestions);
-    }
-
-    return; // Exit early to avoid duplicate processing
-
   } else {
-    // Legacy format (V1/V2) - fallback to old component
-    const apiQuestions = {
-      problemDiscovery: data.questions.problemDiscovery || [],
-      solutionValidation: data.questions.solutionValidation || [],
-      followUp: data.questions.followUp || []
-    };
-
-    // Update the questions state directly
-    actions.setLocalQuestions(apiQuestions);
-    updateQuestions(apiQuestions); // Also update the useResearch hook
-    updateContext({ questionsGenerated: true });
-
-    // Add formatted questions component (legacy)
-    const questionsMessage: Message = {
-      id: Date.now().toString() + '_questions',
-      content: 'FORMATTED_QUESTIONS_COMPONENT',
-      role: 'assistant',
-      timestamp: new Date(),
-      metadata: { type: 'component', questions: apiQuestions }
-    };
-
-    actions.setMessages(prev => [...prev, questionsMessage]);
-
-    // Process stakeholder detection for legacy format
-    await processLegacyStakeholders(data, actions, updateContext, context);
-
-    // Always add next steps for legacy format
-    // Calculate time estimate for legacy format
-    const totalQuestions = apiQuestions.problemDiscovery.length + apiQuestions.solutionValidation.length + apiQuestions.followUp.length;
-    const legacyTimeEstimate = {
-      totalQuestions,
-      estimatedMinutes: `${totalQuestions * 2}-${totalQuestions * 4}`,
-      breakdown: {
-        baseTime: totalQuestions * 2,
-        withBuffer: totalQuestions * 4,
-        perQuestion: 3.0
-      }
-    };
-
-    const nextStepsMessage: Message = {
-      id: Date.now().toString() + '_nextsteps',
-      content: 'NEXT_STEPS_COMPONENT',
-      role: 'assistant',
-      timestamp: new Date(),
-      metadata: {
-        type: 'component',
-        timeEstimate: legacyTimeEstimate
-      }
-    };
-
-    actions.setMessages(prev => [...prev, nextStepsMessage]);
-
-    if (onComplete) {
-      onComplete(apiQuestions);
-    }
+    console.log('🔧 V3 Enhanced Processing: Using native V3 format');
   }
+
+  // Process V3 enhanced stakeholder-based questions (using converted data if needed)
+  const comprehensiveQuestions = {
+    primaryStakeholders: (processedQuestionsData.primaryStakeholders || []).map((stakeholder: any) => ({
+      name: stakeholder.name || 'Primary Stakeholder',
+      description: stakeholder.description || 'Primary stakeholder description',
+      questions: {
+        problemDiscovery: stakeholder.questions?.problemDiscovery || [],
+        solutionValidation: stakeholder.questions?.solutionValidation || [],
+        followUp: stakeholder.questions?.followUp || []
+      }
+    })),
+    secondaryStakeholders: (processedQuestionsData.secondaryStakeholders || []).map((stakeholder: any) => ({
+      name: stakeholder.name || 'Secondary Stakeholder',
+      description: stakeholder.description || 'Secondary stakeholder description',
+      questions: {
+        problemDiscovery: stakeholder.questions?.problemDiscovery || [],
+        solutionValidation: stakeholder.questions?.solutionValidation || [],
+        followUp: stakeholder.questions?.followUp || []
+      }
+    })),
+    timeEstimate: {
+      totalQuestions: processedQuestionsData.timeEstimate?.totalQuestions || 0,
+      estimatedMinutes: processedQuestionsData.timeEstimate?.estimatedMinutes || "0-0",
+      breakdown: processedQuestionsData.timeEstimate?.breakdown || {
+        primary: 0,
+        secondary: 0,
+        perQuestion: 3
+      }
+    }
+  };
+
+  console.log('🔧 V3 Enhanced Processing: Generated comprehensive questions:', {
+    primaryStakeholders: comprehensiveQuestions.primaryStakeholders.length,
+    secondaryStakeholders: comprehensiveQuestions.secondaryStakeholders.length,
+    totalQuestions: comprehensiveQuestions.timeEstimate.totalQuestions,
+    estimatedMinutes: comprehensiveQuestions.timeEstimate.estimatedMinutes
+  });
+
+  // Add comprehensive questions component
+  const messageId = Date.now().toString() + '_comprehensive_questions';
+  const comprehensiveQuestionsMessage: Message = {
+    id: messageId,
+    content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
+    role: 'assistant',
+    timestamp: new Date(),
+    metadata: {
+      type: 'component',
+      comprehensiveQuestions,
+      businessContext: (data as any).context_analysis?.business_idea || context.businessIdea
+    }
+  };
+
+  console.log('🔧 V3 Enhanced Processing: Adding comprehensive questions component');
+
+  actions.setMessages(prev => {
+    // Check if we already have a COMPREHENSIVE_QUESTIONS_COMPONENT with actual questions
+    const existingComprehensiveComponent = prev.find(m => {
+      if (m.content !== 'COMPREHENSIVE_QUESTIONS_COMPONENT') return false;
+      const existingQuestions = m.metadata?.comprehensiveQuestions?.timeEstimate?.totalQuestions || 0;
+      return existingQuestions > 0; // Only consider it existing if it has actual questions
+    });
+
+    if (existingComprehensiveComponent) {
+      console.log('🔧 V3 Enhanced Processing: Questions component already exists, skipping');
+      return prev; // Return unchanged array
+    }
+
+    // If we have an empty component and this new one has questions, replace the empty one
+    const emptyComprehensiveComponent = prev.find(m => {
+      if (m.content !== 'COMPREHENSIVE_QUESTIONS_COMPONENT') return false;
+      const existingQuestions = m.metadata?.comprehensiveQuestions?.timeEstimate?.totalQuestions || 0;
+      return existingQuestions === 0; // Find empty component
+    });
+
+    if (emptyComprehensiveComponent && comprehensiveQuestions.timeEstimate.totalQuestions > 0) {
+      console.log('🔧 V3 Enhanced Processing: Replacing empty component with actual questions');
+      // Remove the empty component and add the new one
+      const filteredMessages = prev.filter(m => m.id !== emptyComprehensiveComponent.id);
+      return [...filteredMessages, comprehensiveQuestionsMessage];
+    }
+
+    return [...prev, comprehensiveQuestionsMessage];
+  });
+
+  // Update local questions state for backward compatibility
+  const allQuestions = convertToSimpleQuestions(comprehensiveQuestions);
+
+  actions.setLocalQuestions(allQuestions);
+  updateQuestions(allQuestions);
+  updateContext({ questionsGenerated: true });
+
+  // Always add next steps for comprehensive questions
+  const nextStepsMessage: Message = {
+    id: Date.now().toString() + '_nextsteps',
+    content: 'NEXT_STEPS_COMPONENT',
+    role: 'assistant',
+    timestamp: new Date(),
+    metadata: {
+      type: 'component',
+      timeEstimate: comprehensiveQuestions.timeEstimate
+    }
+  };
+
+  actions.setMessages(prev => [...prev, nextStepsMessage]);
+
+  if (onComplete) {
+    onComplete(allQuestions);
+  }
+
+  return; // V3 Enhanced format processing complete
 };
 
-/**
- * Process stakeholder detection for legacy question format
- */
-const processLegacyStakeholders = async (
-  data: ApiResponse,
-  actions: ChatActions,
-  updateContext: (updates: any) => void,
-  context: any
-) => {
-  // Use LLM-detected stakeholders from API response if available, otherwise fallback to local detection
-  let stakeholderData = null;
-  if (data.metadata?.extracted_context?.detected_stakeholders) {
-    stakeholderData = data.metadata.extracted_context.detected_stakeholders;
-    console.log('LLM-detected stakeholders from API:', stakeholderData);
-  } else {
-    console.log('No LLM stakeholders in API response, using fallback detection');
-    // Fallback to local detection would be handled by the component
-  }
-
-  if (stakeholderData) {
-    // Update context with stakeholder information for the right panel
-    updateContext({
-      multiStakeholderConsidered: true,
-      multiStakeholderDetected: true,
-      detectedStakeholders: stakeholderData
-    });
-
-    // Add enhanced multi-stakeholder component if detected (only in chat, not in right panel)
-    const enhancedMultiStakeholderMessage: Message = {
-      id: Date.now().toString() + '_enhanced_multistakeholder',
-      content: 'ENHANCED_MULTISTAKEHOLDER_COMPONENT',
-      role: 'assistant',
-      timestamp: new Date(),
-      metadata: { type: 'component', stakeholders: stakeholderData }
-    };
-
-    actions.setMessages(prev => [...prev, enhancedMultiStakeholderMessage]);
-  }
-};
+// Legacy stakeholder processing removed - V3 Enhanced format only
 
 /**
  * Handle suggestion click
