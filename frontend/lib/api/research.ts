@@ -222,25 +222,26 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
   const anonymousUserId = getOrCreateAnonymousUserId();
   const sessionId = request.session_id || `local_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-  const requestWithAnonymousUser = {
-    ...request,
+  // Convert to Conversation Routines format
+  const conversationRoutineRequest = {
     input: sanitizedInput,
+    messages: request.messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    })),
     session_id: sessionId,
     user_id: anonymousUserId,
-    // V3 Simple with improved conversation flow
-    enable_enhanced_analysis: true,
-    enable_thinking_process: true, // Enable for performance tracking
   };
 
   // Use retry and timeout wrappers
   return await withRetry(async () => {
     return await withTimeout(async () => {
-      const response = await fetch(`${API_BASE_URL}/api/research/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/research/conversation-routines/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestWithAnonymousUser),
+        body: JSON.stringify(conversationRoutineRequest),
       });
 
       if (!response.ok) {
@@ -279,9 +280,9 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
           id: Date.now(),
           session_id: sessionId,
           user_id: anonymousUserId,
-          business_idea: result.metadata?.extracted_context?.business_idea || currentSession?.business_idea,
-          target_customer: result.metadata?.extracted_context?.target_customer || currentSession?.target_customer,
-          problem: result.metadata?.extracted_context?.problem || currentSession?.problem,
+          business_idea: result.context?.business_idea || result.metadata?.extracted_context?.business_idea || currentSession?.business_idea,
+          target_customer: result.context?.target_customer || result.metadata?.extracted_context?.target_customer || currentSession?.target_customer,
+          problem: result.context?.problem || result.metadata?.extracted_context?.problem || currentSession?.problem,
           industry: result.metadata?.extracted_context?.industry || currentSession?.industry || 'general',
           stage: result.metadata?.extracted_context?.stage || currentSession?.stage || 'initial',
           status: 'active',
@@ -297,7 +298,36 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
         LocalResearchStorage.setCurrentSession(session);
       }
 
-      return result;
+      // Convert Conversation Routines response to expected format
+      const convertedResult: ChatResponse = {
+        content: result.content,
+        metadata: {
+          ...result.metadata,
+          suggestions: result.suggestions,
+          conversation_routine: true,
+          context_completeness: result.context?.get_completeness_score ? result.context.get_completeness_score() :
+            (result.context?.business_idea && result.context?.target_customer && result.context?.problem ? 1.0 :
+             result.context?.business_idea && result.context?.target_customer ? 0.7 :
+             result.context?.business_idea ? 0.4 : 0.0),
+          exchange_count: result.context?.exchange_count || 0,
+          fatigue_signals: result.context?.user_fatigue_signals || [],
+          // Add extracted context for frontend compatibility
+          extracted_context: {
+            business_idea: result.context?.business_idea,
+            target_customer: result.context?.target_customer,
+            problem: result.context?.problem,
+            questions_generated: result.should_generate_questions || !!result.questions
+          }
+        },
+        questions: result.questions,
+        session_id: result.session_id,
+        // Map thinking process if available
+        thinking_process: result.metadata?.thinking_process || [],
+        performance_metrics: result.metadata?.performance_metrics || {},
+        api_version: "conversation-routines"
+      };
+
+      return convertedResult;
     });
   });
 }

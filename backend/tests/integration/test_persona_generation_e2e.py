@@ -145,7 +145,7 @@ async def test_gemini_direct():
         generation_config = types.GenerateContentConfig(**config_fields)
 
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash-preview-04-17",
+            model="gemini-2.5-flash",
             contents=contents,
             config=generation_config,
         )

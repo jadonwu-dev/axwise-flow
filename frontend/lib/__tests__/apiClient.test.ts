@@ -195,7 +195,7 @@ describe('API Client', () => {
       });
 
       // Call the method with Gemini provider
-      const result = await apiClient.analyzeData(123, 'gemini', 'models/gemini-2.5-flash-preview-04-17', true);
+      const result = await apiClient.analyzeData(123, 'gemini', 'models/gemini-2.5-flash', true);
 
       // Verify the result
       expect(result).toEqual(expect.objectContaining({

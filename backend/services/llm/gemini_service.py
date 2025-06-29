@@ -1848,3 +1848,21 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
             raise LLMServiceError(
                 f"An unexpected error occurred in GeminiService for task '{task}': {e}"
             ) from e
+
+    def get_model_name(self) -> str:
+        """Get the current model name"""
+        return self.default_model_name
+
+    def get_pydantic_ai_model(self) -> str:
+        """Get PydanticAI compatible model string for Google Gemini"""
+        # Map our internal model names to PydanticAI format
+        # Based on PydanticAI docs: https://ai.pydantic.dev/models/google/
+        model_mapping = {
+            "gemini-2.5-flash": "gemini-2.0-flash-exp",
+            "gemini-2.5-flash-preview-05-20": "gemini-2.0-flash-exp",
+            "gemini-1.5-flash": "gemini-1.5-flash",
+            "gemini-1.5-pro": "gemini-1.5-pro",
+        }
+
+        # Default to gemini-1.5-flash if model not found in mapping
+        return model_mapping.get(self.default_model_name, "gemini-1.5-flash")

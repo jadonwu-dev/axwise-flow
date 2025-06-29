@@ -1,0 +1,567 @@
+"""
+Conversation Routines Service
+Implements the 2025 Conversation Routines framework for customer research
+"""
+
+import logging
+import json
+import re
+from typing import Dict, Any, List
+from pydantic_ai import Agent
+from pydantic_ai.tools import Tool
+
+from .models import (
+    ConversationRoutineRequest,
+    ConversationRoutineResponse,
+    ConversationContext,
+    ConversationMessage,
+    extract_context_from_messages,
+)
+from .conversation_routine_prompt import get_conversation_routine_prompt
+from ..v3_enhancements.stakeholder_detector import StakeholderDetector
+from backend.services.llm.gemini_service import GeminiService
+
+logger = logging.getLogger(__name__)
+
+
+class ConversationRoutineService:
+    """
+    Conversation Routines implementation for customer research
+    Uses single LLM call with embedded workflow logic
+    """
+
+    def __init__(self):
+        # Initialize GeminiService with default config
+        llm_config = {
+            "model": "gemini-2.5-flash",
+            "temperature": 0.7,
+            "max_tokens": 16000,
+        }
+        self.llm_service = GeminiService(llm_config)
+        self.stakeholder_detector = StakeholderDetector()
+        self.agent = self._create_agent()
+
+    def _create_agent(self) -> Agent:
+        """Create PydanticAI agent with conversation routine prompt and tools"""
+
+        @Tool
+        async def generate_stakeholder_questions(
+            business_idea: str, target_customer: str, problem: str
+        ) -> Dict[str, Any]:
+            """Generate comprehensive stakeholder-based research questions"""
+            try:
+                logger.info(
+                    f"🎯 Generating stakeholder questions for: {business_idea[:50]}..."
+                )
+
+                # Use existing stakeholder detector
+                context_analysis = {
+                    "business_idea": business_idea,
+                    "target_customer": target_customer,
+                    "problem": problem,
+                }
+                stakeholder_data = await self.stakeholder_detector.generate_dynamic_stakeholders_with_unique_questions(
+                    self.llm_service,
+                    context_analysis=context_analysis,
+                    messages=[],  # Empty for now
+                    business_idea=business_idea,
+                    target_customer=target_customer,
+                    problem=problem,
+                )
+
+                # Calculate time estimates
+                time_estimates = (
+                    self.stakeholder_detector.calculate_stakeholder_time_estimates(
+                        stakeholder_data
+                    )
+                )
+
+                # Format for frontend
+                result = {
+                    "stakeholders": stakeholder_data,
+                    "estimatedTime": time_estimates,
+                    "success": True,
+                }
+
+                logger.info(
+                    f"✅ Generated questions for {len(stakeholder_data.get('primary', []))} primary + {len(stakeholder_data.get('secondary', []))} secondary stakeholders"
+                )
+                return result
+
+            except Exception as e:
+                logger.error(f"🔴 Stakeholder question generation failed: {e}")
+                return {"error": str(e), "success": False}
+
+        @Tool
+        async def extract_conversation_context(
+            messages: List[Dict[str, str]],
+        ) -> Dict[str, Any]:
+            """Extract business context from conversation history using LLM"""
+            try:
+                if not messages:
+                    return {
+                        "business_idea": None,
+                        "target_customer": None,
+                        "problem": None,
+                    }
+
+                # Use LLM to extract context
+                conversation_text = "\n".join(
+                    [
+                        f"{msg['role']}: {msg['content']}"
+                        for msg in messages[-10:]  # Last 10 messages for context
+                    ]
+                )
+
+                extraction_prompt = f"""
+                Extract the business context from this conversation:
+
+                {conversation_text}
+
+                Return JSON with:
+                - business_idea: The product/service concept (or null)
+                - target_customer: The primary customer group (or null)
+                - problem: The main problem being solved (or null)
+
+                Only extract what is clearly stated. Use null for missing information.
+                """
+
+                response_data = await self.llm_service.analyze(
+                    text=extraction_prompt,
+                    task="text_generation",
+                    data={"temperature": 0.1, "max_tokens": 500},
+                )
+                response = response_data.get("text", "")
+
+                # Parse JSON response
+                cleaned = response.strip()
+                if cleaned.startswith("```json"):
+                    json_match = re.search(
+                        r"```json\s*\n(.*?)\n```", cleaned, re.DOTALL
+                    )
+                    if json_match:
+                        cleaned = json_match.group(1).strip()
+
+                context_data = json.loads(cleaned)
+                logger.info(f"📋 Extracted context: {context_data}")
+                return context_data
+
+            except Exception as e:
+                logger.error(f"🔴 Context extraction failed: {e}")
+                return {"business_idea": None, "target_customer": None, "problem": None}
+
+        # Create agent with tools
+        agent = Agent(
+            model=self.llm_service.get_pydantic_ai_model(),
+            system_prompt=get_conversation_routine_prompt(),
+            tools=[generate_stakeholder_questions, extract_conversation_context],
+        )
+
+        return agent
+
+    async def _generate_stakeholder_questions_tool(
+        self, business_idea: str, target_customer: str, problem: str
+    ) -> Dict[str, Any]:
+        """Generate comprehensive stakeholder-based research questions"""
+        try:
+            logger.info(
+                f"🎯 Generating stakeholder questions for: {business_idea[:50]}..."
+            )
+
+            # Use existing stakeholder detector
+            context_analysis = {
+                "business_idea": business_idea,
+                "target_customer": target_customer,
+                "problem": problem,
+            }
+            stakeholder_data = await self.stakeholder_detector.generate_dynamic_stakeholders_with_unique_questions(
+                self.llm_service,
+                context_analysis=context_analysis,
+                messages=[],  # Empty for now
+                business_idea=business_idea,
+                target_customer=target_customer,
+                problem=problem,
+            )
+
+            # Calculate time estimates
+            time_estimates = (
+                self.stakeholder_detector.calculate_stakeholder_time_estimates(
+                    stakeholder_data
+                )
+            )
+
+            # Format for frontend
+            result = {
+                "stakeholders": stakeholder_data,
+                "estimatedTime": time_estimates,
+                "success": True,
+            }
+
+            logger.info(
+                f"✅ Generated questions for {len(stakeholder_data.get('primary', []))} primary + {len(stakeholder_data.get('secondary', []))} secondary stakeholders"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"🔴 Stakeholder question generation failed: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _extract_conversation_context_tool(
+        self, messages: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """Extract business context from conversation history using LLM"""
+        try:
+            if not messages:
+                return {"business_idea": None, "target_customer": None, "problem": None}
+
+            # Use LLM to extract context
+            conversation_text = "\n".join(
+                [
+                    f"{msg['role']}: {msg['content']}"
+                    for msg in messages[-10:]  # Last 10 messages for context
+                ]
+            )
+
+            extraction_prompt = f"""
+            Extract the business context from this conversation:
+
+            {conversation_text}
+
+            Return JSON with:
+            - business_idea: The product/service concept (or null)
+            - target_customer: The primary customer group (or null)
+            - problem: The main problem being solved (or null)
+
+            Only extract what is clearly stated. Use null for missing information.
+            """
+
+            response_data = await self.llm_service.analyze(
+                text=extraction_prompt,
+                task="text_generation",
+                data={"temperature": 0.1, "max_tokens": 500},
+            )
+            response = response_data.get("text", "")
+
+            # Parse JSON response
+            cleaned = response.strip()
+            if cleaned.startswith("```json"):
+                json_match = re.search(r"```json\s*\n(.*?)\n```", cleaned, re.DOTALL)
+                if json_match:
+                    cleaned = json_match.group(1).strip()
+
+            context_data = json.loads(cleaned)
+            logger.info(f"📋 Extracted context: {context_data}")
+            return context_data
+
+        except Exception as e:
+            logger.error(f"🔴 Context extraction failed: {e}")
+            return {"business_idea": None, "target_customer": None, "problem": None}
+
+    async def process_conversation(
+        self, request: ConversationRoutineRequest
+    ) -> ConversationRoutineResponse:
+        """
+        Process conversation using Conversation Routines approach
+        Single LLM call with embedded decision logic
+        """
+        try:
+            logger.info(f"🎯 Processing conversation routine: {request.input[:50]}...")
+
+            # Extract context from conversation history
+            # First add conversation history, then current input
+            messages_for_context = [
+                ConversationMessage(role=msg.role, content=msg.content)
+                for msg in request.messages
+            ] + [ConversationMessage(role="user", content=request.input)]
+
+            context = await extract_context_from_messages(
+                messages_for_context, self.llm_service
+            )
+
+            # Debug logging
+            logger.info(
+                f"🔍 Context extracted: business_idea={context.business_idea}, target_customer={context.target_customer}, problem={context.problem}"
+            )
+            logger.info(
+                f"🔍 Exchange count: {context.exchange_count}, completeness: {context.get_completeness_score()}"
+            )
+            logger.info(f"🔍 Fatigue signals: {context.user_fatigue_signals}")
+
+            # Prepare conversation history for agent
+            conversation_history = [
+                {"role": msg.role, "content": msg.content} for msg in request.messages
+            ]
+
+            # Add current user message
+            conversation_history.append({"role": "user", "content": request.input})
+
+            # Create comprehensive prompt with conversation routine + history
+            conversation_text = "\n".join(
+                [f"{msg['role']}: {msg['content']}" for msg in conversation_history]
+            )
+
+            full_prompt = f"""
+{get_conversation_routine_prompt()}
+
+CURRENT CONVERSATION:
+{conversation_text}
+
+CONTEXT ANALYSIS:
+- Exchange count: {context.exchange_count + 1}
+- Business idea: {context.business_idea or 'Not provided'}
+- Target customer: {context.target_customer or 'Not provided'}
+- Problem: {context.problem or 'Not provided'}
+- Context completeness: {context.get_completeness_score():.1f}
+- Should transition: {context.should_transition_to_questions()}
+- Fatigue signals: {context.user_fatigue_signals}
+
+Based on the conversation routine framework and current context, provide your response.
+If you determine that questions should be generated, include "GENERATE_QUESTIONS" in your response.
+"""
+
+            # Single LLM call with embedded decision logic
+            response_data = await self.llm_service.analyze(
+                text=full_prompt,
+                task="text_generation",
+                data={"temperature": 0.7, "max_tokens": 1000},
+            )
+            response_content = response_data.get("text", "")
+
+            # Check if questions should be generated
+            questions_generated = False
+            generated_questions = None
+
+            # Check for validation confirmation signals
+            user_input_lower = request.input.lower().strip()
+            validation_confirmations = [
+                "yes",
+                "that's right",
+                "correct",
+                "that's correct",
+                "exactly",
+                "yes that's right",
+                "yes it is correct",
+                "that's exactly right",
+                "perfect",
+                "absolutely",
+                "yes that's correct",
+            ]
+
+            is_validation_confirmation = any(
+                confirmation in user_input_lower
+                for confirmation in validation_confirmations
+            )
+
+            # Check if we should force question generation based on context completeness
+            should_force_generation = (
+                context.exchange_count >= 4  # Minimum exchanges
+                and context.get_completeness_score() >= 0.6  # Sufficient context
+                and any(
+                    signal in user_input_lower
+                    for signal in [
+                        "i dont know",
+                        "i don't know",
+                        "i dont care",
+                        "i don't care",
+                    ]
+                )
+            )
+
+            if (
+                "GENERATE_QUESTIONS" in response_content
+                or is_validation_confirmation
+                or should_force_generation
+            ):
+                questions_generated = True
+                # Extract context for question generation
+                extracted_context = await self._extract_conversation_context_tool(
+                    conversation_history
+                )
+
+                if (
+                    extracted_context.get("business_idea")
+                    and extracted_context.get("target_customer")
+                    and extracted_context.get("problem")
+                ):
+                    generated_questions = (
+                        await self._generate_stakeholder_questions_tool(
+                            business_idea=extracted_context["business_idea"],
+                            target_customer=extracted_context["target_customer"],
+                            problem=extracted_context["problem"],
+                        )
+                    )
+
+                # Remove the trigger from response if present
+                response_content = response_content.replace(
+                    "GENERATE_QUESTIONS", ""
+                ).strip()
+
+                # If this was a validation confirmation, replace with generation message
+                if is_validation_confirmation and not generated_questions:
+                    response_content = "Perfect! I'm generating your comprehensive research questions now..."
+                elif is_validation_confirmation and generated_questions:
+                    response_content = "Perfect! I've generated your custom research questions based on our conversation."
+                elif should_force_generation and generated_questions:
+                    response_content = "I have enough context about your Legacy API Service for VW account managers. Let me generate targeted research questions to help validate this solution."
+                elif should_force_generation and not generated_questions:
+                    response_content = "Based on our conversation, I'll generate research questions for your Legacy API Service solution."
+
+            # Update context
+            context.exchange_count += 1
+
+            # Generate suggestions based on context
+            suggestions = await self._generate_suggestions(context, response_content)
+
+            response = ConversationRoutineResponse(
+                content=response_content,
+                context=context,
+                should_generate_questions=questions_generated,
+                questions=generated_questions,
+                suggestions=suggestions,
+                metadata={
+                    "conversation_routine": True,
+                    "context_completeness": context.get_completeness_score(),
+                    "exchange_count": context.exchange_count,
+                    "fatigue_signals": context.user_fatigue_signals,
+                },
+                session_id=request.session_id,
+            )
+
+            logger.info(
+                f"✅ Conversation routine completed - Questions generated: {questions_generated}"
+            )
+            return response
+
+        except Exception as e:
+            logger.error(f"🔴 Conversation routine failed: {e}")
+
+            # Fallback response
+            return ConversationRoutineResponse(
+                content="I'd love to learn more about your business idea. Can you tell me what problem you're trying to solve?",
+                context=ConversationContext(),
+                suggestions=[
+                    "Tell me more",
+                    "What industry is this for?",
+                    "Who are your target customers?",
+                ],
+                metadata={"error": str(e), "fallback": True},
+            )
+
+    async def _generate_suggestions(
+        self, context: ConversationContext, response_content: str
+    ) -> List[str]:
+        """Generate contextual quick reply suggestions"""
+
+        # If questions were generated, show completion suggestions
+        if (
+            "research questions" in response_content.lower()
+            or "questionnaire" in response_content.lower()
+        ):
+            return ["Export questions", "Start research", "Modify questions"]
+
+        # If ready for questions, show transition suggestions
+        if context.should_transition_to_questions():
+            return [
+                "Yes, that's correct",
+                "Let me add more details",
+                "Actually, let me clarify",
+            ]
+
+        # Generate contextual suggestions using LLM
+        suggestions = await self._generate_contextual_suggestions(
+            context, response_content
+        )
+        return suggestions[:3]  # Limit to 3 suggestions
+
+    async def _generate_contextual_suggestions(
+        self, context: ConversationContext, response_content: str
+    ) -> List[str]:
+        """Generate contextual quick reply suggestions based on conversation state"""
+        try:
+            # Determine what information is missing and generate appropriate suggestions
+            if not context.business_idea:
+                # Generic business type suggestions
+                return [
+                    "It's a mobile app",
+                    "It's a service business",
+                    "It's a physical product",
+                ]
+
+            elif not context.target_customer:
+                # Generate contextual customer suggestions based on business idea
+                prompt = f"""
+Generate 3 short, specific target customer suggestions for this business: "{context.business_idea}"
+
+Return only a JSON array of 3 strings, each 2-4 words max. Examples:
+["Busy professionals", "Small startups", "Enterprise clients"]
+
+Business: {context.business_idea}
+JSON array:"""
+
+                response_data = await self.llm_service.analyze(
+                    text=prompt,
+                    task="text_generation",
+                    data={"temperature": 0.3, "max_tokens": 100},
+                )
+
+                import json
+                import re
+
+                response_text = response_data.get("text", "")
+                json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
+                if json_match:
+                    suggestions = json.loads(json_match.group())
+                    return suggestions[:3]
+
+            elif not context.problem:
+                # Generate contextual problem suggestions based on business + customer
+                prompt = f"""
+Generate 3 short, specific problem statements for this business and customer:
+
+Business: {context.business_idea}
+Target Customer: {context.target_customer}
+
+Return only a JSON array of 3 strings, each describing a pain point. Examples:
+["Slow data access", "Manual processes", "High costs"]
+
+JSON array:"""
+
+                response_data = await self.llm_service.analyze(
+                    text=prompt,
+                    task="text_generation",
+                    data={"temperature": 0.3, "max_tokens": 100},
+                )
+
+                import json
+                import re
+
+                response_text = response_data.get("text", "")
+                json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
+                if json_match:
+                    suggestions = json.loads(json_match.group())
+                    return suggestions[:3]
+
+            else:
+                # All context gathered - validation stage suggestions
+                return [
+                    "Yes, that's correct",
+                    "Let me add more context",
+                    "Actually, let me clarify",
+                ]
+
+        except Exception as e:
+            logger.warning(f"Failed to generate contextual suggestions: {e}")
+
+        # Fallback to generic suggestions
+        if not context.business_idea:
+            return ["Tell me more", "What industry?", "Who are customers?"]
+        elif not context.target_customer:
+            return ["Businesses", "Consumers", "Professionals"]
+        elif not context.problem:
+            return ["Time consuming", "Too expensive", "Too complex"]
+        else:
+            return [
+                "Yes, that's correct",
+                "Let me add more",
+                "Actually, let me clarify",
+            ]

@@ -160,7 +160,7 @@ class TestConfig:
 
         # LLM configuration for compatibility with different code paths
         self.llm_config = {
-            "model": "gemini-2.5-flash-preview-04-17",
+            "model": "gemini-2.5-flash",
             "max_output_tokens": 65536,
             "temperature": 0.0,
             "top_p": 0.95,

@@ -276,8 +276,16 @@ app.include_router(debug_router, prefix="/api")
 # Include modular customer research router (V1 core + V3 enhancements)
 from backend.api.research.research_router import router as modular_research_router
 
+# Include conversation routines router (2025 framework)
+from backend.api.research.conversation_routines.router import (
+    router as conversation_routines_router,
+)
+
 # Use clean modular architecture: V1 core (proven) + V3 enhancements (fail-safe)
 app.include_router(modular_research_router)
+
+# Include conversation routines (2025 framework)
+app.include_router(conversation_routines_router)
 
 # Initialize database tables
 create_tables()

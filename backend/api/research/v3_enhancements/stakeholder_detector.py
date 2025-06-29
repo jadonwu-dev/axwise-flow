@@ -102,9 +102,12 @@ Return as JSON:
 
 Make stakeholder names specific to this business context."""
 
-            response = await llm_service.generate_text(
-                prompt=prompt, temperature=0.6, max_tokens=600
+            response_data = await llm_service.analyze(
+                text=prompt,
+                task="text_generation",
+                data={"temperature": 0.6, "max_tokens": 600},
             )
+            response = response_data.get("text", "")
 
             # Parse JSON response (handle markdown code blocks)
             import json
@@ -286,9 +289,12 @@ Return in this exact JSON format:
                     }
                 else:
                     # Fallback to text generation with JSON parsing
-                    response = await llm_service.generate_text(
-                        prompt=prompt, temperature=0.7, max_tokens=600
+                    response_data = await llm_service.analyze(
+                        text=prompt,
+                        task="text_generation",
+                        data={"temperature": 0.7, "max_tokens": 600},
                     )
+                    response = response_data.get("text", "")
 
                     # Parse JSON response (handle markdown code blocks)
                     import json
@@ -323,17 +329,22 @@ Return in this exact JSON format:
                     f"Structured parsing failed for {stakeholder_name}: {parse_error}"
                 )
 
-                # Final fallback: generate simple categorized questions
+                # Final fallback: generate simple categorized questions with proper context
+                logger.warning(
+                    f"Using fallback questions for {stakeholder_name} - this indicates LLM generation failed"
+                )
                 fallback_questions = {
                     "problemDiscovery": [
-                        f"What challenges do you currently face related to {business_idea}?",
-                        f"How does the current situation impact your work as {stakeholder_name}?",
+                        f"What challenges do you currently face related to {problem or 'the current situation'}?",
+                        f"How does the current situation impact your daily life or responsibilities as someone in the {stakeholder_name.lower()} category?",
                     ],
                     "solutionValidation": [
-                        f"How interested would you be in {business_idea}?",
-                        f"What concerns would you have about this solution?",
+                        f"How interested would you be in a solution that addresses {problem or 'these challenges'}?",
+                        f"What concerns would you have about implementing this type of solution?",
                     ],
-                    "followUp": ["Can you tell me more about your current process?"],
+                    "followUp": [
+                        f"What other aspects of {problem or 'this situation'} should we consider?"
+                    ],
                 }
 
                 # Adjust question count based on stakeholder type
