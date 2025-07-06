@@ -295,6 +295,48 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
           isLocal: true,
         };
 
+        // If questions were generated, ensure they're properly saved as a questionnaire component
+        if (result.questions && result.should_generate_questions) {
+          console.log('💾 Ensuring questionnaire is properly saved in conversation routines...');
+
+          // Ensure messages array exists
+          if (!session.messages) {
+            session.messages = [];
+          }
+
+          // Check if we already have a questionnaire component
+          const hasQuestionnaireComponent = session.messages.some(msg =>
+            msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' &&
+            msg.metadata?.comprehensiveQuestions
+          );
+
+          if (!hasQuestionnaireComponent) {
+            console.log('🔧 Adding questionnaire component to conversation routines session');
+
+            // Add questionnaire component message
+            const questionnaireMessage: Message = {
+              id: `questionnaire_${Date.now()}`,
+              content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
+              role: 'assistant',
+              timestamp: new Date().toISOString(),
+              metadata: {
+                type: 'component',
+                comprehensiveQuestions: result.questions,
+                businessContext: session.business_idea
+              }
+            };
+
+            session.messages.push(questionnaireMessage);
+            session.message_count = session.messages.length;
+          }
+
+          // Ensure session is marked as completed with questionnaire
+          session.questions_generated = true;
+          session.status = 'completed';
+          session.stage = 'completed';
+          session.completed_at = new Date().toISOString();
+        }
+
         LocalResearchStorage.saveSession(session);
         LocalResearchStorage.setCurrentSession(session);
       }

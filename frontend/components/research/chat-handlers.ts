@@ -12,7 +12,6 @@ import {
   createAssistantMessage,
   extractSuggestions,
   hasCompleteQuestions,
-  convertToSimpleQuestions,
   logSuggestionsDebug,
   scrollToBottomIfNeeded
 } from './chat-utils';
@@ -170,15 +169,7 @@ export const handleSendMessage = async (
       fullData: data
     });
 
-    // Additional debug for questions structure
-    console.log('🔍 Detailed Questions Debug:', {
-      questionsData: data.questions,
-      hasPrimaryStakeholders: !!(data.questions as any)?.primaryStakeholders,
-      hasSecondaryStakeholders: !!(data.questions as any)?.secondaryStakeholders,
-      primaryCount: (data.questions as any)?.primaryStakeholders?.length || 0,
-      secondaryCount: (data.questions as any)?.secondaryStakeholders?.length || 0,
-      hasTimeEstimate: !!(data.questions as any)?.timeEstimate
-    });
+
 
     // Process questions if generated
     if (data.questions) {
@@ -227,11 +218,11 @@ const processGeneratedQuestions = async (
   context: any,
   onComplete?: (questions: any) => void
 ) => {
-  console.log('🔧 DUPLICATE DEBUG: processGeneratedQuestions called with:', {
+  console.log('🔧 V3 Enhanced: processGeneratedQuestions called with:', {
     questionsData: data.questions,
-    hasStakeholders: !!(data.questions as any)?.stakeholders,
-    hasEstimatedTime: !!(data.questions as any)?.estimatedTime,
-    hasProblemDiscovery: !!(data.questions as any)?.problemDiscovery,
+    hasPrimaryStakeholders: !!(data.questions as any)?.primaryStakeholders,
+    hasSecondaryStakeholders: !!(data.questions as any)?.secondaryStakeholders,
+    hasTimeEstimate: !!(data.questions as any)?.timeEstimate,
     questionsKeys: data.questions ? Object.keys(data.questions) : []
   });
 
@@ -242,69 +233,22 @@ const processGeneratedQuestions = async (
 
   const questionsData = data.questions as any;
 
+  // Validate V3 format - reject if not in expected format
+  if (!questionsData?.primaryStakeholders && !questionsData?.secondaryStakeholders) {
+    console.error('❌ Invalid questionnaire format - V3 Enhanced format required');
+    throw new Error('Invalid questionnaire format received from backend');
+  }
+
   console.log('🔧 V3 Enhanced Processing: Stakeholder data analysis:', {
     hasPrimaryStakeholders: !!questionsData?.primaryStakeholders,
     hasSecondaryStakeholders: !!questionsData?.secondaryStakeholders,
     hasTimeEstimate: !!questionsData?.timeEstimate,
-    hasLegacyStakeholders: !!questionsData?.stakeholders,
-    hasEstimatedTime: !!questionsData?.estimatedTime,
     primaryStakeholdersLength: questionsData?.primaryStakeholders?.length || 0,
-    secondaryStakeholdersLength: questionsData?.secondaryStakeholders?.length || 0,
-    legacyStakeholdersStructure: questionsData?.stakeholders ? Object.keys(questionsData.stakeholders) : []
+    secondaryStakeholdersLength: questionsData?.secondaryStakeholders?.length || 0
   });
 
-  // Convert legacy format to V3 format if needed
-  let processedQuestionsData = questionsData;
-
-  if (!questionsData?.primaryStakeholders && !questionsData?.secondaryStakeholders && questionsData?.stakeholders) {
-    console.log('🔧 V3 Enhanced Processing: Converting legacy format to V3 format');
-
-    // Convert legacy stakeholders format to V3 format
-    const stakeholders = questionsData.stakeholders;
-    processedQuestionsData = {
-      primaryStakeholders: stakeholders.primary || [],
-      secondaryStakeholders: stakeholders.secondary || [],
-      timeEstimate: {
-        totalQuestions: (() => {
-          // Calculate total questions from all stakeholders
-          let total = 0;
-          if (stakeholders.primary) {
-            stakeholders.primary.forEach((stakeholder: any) => {
-              if (stakeholder.questions) {
-                total += (stakeholder.questions.problemDiscovery?.length || 0) +
-                        (stakeholder.questions.solutionValidation?.length || 0) +
-                        (stakeholder.questions.followUp?.length || 0);
-              }
-            });
-          }
-          if (stakeholders.secondary) {
-            stakeholders.secondary.forEach((stakeholder: any) => {
-              if (stakeholder.questions) {
-                total += (stakeholder.questions.problemDiscovery?.length || 0) +
-                        (stakeholder.questions.solutionValidation?.length || 0) +
-                        (stakeholder.questions.followUp?.length || 0);
-              }
-            });
-          }
-          return total;
-        })(),
-        estimatedMinutes: questionsData.estimatedTime || "0-0",
-        breakdown: {
-          primary: stakeholders.primary?.length || 0,
-          secondary: stakeholders.secondary?.length || 0,
-          perQuestion: 3
-        }
-      }
-    };
-
-    console.log('🔧 V3 Enhanced Processing: Converted to V3 format:', {
-      primaryStakeholders: processedQuestionsData.primaryStakeholders.length,
-      secondaryStakeholders: processedQuestionsData.secondaryStakeholders.length,
-      totalQuestions: processedQuestionsData.timeEstimate.totalQuestions
-    });
-  } else {
-    console.log('🔧 V3 Enhanced Processing: Using native V3 format');
-  }
+  // Use V3 format directly (no legacy conversion)
+  const processedQuestionsData = questionsData;
 
   // Process V3 enhanced stakeholder-based questions (using converted data if needed)
   const comprehensiveQuestions = {
@@ -345,7 +289,7 @@ const processGeneratedQuestions = async (
   });
 
   // Add comprehensive questions component
-  const messageId = Date.now().toString() + '_comprehensive_questions';
+  const messageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}_comprehensive_questions`;
   const comprehensiveQuestionsMessage: Message = {
     id: messageId,
     content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
@@ -390,11 +334,7 @@ const processGeneratedQuestions = async (
     return [...prev, comprehensiveQuestionsMessage];
   });
 
-  // Update local questions state for backward compatibility
-  const allQuestions = convertToSimpleQuestions(comprehensiveQuestions);
-
-  actions.setLocalQuestions(allQuestions);
-  updateQuestions(allQuestions);
+  // Update context - no need for legacy format conversion
   updateContext({ questionsGenerated: true });
 
   // Save comprehensive questionnaire data to backend if we have a session ID
@@ -405,6 +345,63 @@ const processGeneratedQuestions = async (
     } catch (error) {
       console.error('❌ Failed to save questionnaire to backend:', error);
       // Don't throw error - this is not critical for the user experience
+    }
+  }
+
+  // Ensure local sessions are properly saved with questionnaire data
+  if (data.session_id && data.session_id.startsWith('local_')) {
+    try {
+      console.log('💾 Ensuring local questionnaire is properly saved...');
+
+      // Import LocalResearchStorage dynamically
+      const { LocalResearchStorage } = await import('@/lib/api/research');
+
+      // Get current session
+      let session = LocalResearchStorage.getSession(data.session_id);
+
+      if (session) {
+        // Update session to mark questions as generated
+        session.questions_generated = true;
+        session.status = 'completed';
+        session.stage = 'completed';
+        session.completed_at = new Date().toISOString();
+        session.updated_at = new Date().toISOString();
+
+        // Ensure the questionnaire message is properly formatted
+        const questionnaireMessageExists = session.messages?.some(msg =>
+          msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' &&
+          msg.metadata?.comprehensiveQuestions
+        );
+
+        if (!questionnaireMessageExists) {
+          console.log('🔧 Adding missing questionnaire component to local session');
+
+          // Add the questionnaire message if it doesn't exist
+          const questionnaireMessage = {
+            id: `questionnaire_${Date.now()}`,
+            content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
+            role: 'assistant' as const,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              type: 'component',
+              comprehensiveQuestions,
+              businessContext: session.business_idea
+            }
+          };
+
+          session.messages = session.messages || [];
+          session.messages.push(questionnaireMessage);
+          session.message_count = session.messages.length;
+        }
+
+        // Save the updated session
+        LocalResearchStorage.saveSession(session);
+        console.log('✅ Local questionnaire saved successfully');
+      } else {
+        console.warn('⚠️ Local session not found for questionnaire saving');
+      }
+    } catch (error) {
+      console.error('❌ Failed to save local questionnaire:', error);
     }
   }
 
@@ -423,13 +420,11 @@ const processGeneratedQuestions = async (
   actions.setMessages(prev => [...prev, nextStepsMessage]);
 
   if (onComplete) {
-    onComplete(allQuestions);
+    onComplete(comprehensiveQuestions);
   }
 
   return; // V3 Enhanced format processing complete
 };
-
-// Legacy stakeholder processing removed - V3 Enhanced format only
 
 /**
  * Handle suggestion click

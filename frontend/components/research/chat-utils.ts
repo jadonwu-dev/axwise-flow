@@ -200,27 +200,7 @@ export const hasCompleteQuestions = (questions: any): boolean => {
     questions.followUp && questions.followUp.length > 0;
 };
 
-/**
- * Convert comprehensive questions to simple format for backward compatibility
- */
-export const convertToSimpleQuestions = (comprehensiveQuestions: any): GeneratedQuestions => {
-  const allQuestions: GeneratedQuestions = {
-    problemDiscovery: [],
-    solutionValidation: [],
-    followUp: []
-  };
 
-  // Combine all stakeholder questions for backward compatibility
-  [...(comprehensiveQuestions.primaryStakeholders || []), ...(comprehensiveQuestions.secondaryStakeholders || [])].forEach((stakeholder: any) => {
-    if (stakeholder.questions) {
-      allQuestions.problemDiscovery.push(...(stakeholder.questions.problemDiscovery || []));
-      allQuestions.solutionValidation.push(...(stakeholder.questions.solutionValidation || []));
-      allQuestions.followUp.push(...(stakeholder.questions.followUp || []));
-    }
-  });
-
-  return allQuestions;
-};
 
 /**
  * Create initial chat message
@@ -233,10 +213,19 @@ export const createInitialMessage = (): Message => ({
 });
 
 /**
+ * Generate unique message ID
+ */
+let messageIdCounter = 0;
+const generateUniqueMessageId = (): string => {
+  messageIdCounter += 1;
+  return `${Date.now()}_${messageIdCounter}_${Math.random().toString(36).substring(2, 11)}`;
+};
+
+/**
  * Create user message
  */
 export const createUserMessage = (content: string): Message => ({
-  id: Date.now().toString(),
+  id: generateUniqueMessageId(),
   content,
   role: 'user',
   timestamp: new Date(),
@@ -246,7 +235,7 @@ export const createUserMessage = (content: string): Message => ({
  * Create assistant message
  */
 export const createAssistantMessage = (content: string, metadata?: any): Message => ({
-  id: (Date.now() + 2).toString(),
+  id: generateUniqueMessageId(),
   content,
   role: 'assistant',
   timestamp: new Date(),

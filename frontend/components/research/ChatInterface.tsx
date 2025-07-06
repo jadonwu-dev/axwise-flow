@@ -113,14 +113,15 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
     try {
       if (format === 'txt') {
-        // Check if we have comprehensive stakeholder structure
-        if (comprehensiveData && (comprehensiveData.primaryStakeholders || comprehensiveData.secondaryStakeholders)) {
-          // Use comprehensive format with actual stakeholder data
-          console.log('📋 Using comprehensive stakeholder format');
+        // V3 Enhanced format only - comprehensive stakeholder structure required
+        if (!comprehensiveData || (!comprehensiveData.primaryStakeholders && !comprehensiveData.secondaryStakeholders)) {
+          throw new Error('Invalid questionnaire format - V3 Enhanced format required');
+        }
 
-          const primaryStakeholders = comprehensiveData.primaryStakeholders || [];
-          const secondaryStakeholders = comprehensiveData.secondaryStakeholders || [];
-          const timeEstimate = comprehensiveData.timeEstimate || {};
+        console.log('📋 Using V3 Enhanced stakeholder format');
+        const primaryStakeholders = comprehensiveData.primaryStakeholders || [];
+        const secondaryStakeholders = comprehensiveData.secondaryStakeholders || [];
+        const timeEstimate = comprehensiveData.timeEstimate || {};
 
           const textContent = `# Customer Research Questionnaire
 Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
@@ -208,108 +209,7 @@ Ready for simulation bridge and interview analysis`;
 
           console.log('✅ Comprehensive questionnaire exported successfully');
           return;
-        } else {
-          // Use simplified format with all available questions
-          console.log('📋 Using simplified format - creating comprehensive export from available questions');
 
-          const totalQuestions = (currentQuestions.problemDiscovery?.length || 0) +
-                               (currentQuestions.solutionValidation?.length || 0) +
-                               (currentQuestions.followUp?.length || 0);
-
-          const textContent = `# Customer Research Questionnaire
-Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
-
-## Business Context
-**Business Idea:** ${context.businessIdea || 'Not specified'}
-**Target Customer:** ${context.targetCustomer || 'Not specified'}
-**Problem:** ${context.problem || 'Not specified'}
-
----
-
-## 📊 Questionnaire Overview
-**Total Questions:** ${totalQuestions}
-**Problem Discovery:** ${currentQuestions.problemDiscovery?.length || 0} questions
-**Solution Validation:** ${currentQuestions.solutionValidation?.length || 0} questions
-**Follow-up Questions:** ${currentQuestions.followUp?.length || 0} questions
-**Estimated Time:** ${Math.ceil(totalQuestions * 2.5)}-${Math.ceil(totalQuestions * 4)} minutes per interview
-
----
-
-## 🔍 PROBLEM DISCOVERY QUESTIONS
-*Understand current state and pain points*
-
-${(currentQuestions.problemDiscovery || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
-
----
-
-## ✅ SOLUTION VALIDATION QUESTIONS
-*Validate your proposed solution approach*
-
-${(currentQuestions.solutionValidation || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
-
----
-
-## 💡 FOLLOW-UP QUESTIONS
-*Deeper insights and next steps*
-
-${(currentQuestions.followUp || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
-
----
-
-## 🎯 STAKEHOLDER GUIDANCE
-*Based on your business context, consider interviewing:*
-
-### Primary Stakeholders (Interview First)
-- **Account Managers** - Direct users experiencing the fragmented data problem
-- **Head of Account Management** - Leadership responsible for revenue realization
-- **Sales Operations Manager** - Process optimization and data management oversight
-
-### Secondary Stakeholders (Interview Later)
-- **IT Systems Administrator** - Technical integration and system stability concerns
-- **Finance Director** - Financial impact and ROI evaluation
-
----
-
-## 📋 RESEARCH INSTRUCTIONS
-
-### Interview Process
-1. **Start with Problem Discovery** - Understand current pain points thoroughly
-2. **Move to Solution Validation** - Test your API service concept
-3. **Use Follow-up Questions** - Dig deeper into interesting responses
-4. **Keep interviews focused** - 45-60 minutes per stakeholder type
-5. **Look for patterns** - Identify common themes across interviews
-
-### Key Areas to Explore
-- **Current data fragmentation challenges**
-- **Impact of unfulfilled discount agreements**
-- **Technical integration requirements**
-- **Financial implications and ROI expectations**
-- **Change management and adoption concerns**
-
-### After Interviews
-1. **Upload transcripts to AxWise** - For automated analysis and insights
-2. **Generate Product Requirements** - Transform insights into actionable specs
-3. **Create user stories** - Based on validated customer needs
-4. **Iterate on your API concept** - Use insights to refine your solution
-
----
-
-Generated by AxWise Customer Research Assistant
-Ready for simulation bridge and interview analysis`;
-
-          const blob = new Blob([textContent], { type: 'text/plain' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `research-questionnaire-${new Date().toISOString().split('T')[0]}.txt`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          console.log('✅ Comprehensive questionnaire exported successfully');
-          return;
-        }
       }
     } catch (error) {
       console.error('❌ Failed to export comprehensive questions:', error);
