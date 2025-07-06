@@ -64,9 +64,9 @@ export async function GET(request: NextRequest) {
       authToken = token;
       console.log('History API: Using Clerk JWT token for authenticated user:', userId);
     } else {
-      // Development mode: use development token
-      authToken = 'DEV_TOKEN_REDACTED';
-      console.log('History API: Using development token (development mode only)');
+      // Development mode: use development token for the main user
+      authToken = 'dev_test_token_DEV_TOKEN_REDACTED';
+      console.log('History API: Using development token for DEV_TOKEN_REDACTED (development mode only)');
     }
 
     // Get the backend URL from environment

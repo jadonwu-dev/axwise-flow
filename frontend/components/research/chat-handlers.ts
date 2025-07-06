@@ -18,6 +18,28 @@ import {
 } from './chat-utils';
 
 /**
+ * Save questionnaire data to backend
+ */
+const saveQuestionnaireToBackend = async (sessionId: string, questionnaireData: any): Promise<void> => {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+  const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}/questionnaire`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(questionnaireData),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to save questionnaire: ${errorText}`);
+  }
+
+  return response.json();
+};
+
+/**
  * Handle sending a message to the research API
  */
 export const handleSendMessage = async (
@@ -139,8 +161,28 @@ export const handleSendMessage = async (
       updateContext(newContext);
     }
 
+    // Debug: Log the full API response to see what we're getting
+    console.log('🔍 Full API response:', {
+      hasQuestions: !!data.questions,
+      questionsKeys: data.questions ? Object.keys(data.questions) : [],
+      hasMetadata: !!data.metadata,
+      metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
+      fullData: data
+    });
+
+    // Additional debug for questions structure
+    console.log('🔍 Detailed Questions Debug:', {
+      questionsData: data.questions,
+      hasPrimaryStakeholders: !!(data.questions as any)?.primaryStakeholders,
+      hasSecondaryStakeholders: !!(data.questions as any)?.secondaryStakeholders,
+      primaryCount: (data.questions as any)?.primaryStakeholders?.length || 0,
+      secondaryCount: (data.questions as any)?.secondaryStakeholders?.length || 0,
+      hasTimeEstimate: !!(data.questions as any)?.timeEstimate
+    });
+
     // Process questions if generated
     if (data.questions) {
+      console.log('✅ Processing questions from API response');
       await processGeneratedQuestions(
         data,
         actions,
@@ -149,6 +191,8 @@ export const handleSendMessage = async (
         context,
         onComplete
       );
+    } else {
+      console.log('❌ No questions found in API response');
     }
 
   } catch (error) {
@@ -353,6 +397,17 @@ const processGeneratedQuestions = async (
   updateQuestions(allQuestions);
   updateContext({ questionsGenerated: true });
 
+  // Save comprehensive questionnaire data to backend if we have a session ID
+  if (data.session_id && !data.session_id.startsWith('local_')) {
+    try {
+      await saveQuestionnaireToBackend(data.session_id, comprehensiveQuestions);
+      console.log('✅ Questionnaire saved to backend successfully');
+    } catch (error) {
+      console.error('❌ Failed to save questionnaire to backend:', error);
+      // Don't throw error - this is not critical for the user experience
+    }
+  }
+
   // Always add next steps for comprehensive questions
   const nextStepsMessage: Message = {
     id: Date.now().toString() + '_nextsteps',
@@ -402,7 +457,25 @@ export const loadSession = async (
 ) => {
   try {
     console.log('Loading session:', sessionId);
-    const sessionData = await getResearchSession(sessionId);
+
+    let sessionData;
+
+    // Check if it's a local session (starts with 'local_')
+    if (sessionId.startsWith('local_')) {
+      console.log('Loading local session from localStorage');
+      // Import LocalResearchStorage dynamically to avoid SSR issues
+      const { LocalResearchStorage } = await import('@/lib/api/research');
+      sessionData = LocalResearchStorage.getSession(sessionId);
+
+      if (!sessionData) {
+        console.error('Local session not found in localStorage:', sessionId);
+        return;
+      }
+    } else {
+      // Load from backend API
+      sessionData = await getResearchSession(sessionId);
+    }
+
     console.log('Session data loaded:', sessionData);
 
     // Update context from session
@@ -414,21 +487,37 @@ export const loadSession = async (
       multiStakeholderConsidered: sessionData.questions_generated // If questions exist, assume multi-stakeholder was considered
     });
 
-    // Load messages into chat - Note: messages might not be available in the API response
-    // For now, we'll start with a fresh conversation when loading a session
-    actions.setMessages([
-      {
-        id: '1',
-        content: "Hi! I'm your customer research assistant. I can see you have a previous session. Let's continue from where you left off.",
-        role: 'assistant',
-        timestamp: new Date(),
-      }
-    ]);
+    // Load actual messages from the session if available
+    if (sessionData.messages && sessionData.messages.length > 0) {
+      console.log(`Loading ${sessionData.messages.length} messages from session`);
+
+      // Convert message format to chat interface format
+      const chatMessages = sessionData.messages.map((msg: any, index: number) => ({
+        id: msg.id || `loaded_${index}`,
+        content: msg.content,
+        role: msg.role,
+        timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        metadata: msg.metadata || {}
+      }));
+
+      actions.setMessages(chatMessages);
+      actions.setConversationStarted(true);
+    } else {
+      // If no messages, start with a welcome message
+      actions.setMessages([
+        {
+          id: '1',
+          content: "Hi! I'm your customer research assistant. I can see you have a previous session. Let's continue from where you left off.",
+          role: 'assistant',
+          timestamp: new Date(),
+        }
+      ]);
+    }
 
     // Set session ID
     actions.setSessionId(sessionId);
 
-    console.log('Session loaded successfully');
+    console.log('Session loaded successfully with', sessionData.messages?.length || 0, 'messages');
   } catch (error) {
     console.error('Failed to load session:', error);
   }

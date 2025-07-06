@@ -26,7 +26,7 @@ import type { PriorityInsightsResponse } from '@/types/api';
 import { PRDDisplay } from './PRDDisplay';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import CustomErrorBoundary from './ErrorBoundary';
 
 import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
@@ -58,16 +58,15 @@ export default function VisualizationTabsRefactored({
   initialTab,
   prdData
 }: VisualizationTabsProps) {
-  // No router needed
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useUser();
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(
-    initialTab as TabValue || activeTabFromUrl || 'themes'
+    activeTabFromUrl || initialTab as TabValue || 'themes'
   );
 
-  // Debug logging
-  console.log(`[VisualizationTabs] Current state - activeTab: "${activeTab}", activeTabFromUrl: "${activeTabFromUrl}", initialTab: "${initialTab}"`);
+
   const [localAnalysis, setLocalAnalysis] = useState<any>({ themes: [], patterns: [], sentiment: null, personas: [] });
   const [loading, setLoading] = useState<boolean>(!serverAnalysisData); // Initial loading based on server data
   const [fetchError, setFetchError] = useState<string | null>(null); // Renamed for clarity
@@ -78,8 +77,7 @@ export default function VisualizationTabsRefactored({
   const urlAnalysisId = searchParams.get('analysisId') || searchParams.get('result_id');
   const effectiveAnalysisId = analysisId || urlAnalysisId;
 
-  // Debug logging for analysis ID resolution
-  console.log(`[VisualizationTabs] Analysis ID resolution - analysisId prop: "${analysisId}", urlAnalysisId: "${urlAnalysisId}", effectiveAnalysisId: "${effectiveAnalysisId}"`);
+
 
   // Use server data if available, otherwise use local state
   const analysis = serverAnalysisData || localAnalysis;
@@ -144,19 +142,12 @@ export default function VisualizationTabsRefactored({
 
 
 
-  // We're disabling URL updates for tab changes to prevent tab jumping issues
-  // Instead, we'll only read the initial tab from the URL
-  const initialRender = useRef(true);
-
-  // Set active tab based on URL parameter, but only on first render
+  // Sync active tab with URL parameter whenever it changes
   useEffect(() => {
-    console.log(`[VisualizationTabs] useEffect for tab setting - activeTabFromUrl: "${activeTabFromUrl}", initialRender: ${initialRender.current}`);
-    if (initialRender.current && activeTabFromUrl) {
-      console.log(`[VisualizationTabs] Setting active tab to: "${activeTabFromUrl}"`);
-      initialRender.current = false;
+    if (activeTabFromUrl && activeTabFromUrl !== activeTab) {
       setActiveTab(activeTabFromUrl);
     }
-  }, []); // Empty dependency array means it only runs once on mount
+  }, [activeTabFromUrl, activeTab]); // Update when URL parameter changes
 
   // Set active tab function
   const setActiveTabSafe = useCallback((tab: TabValue) => {
@@ -181,7 +172,16 @@ export default function VisualizationTabsRefactored({
 
   // Handle tab change
   const handleTabChange = (newTab: string) => {
-    setActiveTabSafe(newTab as TabValue);
+    const newTabValue = newTab as TabValue;
+    setActiveTabSafe(newTabValue);
+
+    // Update URL to reflect the new tab
+    const currentParams = new URLSearchParams(searchParams.toString());
+    currentParams.set('visualizationTab', newTabValue);
+
+    // Preserve analysisId and other parameters
+    const newUrl = `/unified-dashboard?${currentParams.toString()}`;
+    router.push(newUrl);
   };
 
   return (
@@ -255,7 +255,7 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="patterns" className="mt-6">
-                {analysis?.patterns.length ? (
+                {analysis?.patterns?.length ? (
                   <PatternList patterns={analysis.patterns} />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

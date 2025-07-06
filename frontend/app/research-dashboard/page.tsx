@@ -1,59 +1,65 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, Users, Target, CheckCircle, Clock, Trash2, Eye } from 'lucide-react';
 import {
-  getResearchSessions,
-  getResearchSession,
-  deleteResearchSession,
-  LocalResearchStorage,
-  type ResearchSession as APIResearchSession
-} from '@/lib/api/research';
+  Clock,
+  Target,
+  Users,
+  CheckCircle,
+  MessageSquare,
+  Calendar,
+  Trash2,
+  Eye,
+  ArrowRight
+} from 'lucide-react';
+import { getResearchSessions, deleteResearchSession, type ResearchSession } from '@/lib/api/research';
 
 export default function ResearchDashboard() {
-  const [sessions, setSessions] = useState<APIResearchSession[]>([]);
+  const [sessions, setSessions] = useState<ResearchSession[]>([]);
+  const [selectedSession, setSelectedSession] = useState<ResearchSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSession, setSelectedSession] = useState<APIResearchSession | null>(null);
 
   useEffect(() => {
-    fetchSessions();
+    loadSessions();
+
+    // Auto-redirect after 5 seconds
+    const timer = setTimeout(() => {
+      window.location.href = '/unified-dashboard/research-chat-history';
+    }, 5000);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  const fetchSessions = async () => {
+  const loadSessions = async () => {
     try {
-      // Get sessions from local storage (for anonymous users)
-      const data = await getResearchSessions(20);
+      setLoading(true);
+      const data = await getResearchSessions(50);
       setSessions(data);
     } catch (error) {
-      console.error('Error fetching sessions:', error);
+      console.error('Failed to load sessions:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const viewSession = async (sessionId: string) => {
-    try {
-      const data = await getResearchSession(sessionId);
-      setSelectedSession(data);
-    } catch (error) {
-      console.error('Error fetching session details:', error);
-    }
+  const viewSession = (sessionId: string) => {
+    const session = sessions.find(s => s.session_id === sessionId);
+    setSelectedSession(session || null);
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) return;
+  const deleteSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this session?')) {
+      return;
+    }
 
     try {
       await deleteResearchSession(sessionId);
-
-      // Remove from local state
       setSessions(sessions.filter(s => s.session_id !== sessionId));
 
-      // Clear selected session if it was the deleted one
       if (selectedSession && selectedSession.session_id === sessionId) {
         setSelectedSession(null);
       }
@@ -80,6 +86,8 @@ export default function ResearchDashboard() {
       case 'business_idea': return <Target className="h-4 w-4" />;
       case 'target_customer': return <Users className="h-4 w-4" />;
       case 'validation': return <CheckCircle className="h-4 w-4" />;
+      case 'conversation': return <MessageSquare className="h-4 w-4" />;
+      case 'completed': return <CheckCircle className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
     }
   };
@@ -88,7 +96,7 @@ export default function ResearchDashboard() {
     return (
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Loading sessions...</div>
+          <div className="text-lg">Loading research sessions...</div>
         </div>
       </div>
     );
@@ -98,35 +106,31 @@ export default function ResearchDashboard() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 max-w-7xl">
         <div className="mb-6">
-          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Research Dashboard <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Legacy</span></h1>
-          <p className="text-muted-foreground mt-2">Manage and review customer research sessions</p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-            <p className="text-blue-800 text-sm">
-              💡 <strong>New:</strong> Use the <button
-                onClick={() => window.location.href = '/unified-dashboard/research'}
-                className="text-blue-600 underline hover:text-blue-800"
-              >
-                Research Dashboard
-              </button> for the latest features including question generation and session management.
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+            <h2 className="text-lg font-semibold text-blue-900 mb-2">Page Moved</h2>
+            <p className="text-blue-800 mb-4">
+              Research Chat History has been moved to the unified dashboard for better organization.
             </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => window.location.href = '/unified-dashboard/research-chat-history'}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Go to Research Chat History
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.location.href = '/unified-dashboard/research-chat'}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Start New Research Chat
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-3 mt-4">
-            <Button
-              onClick={() => {
-                // Clear any current session and start fresh
-                localStorage.removeItem('current_research_session');
-                window.location.href = '/customer-research';
-              }}
-            >
-              Start New Research
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => window.location.href = '/unified-dashboard/research'}
-            >
-              Go to Research Dashboard
-            </Button>
-          </div>
+
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Research Sessions <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Legacy</span></h1>
+          <p className="text-muted-foreground mt-2">This page will redirect you to the new location</p>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -196,7 +200,7 @@ export default function ResearchDashboard() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteSession(session.session_id);
+                              deleteSession(session.session_id);
                             }}
                             className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                           >
@@ -241,9 +245,8 @@ export default function ResearchDashboard() {
                       <Button
                         size="sm"
                         onClick={() => {
-                          // Save the session as current and navigate to unified dashboard
-                          localStorage.setItem('current_research_session', JSON.stringify(selectedSession));
-                          window.location.href = '/unified-dashboard/research';
+                          // Navigate to research chat with session ID as URL parameter
+                          window.location.href = `/unified-dashboard/research-chat?session=${selectedSession.session_id}`;
                         }}
                       >
                         Continue Session
@@ -293,7 +296,7 @@ export default function ResearchDashboard() {
                                   {msg.role === 'user' ? 'User' : 'AI'}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">
-                                  {new Date(msg.timestamp).toLocaleTimeString()}
+                                  {typeof window !== 'undefined' ? new Date(msg.timestamp).toLocaleTimeString() : ''}
                                 </span>
                               </div>
                               <p className="text-sm text-foreground pl-2 border-l-2 border-border">

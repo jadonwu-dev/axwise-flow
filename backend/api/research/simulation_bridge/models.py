@@ -9,6 +9,7 @@ from enum import Enum
 
 class SimulationDepth(str, Enum):
     """Simulation depth options."""
+
     QUICK = "quick"
     DETAILED = "detailed"
     COMPREHENSIVE = "comprehensive"
@@ -16,6 +17,7 @@ class SimulationDepth(str, Enum):
 
 class ResponseStyle(str, Enum):
     """Response style options."""
+
     REALISTIC = "realistic"
     OPTIMISTIC = "optimistic"
     CRITICAL = "critical"
@@ -24,6 +26,7 @@ class ResponseStyle(str, Enum):
 
 class SimulationConfig(BaseModel):
     """Configuration for simulation parameters."""
+
     depth: SimulationDepth = SimulationDepth.DETAILED
     personas_per_stakeholder: int = Field(default=2, ge=1, le=5)
     response_style: ResponseStyle = ResponseStyle.REALISTIC
@@ -33,6 +36,7 @@ class SimulationConfig(BaseModel):
 
 class BusinessContext(BaseModel):
     """Business context for simulation."""
+
     business_idea: str
     target_customer: str
     problem: str
@@ -41,6 +45,7 @@ class BusinessContext(BaseModel):
 
 class Stakeholder(BaseModel):
     """Stakeholder information."""
+
     id: str
     name: str
     description: str
@@ -49,12 +54,14 @@ class Stakeholder(BaseModel):
 
 class QuestionsData(BaseModel):
     """Questions data structure."""
+
     stakeholders: Dict[str, List[Stakeholder]]
     timeEstimate: Optional[Dict[str, Any]] = None
 
 
 class AIPersona(BaseModel):
     """Generated AI persona for simulation."""
+
     id: str
     name: str
     age: int
@@ -68,6 +75,7 @@ class AIPersona(BaseModel):
 
 class InterviewResponse(BaseModel):
     """Single interview response."""
+
     question: str
     response: str
     sentiment: str
@@ -77,6 +85,7 @@ class InterviewResponse(BaseModel):
 
 class SimulatedInterview(BaseModel):
     """Complete simulated interview."""
+
     persona_id: str
     stakeholder_type: str
     responses: List[InterviewResponse]
@@ -87,6 +96,7 @@ class SimulatedInterview(BaseModel):
 
 class SimulationInsights(BaseModel):
     """Insights from the simulation."""
+
     overall_sentiment: str
     key_themes: List[str]
     stakeholder_priorities: Dict[str, List[str]]
@@ -97,13 +107,16 @@ class SimulationInsights(BaseModel):
 
 class SimulationRequest(BaseModel):
     """Request for simulation."""
-    questions_data: QuestionsData
-    business_context: BusinessContext
+
+    questions_data: Optional[QuestionsData] = None
+    business_context: Optional[BusinessContext] = None
+    raw_questionnaire_content: Optional[str] = None
     config: SimulationConfig
 
 
 class SimulationResponse(BaseModel):
     """Response from simulation."""
+
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
@@ -117,6 +130,7 @@ class SimulationResponse(BaseModel):
 
 class SimulationProgress(BaseModel):
     """Progress tracking for simulation."""
+
     simulation_id: str
     stage: str
     progress_percentage: int

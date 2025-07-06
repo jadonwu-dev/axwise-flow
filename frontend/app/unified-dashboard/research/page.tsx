@@ -3,490 +3,433 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   MessageSquare,
-  Users,
-  Target,
-  Lightbulb,
   ArrowRight,
-  Download,
-  RefreshCw,
-  CheckCircle2,
-  Clock
+  Clock,
+  Upload,
+  Loader2,
+  Download
 } from 'lucide-react';
-import { useResearch } from '@/hooks/use-research';
-import { ResearchContextDisplay } from '@/components/research/dashboard/ResearchContextDisplay';
-import { QuestionnaireSelector } from '@/components/research/dashboard/QuestionnaireSelector';
-import { SimulationSettingsPanel } from '@/components/research/dashboard/SimulationSettingsPanel';
-
-import { SimulationProgress } from '@/components/research/simulation/SimulationProgress';
-import { SimulationResults } from '@/components/research/simulation/SimulationResults';
-import {
-  createSimulation,
-  SimulationConfig,
-  SimulationResponse,
-  QuestionsData,
-  BusinessContext
-} from '@/lib/api/simulation';
-import {
-  type DashboardQuestionResponse
-} from '@/lib/api/research-dashboard';
+import { createSimulation, SimulationConfig, QuestionsData, BusinessContext, SimulationResponse } from '@/lib/api/simulation';
 
 export default function ResearchDashboardPage() {
-  const { context, questions, isLoading, generateQuestions, exportQuestions, loadSession } = useResearch();
-  const [generatedQuestions, setGeneratedQuestions] = useState<DashboardQuestionResponse | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Simulation state
-  const [showSimulationProgress, setShowSimulationProgress] = useState(false);
-  const [simulationResults, setSimulationResults] = useState<SimulationResponse | null>(null);
-  const [currentSimulationId, setCurrentSimulationId] = useState<string | null>(null);
-  const [simulationConfig, setSimulationConfig] = useState<SimulationConfig | null>(null);
+  const [completedSimulations, setCompletedSimulations] = useState<any[]>([]);
+  const [lastSimulationResult, setLastSimulationResult] = useState<any>(null);
 
-  // Load context from localStorage on mount
+  // Load completed simulations on component mount
   useEffect(() => {
-    const loadLatestContext = async () => {
-      try {
-        // First check if there's a current session set from the research dashboard
-        const currentSessionStr = localStorage.getItem('current_research_session');
-        if (currentSessionStr) {
-          const currentSession = JSON.parse(currentSessionStr);
-          console.log('Loading current session from research dashboard:', currentSession);
-          if (currentSession.session_id) {
-            await loadSession(currentSession.session_id);
-            return;
-          }
-        }
+    loadCompletedSimulations();
+  }, []);
 
-        // Fallback: Try to load the most recent session
-        const sessions = JSON.parse(localStorage.getItem('research_sessions') || '[]');
-        if (sessions.length > 0) {
-          const latestSession = sessions[0];
-          if (latestSession.session_id) {
-            await loadSession(latestSession.session_id);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load research context:', error);
-      }
-    };
-
-    loadLatestContext();
-  }, [loadSession]);
-
-  // Convert research helper questions to dashboard format when available
-  useEffect(() => {
-    console.log('🔍 Debug - Questions:', questions);
-    console.log('🔍 Debug - Context:', context);
-    console.log('🔍 Debug - Generated Questions:', generatedQuestions);
-
-    if (questions && !generatedQuestions && context.questionsGenerated) {
-      console.log('✅ Converting existing research questions to dashboard format');
-
-      // Convert research helper format to dashboard format
-      const dashboardFormat: DashboardQuestionResponse = {
-        success: true,
-        message: 'Questions loaded from research session',
-        questions: {
-          primaryStakeholders: [{
-            name: 'Primary Stakeholder',
-            description: 'Primary stakeholder from research session',
-            questions: {
-              problemDiscovery: questions.problemDiscovery || [],
-              solutionValidation: questions.solutionValidation || [],
-              followUp: questions.followUp || []
-            }
-          }],
-          secondaryStakeholders: []
-        },
-        metadata: {
-          total_questions: (questions.problemDiscovery?.length || 0) +
-                          (questions.solutionValidation?.length || 0) +
-                          (questions.followUp?.length || 0),
-          generation_method: 'research_session',
-          conversation_routine: true
-        }
-      };
-
-      setGeneratedQuestions(dashboardFormat);
-      console.log('🔄 Converted questions:', dashboardFormat);
-    }
-
-    // Also check if we have questions but questionsGenerated is false
-    if (questions && !generatedQuestions && !context.questionsGenerated) {
-      console.log('⚠️ Found questions but questionsGenerated is false, converting anyway');
-      const dashboardFormat: DashboardQuestionResponse = {
-        success: true,
-        message: 'Questions loaded from research session',
-        questions: {
-          primaryStakeholders: [{
-            name: 'Primary Stakeholder',
-            description: 'Primary stakeholder from research session',
-            questions: {
-              problemDiscovery: questions.problemDiscovery || [],
-              solutionValidation: questions.solutionValidation || [],
-              followUp: questions.followUp || []
-            }
-          }],
-          secondaryStakeholders: []
-        },
-        metadata: {
-          total_questions: (questions.problemDiscovery?.length || 0) +
-                          (questions.solutionValidation?.length || 0) +
-                          (questions.followUp?.length || 0),
-          generation_method: 'research_session',
-          conversation_routine: true
-        }
-      };
-
-      setGeneratedQuestions(dashboardFormat);
-      console.log('🔄 Converted questions (fallback):', dashboardFormat);
-    }
-  }, [questions, generatedQuestions, context.questionsGenerated]);
-
-  // Check if we have sufficient context for question generation
-  const hasContext = context.businessIdea && context.targetCustomer && context.problem;
-  const contextCompleteness = hasContext ? 100 :
-    (context.businessIdea ? 33 : 0) +
-    (context.targetCustomer ? 33 : 0) +
-    (context.problem ? 34 : 0);
-
-  const handleConfigureSimulation = async (config: SimulationConfig) => {
-    if (!generatedQuestions?.questions || !context.businessIdea) {
-      console.error('Missing required data for simulation');
-      return;
-    }
-
+  const loadCompletedSimulations = async () => {
     try {
-      setSimulationConfig(config);
-      setShowSimulationProgress(true);
-
-      // Debug: Log the generated questions structure
-      console.log('🔍 Generated Questions Full Response:', generatedQuestions);
-      console.log('🔍 Questions Object:', generatedQuestions.questions);
-      console.log('🔍 Questions Structure Keys:', Object.keys(generatedQuestions.questions || {}));
-      console.log('🔍 Primary Stakeholders:', generatedQuestions.questions?.primaryStakeholders);
-      console.log('🔍 Secondary Stakeholders:', generatedQuestions.questions?.secondaryStakeholders);
-      console.log('🔍 Stakeholders Object:', generatedQuestions.questions?.stakeholders);
-      console.log('🔍 Metadata:', generatedQuestions.metadata);
-
-      // Helper function to convert research helper stakeholder to simulation format
-      const convertStakeholder = (stakeholder: any, index: number) => ({
-        id: `${stakeholder.name.toLowerCase().replace(/\s+/g, '_')}_${index}`,
-        name: stakeholder.name,
-        description: stakeholder.description,
-        // Flatten all question categories into a single array
-        questions: [
-          ...(stakeholder.questions?.problemDiscovery || []),
-          ...(stakeholder.questions?.solutionValidation || []),
-          ...(stakeholder.questions?.followUp || [])
-        ]
-      });
-
-      // Handle different question structures - check both formats
-      let primaryStakeholders = [];
-      let secondaryStakeholders = [];
-
-      if (generatedQuestions.questions?.primaryStakeholders) {
-        // Format 1: Direct primaryStakeholders/secondaryStakeholders
-        primaryStakeholders = generatedQuestions.questions.primaryStakeholders;
-        secondaryStakeholders = generatedQuestions.questions.secondaryStakeholders || [];
-      } else if (generatedQuestions.questions?.stakeholders) {
-        // Format 2: Nested stakeholders object
-        primaryStakeholders = generatedQuestions.questions.stakeholders.primary || [];
-        secondaryStakeholders = generatedQuestions.questions.stakeholders.secondary || [];
-      }
-
-      console.log('🔍 Extracted Primary:', primaryStakeholders);
-      console.log('🔍 Extracted Secondary:', secondaryStakeholders);
-
-      // Convert questions to simulation format with proper structure mapping
-      const questionsData: QuestionsData = {
-        stakeholders: {
-          primary: primaryStakeholders.map(convertStakeholder),
-          secondary: secondaryStakeholders.map(convertStakeholder)
-        },
-        timeEstimate: {
-          totalQuestions: generatedQuestions.metadata?.total_questions || 0
-        }
-      };
-
-      console.log('🔍 Final Questions Data for Simulation:', questionsData);
-
-      const businessContext: BusinessContext = {
-        business_idea: context.businessIdea,
-        target_customer: context.targetCustomer || '',
-        problem: context.problem || '',
-        industry: 'general'
-      };
-
-      const response = await createSimulation(questionsData, businessContext, config);
-
-      if (response.success && response.simulation_id) {
-        setCurrentSimulationId(response.simulation_id);
-        setSimulationResults(response);
-        // Hide progress modal and show results immediately since simulation completed
-        setShowSimulationProgress(false);
-        console.log('Simulation completed successfully:', response);
-        console.log('Personas:', response.personas?.length || 0);
-        console.log('Interviews:', response.interviews?.length || 0);
-        console.log('Insights:', response.simulation_insights);
-      } else {
-        throw new Error(response.message || 'Simulation failed');
+      const response = await fetch('/api/research/simulation-bridge/completed');
+      if (response.ok) {
+        const data = await response.json();
+        setCompletedSimulations(Object.values(data.simulations));
       }
     } catch (error) {
-      console.error('Simulation failed:', error);
-      setShowSimulationProgress(false);
-      // You might want to show an error toast here
+      console.error('Failed to load completed simulations:', error);
     }
   };
 
-  const handleSimulationComplete = (simulationId: string) => {
-    setShowSimulationProgress(false);
-    // Results are already set in simulationResults state
-  };
+  const downloadInterviewsFromData = (result: any) => {
+    try {
+      // Generate clean interview TXT content
+      const content = result.interviews.map((interview: any, index: number) => {
+        const persona = result.personas?.find((p: any) => p.id === interview.persona_id);
 
-  const handleCancelSimulation = () => {
-    setShowSimulationProgress(false);
-    setCurrentSimulationId(null);
-    setSimulationConfig(null);
-  };
+        return `INTERVIEW ${index + 1}
+================
 
-  const handleAnalyzeResults = () => {
-    // Navigate to analysis with simulation data
-    if (simulationResults?.data) {
-      // Store simulation data for analysis
-      localStorage.setItem('simulation_analysis_data', JSON.stringify(simulationResults.data));
-      window.location.href = '/unified-dashboard/upload?source=simulation';
-    }
-  };
+Persona: ${persona?.name || 'Unknown'}
+Stakeholder Type: ${interview.stakeholder_type}
 
-  const handleViewDetails = () => {
-    // Show detailed simulation results
-    console.log('View simulation details:', simulationResults);
-  };
+RESPONSES:
+----------
 
-  const handleExportSimulationData = () => {
-    if (simulationResults?.data) {
-      const dataStr = JSON.stringify(simulationResults.data, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `simulation_${simulationResults.simulation_id}.json`;
-      link.click();
+${interview.responses.map((response: any, i: number) => `Q${i + 1}: ${response.question}
+
+A${i + 1}: ${response.response}
+`).join('\n---\n')}
+
+================
+`;
+      }).join('\n\n');
+
+      // Download immediately
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `interviews_${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download interviews:', error);
+    }
+  };
+
+  const downloadInterviewsDirectly = async (simulationId: string) => {
+    try {
+      const response = await fetch(`/api/research/simulation-bridge/completed/${simulationId}`);
+      if (response.ok) {
+        const result = await response.json();
+
+        // Generate clean interview TXT content
+        const content = result.interviews.map((interview: any, index: number) => {
+          const persona = result.personas?.find((p: any) => p.id === interview.persona_id);
+
+          return `INTERVIEW ${index + 1}
+================
+
+Persona: ${persona?.name || 'Unknown'}
+Stakeholder Type: ${interview.stakeholder_type}
+
+RESPONSES:
+----------
+
+${interview.responses.map((response: any, i: number) => `Q${i + 1}: ${response.question}
+
+A${i + 1}: ${response.response}
+`).join('\n---\n')}
+
+================
+`;
+        }).join('\n\n');
+
+        // Download immediately
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `interviews_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Failed to download interviews:', error);
+    }
+  };
+
+  const handleFileUploadAndSimulate = async (file: File) => {
+    const content = await file.text();
+
+    // Send raw content directly to simulation bridge - it has PydanticAI to parse it
+    const config: SimulationConfig = {
+      depth: 'detailed',
+      personas_per_stakeholder: 5,
+      response_style: 'realistic',
+      include_insights: true,
+      temperature: 0.7
+    };
+
+    console.log('🚀 Sending raw questionnaire to simulation bridge');
+
+    const result = await createSimulation(
+      { raw_questionnaire_content: content }, // Send raw content
+      { business_idea: '', target_customer: '', problem: '', industry: 'general' }, // Placeholder - bridge will parse
+      config
+    );
+
+    return result;
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'text/plain') {
+      setSelectedFile(file);
+      setError(null);
+      setSuccess(null);
+
+      try {
+        setIsProcessing(true);
+
+        // Send file directly to simulation bridge - it will parse with PydanticAI
+        try {
+          const result = await handleFileUploadAndSimulate(file);
+
+          if (result.success) {
+            setLastSimulationResult(result);
+            setSuccess(`Simulation completed! Generated ${result.interviews?.length || 0} interviews.`);
+            console.log('Simulation result:', result);
+
+            // Auto-download interviews immediately from the result data
+            if (result.interviews && result.interviews.length > 0) {
+              downloadInterviewsFromData(result);
+            }
+
+            // Refresh completed simulations list
+            await loadCompletedSimulations();
+          } else {
+            setError(result.message || 'Simulation failed');
+          }
+        } catch (error: any) {
+          if (error.message.includes('fetch')) {
+            // Likely a timeout - simulation might still be running
+            setSuccess('Simulation started! It may take a few minutes to complete. Check the "Completed Simulations" section below.');
+            // Refresh completed simulations list
+            await loadCompletedSimulations();
+          } else {
+            setError(error.message || 'Simulation failed');
+          }
+        }
+      } catch (err) {
+        console.error('Simulation error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to process file and start simulation');
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      setError('Please select a valid TXT file');
+    }
+  };
+
+  const handleStartSimulation = async (sessionId?: string) => {
+    try {
+      setIsProcessing(true);
+      setError(null);
+      setSuccess(null);
+
+      // TODO: Load session data and start simulation
+      console.log('Starting simulation with session:', sessionId);
+
+      // For now, show a placeholder message
+      setSuccess('Session simulation feature coming soon!');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start simulation');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4 max-w-7xl">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">
-            Research Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Generate and manage your customer research questions
-          </p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Interview Simulation</h1>
+        <p className="text-muted-foreground">
+          Generate AI persona interviews from your research sessions
+        </p>
+      </div>
 
-          {/* Workflow Status */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-              <div>
-                <p className="text-green-800 font-medium text-sm">✅ Session Management Active</p>
-                <p className="text-green-700 text-xs mt-1">
-                  Your research sessions are now properly saved and can be continued from the{' '}
-                  <button
-                    onClick={() => window.location.href = '/research-dashboard'}
-                    className="text-green-600 underline hover:text-green-800"
-                  >
-                    Sessions Dashboard
-                  </button>
+      {/* Simplified Simulation Bridge Interface */}
+      <div className="max-w-4xl mx-auto space-y-6">
+
+        {/* Upload Questionnaire Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Upload className="h-6 w-6" />
+              Option 1: Upload Questionnaire File
+            </CardTitle>
+            <CardDescription>
+              Have a questionnaire file ready? Upload it to start AI persona interviews immediately
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-medium mb-2">Upload Questionnaire File</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload your TXT questionnaire file to automatically start simulation
+              </p>
+              <input
+                type="file"
+                accept=".txt"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="questionnaire-upload"
+              />
+              <label htmlFor="questionnaire-upload">
+                <Button className="mb-2" disabled={isProcessing} asChild>
+                  <span>
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Select TXT File
+                      </>
+                    )}
+                  </span>
+                </Button>
+              </label>
+
+              {selectedFile && !isProcessing && (
+                <p className="text-sm text-green-600 mt-2">
+                  Selected: {selectedFile.name}
                 </p>
-              </div>
+              )}
+
+              {error && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+              )}
+
+              {success && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-600">{success}</p>
+                  {lastSimulationResult && (
+                    <Button
+                      onClick={() => downloadInterviewsFromData(lastSimulationResult)}
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Interviews
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Supports TXT files with stakeholder questions
+              </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* OR Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Questionnaire Selection */}
-          <div className="space-y-6">
-            <QuestionnaireSelector
-              generatedQuestions={generatedQuestions}
-              onQuestionnaireSelect={(questionnaire) => {
-                setGeneratedQuestions(questionnaire);
-              }}
-            />
-
-            {/* Debug/Sample Questionnaire Button */}
-            {!generatedQuestions && (
-              <Card>
-                <CardContent className="p-4">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      const sampleQuestionnaire: DashboardQuestionResponse = {
-                        success: true,
-                        message: 'Sample questionnaire for testing',
-                        questions: {
-                          primaryStakeholders: [{
-                            name: 'Account Manager',
-                            description: 'Primary user of the API service',
-                            questions: {
-                              problemDiscovery: [
-                                'How do you currently handle client data from subsidiaries?',
-                                'What challenges do you face with discount application?',
-                                'How often do discount discrepancies occur?'
-                              ],
-                              solutionValidation: [
-                                'Would an automated API service help streamline your workflow?',
-                                'What features would be most valuable in such a system?'
-                              ],
-                              followUp: [
-                                'What would be your biggest concern about implementing this solution?'
-                              ]
-                            }
-                          }],
-                          secondaryStakeholders: [{
-                            name: 'IT Administrator',
-                            description: 'Technical stakeholder for system integration',
-                            questions: {
-                              problemDiscovery: [
-                                'What are the current technical challenges with legacy systems?',
-                                'How do you handle data integration currently?'
-                              ],
-                              solutionValidation: [
-                                'What technical requirements would this API need to meet?'
-                              ],
-                              followUp: []
-                            }
-                          }]
-                        },
-                        metadata: {
-                          total_questions: 8,
-                          generation_method: 'sample',
-                          conversation_routine: false
-                        }
-                      };
-                      setGeneratedQuestions(sampleQuestionnaire);
-                    }}
-                  >
-                    Load Sample Questionnaire
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-2 text-center">
-                    For testing simulation functionality
+        {/* Recent Sessions Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Clock className="h-6 w-6" />
+              Option 2: Use Recent Research Session
+            </CardTitle>
+            <CardDescription>
+              Select from questionnaires you've already created in Research Chat
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                <div className="flex-1">
+                  <h4 className="font-medium">API service for legacy source systems</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Account managers • 34 questions • 5 stakeholders
                   </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Middle Column - Research Context */}
-          <div className="space-y-6">
-            <ResearchContextDisplay
-              context={context}
-              completeness={contextCompleteness}
-            />
-
-            {/* No Context State */}
-            {!hasContext && (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">No Research Context</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Start a conversation in the Customer Research Helper to build your research context.
-                  </p>
-                  <Button
-                    onClick={() => window.location.href = '/customer-research'}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Start Research Chat
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Simulation Settings */}
-          <div className="space-y-6">
-            <SimulationSettingsPanel
-              questionsData={{
-                stakeholders: {
-                  primary: generatedQuestions?.questions?.primaryStakeholders || [],
-                  secondary: generatedQuestions?.questions?.secondaryStakeholders || []
-                },
-                timeEstimate: {
-                  totalQuestions: generatedQuestions?.metadata?.total_questions || 0
-                }
-              }}
-              onStartSimulation={handleConfigureSimulation}
-              disabled={!generatedQuestions?.questions}
-            />
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                  <p className="text-xs text-muted-foreground">Generated today at 4:17 PM</p>
+                </div>
                 <Button
                   variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => window.location.href = '/customer-research'}
+                  size="sm"
+                  disabled={isProcessing}
+                  onClick={() => handleStartSimulation('session-1')}
                 >
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Continue Research Chat
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="h-4 w-4 mr-1" />
+                      Start Simulation
+                    </>
+                  )}
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => window.location.href = '/research-dashboard'}
-                >
+              </div>
+
+              <div className="text-center py-4">
+                <Button variant="ghost" size="sm">
                   <Clock className="mr-2 h-4 w-4" />
                   View All Sessions
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => window.location.href = '/unified-dashboard/upload'}
-                >
-                  <ArrowRight className="mr-2 h-4 w-4" />
-                  Upload Interview Data
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Need to Create Questions?</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => window.location.href = '/customer-research'}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Start Research Chat
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => window.location.href = '/research-dashboard'}
+              >
+                <Clock className="mr-2 h-4 w-4" />
+                View All Sessions
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Completed Simulations */}
+        {completedSimulations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Completed Simulations</CardTitle>
+              <CardDescription>
+                Previous simulation results available for download
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {completedSimulations.map((sim: any) => (
+                  <div key={sim.simulation_id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium">
+                        {sim.total_personas} personas, {sim.total_interviews} interviews
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {sim.created_at ? new Date(sim.created_at).toLocaleString() : 'Recently completed'}
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => downloadInterviewsDirectly(sim.simulation_id)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Interviews
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Simulation Progress and Results */}
-      <SimulationProgress
-        isVisible={showSimulationProgress}
-        simulationId={currentSimulationId || undefined}
-        onCancel={handleCancelSimulation}
-        onComplete={handleSimulationComplete}
-        simulationConfig={simulationConfig || undefined}
-      />
 
-      {simulationResults && (
-        <SimulationResults
-          simulationResponse={simulationResults}
-          onAnalyzeResults={handleAnalyzeResults}
-          onViewDetails={handleViewDetails}
-          onExportData={handleExportSimulationData}
-          onClose={() => {
-            console.log('Closing simulation results');
-            setSimulationResults(null);
-          }}
-        />
-      )}
     </div>
   );
 }

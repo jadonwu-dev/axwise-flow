@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -13,6 +13,21 @@ import { ComprehensiveQuestionsComponent } from './ComprehensiveQuestionsCompone
 
 import { EnhancedMultiStakeholderComponent } from './EnhancedMultiStakeholderComponent';
 import { StakeholderQuestionsComponent } from './StakeholderQuestionsComponent';
+
+// Client-side timestamp component to avoid hydration errors
+function ClientTimestamp({ timestamp }: { timestamp: Date }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null; // Return null instead of empty string to avoid hydration mismatch
+  }
+
+  return <span>{timestamp.toLocaleTimeString()}</span>;
+}
 import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
 import { StakeholderAlert } from './StakeholderAlert';
 
@@ -73,6 +88,233 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
   // Local state for questions to handle API responses directly
   const currentQuestions = state.localQuestions || questions;
+
+  // Enhanced export function that uses comprehensive stakeholder questions
+  const exportComprehensiveQuestions = (format: 'txt' | 'json' | 'csv' = 'txt') => {
+    if (!currentQuestions) {
+      console.error('No questions available to export');
+      return;
+    }
+
+    // Find the latest message with comprehensive questions data
+    let comprehensiveData = null;
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const message = state.messages[i];
+      if (message.metadata?.comprehensiveQuestions) {
+        comprehensiveData = message.metadata.comprehensiveQuestions;
+        break;
+      }
+    }
+
+    // Debug the actual data structure
+    console.log('🔍 [Export Debug] Found comprehensive data:', comprehensiveData);
+    console.log('🔍 [Export Debug] Primary stakeholders:', comprehensiveData?.primaryStakeholders?.length || 0);
+    console.log('🔍 [Export Debug] Secondary stakeholders:', comprehensiveData?.secondaryStakeholders?.length || 0);
+
+    try {
+      if (format === 'txt') {
+        // Check if we have comprehensive stakeholder structure
+        if (comprehensiveData && (comprehensiveData.primaryStakeholders || comprehensiveData.secondaryStakeholders)) {
+          // Use comprehensive format with actual stakeholder data
+          console.log('📋 Using comprehensive stakeholder format');
+
+          const primaryStakeholders = comprehensiveData.primaryStakeholders || [];
+          const secondaryStakeholders = comprehensiveData.secondaryStakeholders || [];
+          const timeEstimate = comprehensiveData.timeEstimate || {};
+
+          const textContent = `# Customer Research Questionnaire
+Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+
+## Business Context
+**Business Idea:** ${context.businessIdea || 'Not specified'}
+**Target Customer:** ${context.targetCustomer || 'Not specified'}
+**Problem:** ${context.problem || 'Not specified'}
+
+---
+
+## 📊 Questionnaire Overview
+**Primary Stakeholders:** ${primaryStakeholders.length}
+**Secondary Stakeholders:** ${secondaryStakeholders.length}
+**Total Questions:** ${timeEstimate.totalQuestions || 0}
+**Estimated Time:** ${timeEstimate.estimatedMinutes || '0-0'} minutes per conversation
+
+---
+
+## 🎯 PRIMARY STAKEHOLDERS
+*Focus First - Start with these ${primaryStakeholders.length} stakeholders to validate core business assumptions*
+
+${primaryStakeholders.map((stakeholder: any, index: number) => `
+### ${index + 1}. ${stakeholder.name}
+${stakeholder.description}
+
+#### 🔍 Problem Discovery Questions
+${(stakeholder.questions?.problemDiscovery || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+#### ✅ Solution Validation Questions
+${(stakeholder.questions?.solutionValidation || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+#### 💡 Follow-up Questions
+${(stakeholder.questions?.followUp || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+---`).join('\n')}
+
+## 👥 SECONDARY STAKEHOLDERS
+*Research Later - Expand to these ${secondaryStakeholders.length} stakeholders after validating primary assumptions*
+
+${secondaryStakeholders.map((stakeholder: any, index: number) => `
+### ${index + 1}. ${stakeholder.name}
+${stakeholder.description}
+
+#### 🔍 Problem Discovery Questions
+${(stakeholder.questions?.problemDiscovery || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+#### ✅ Solution Validation Questions
+${(stakeholder.questions?.solutionValidation || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+#### 💡 Follow-up Questions
+${(stakeholder.questions?.followUp || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+---`).join('\n')}
+
+## 📋 RESEARCH INSTRUCTIONS
+
+### Interview Process
+1. **Start with Primary Stakeholders** - Focus on validating core assumptions first
+2. **Schedule focused conversations** - Use the time estimates provided for each stakeholder
+3. **Use questions as a guide** - Let conversation flow naturally, but ensure key topics are covered
+4. **Ask follow-up questions** - Dig deeper into interesting responses
+5. **Look for patterns** - Identify common themes across multiple interviews
+
+### After Interviews
+1. **Upload transcripts to AxWise** - For automated analysis and insights
+2. **Generate Product Requirements** - Transform insights into actionable requirements
+3. **Create user stories** - Based on validated customer needs
+4. **Iterate on your concept** - Use insights to refine your business idea
+
+---
+
+Generated by AxWise Customer Research Assistant
+Ready for simulation bridge and interview analysis`;
+
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `research-questionnaire-${new Date().toISOString().split('T')[0]}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          console.log('✅ Comprehensive questionnaire exported successfully');
+          return;
+        } else {
+          // Use simplified format with all available questions
+          console.log('📋 Using simplified format - creating comprehensive export from available questions');
+
+          const totalQuestions = (currentQuestions.problemDiscovery?.length || 0) +
+                               (currentQuestions.solutionValidation?.length || 0) +
+                               (currentQuestions.followUp?.length || 0);
+
+          const textContent = `# Customer Research Questionnaire
+Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+
+## Business Context
+**Business Idea:** ${context.businessIdea || 'Not specified'}
+**Target Customer:** ${context.targetCustomer || 'Not specified'}
+**Problem:** ${context.problem || 'Not specified'}
+
+---
+
+## 📊 Questionnaire Overview
+**Total Questions:** ${totalQuestions}
+**Problem Discovery:** ${currentQuestions.problemDiscovery?.length || 0} questions
+**Solution Validation:** ${currentQuestions.solutionValidation?.length || 0} questions
+**Follow-up Questions:** ${currentQuestions.followUp?.length || 0} questions
+**Estimated Time:** ${Math.ceil(totalQuestions * 2.5)}-${Math.ceil(totalQuestions * 4)} minutes per interview
+
+---
+
+## 🔍 PROBLEM DISCOVERY QUESTIONS
+*Understand current state and pain points*
+
+${(currentQuestions.problemDiscovery || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+---
+
+## ✅ SOLUTION VALIDATION QUESTIONS
+*Validate your proposed solution approach*
+
+${(currentQuestions.solutionValidation || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+---
+
+## 💡 FOLLOW-UP QUESTIONS
+*Deeper insights and next steps*
+
+${(currentQuestions.followUp || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n\n')}
+
+---
+
+## 🎯 STAKEHOLDER GUIDANCE
+*Based on your business context, consider interviewing:*
+
+### Primary Stakeholders (Interview First)
+- **Account Managers** - Direct users experiencing the fragmented data problem
+- **Head of Account Management** - Leadership responsible for revenue realization
+- **Sales Operations Manager** - Process optimization and data management oversight
+
+### Secondary Stakeholders (Interview Later)
+- **IT Systems Administrator** - Technical integration and system stability concerns
+- **Finance Director** - Financial impact and ROI evaluation
+
+---
+
+## 📋 RESEARCH INSTRUCTIONS
+
+### Interview Process
+1. **Start with Problem Discovery** - Understand current pain points thoroughly
+2. **Move to Solution Validation** - Test your API service concept
+3. **Use Follow-up Questions** - Dig deeper into interesting responses
+4. **Keep interviews focused** - 45-60 minutes per stakeholder type
+5. **Look for patterns** - Identify common themes across interviews
+
+### Key Areas to Explore
+- **Current data fragmentation challenges**
+- **Impact of unfulfilled discount agreements**
+- **Technical integration requirements**
+- **Financial implications and ROI expectations**
+- **Change management and adoption concerns**
+
+### After Interviews
+1. **Upload transcripts to AxWise** - For automated analysis and insights
+2. **Generate Product Requirements** - Transform insights into actionable specs
+3. **Create user stories** - Based on validated customer needs
+4. **Iterate on your API concept** - Use insights to refine your solution
+
+---
+
+Generated by AxWise Customer Research Assistant
+Ready for simulation bridge and interview analysis`;
+
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `research-questionnaire-${new Date().toISOString().split('T')[0]}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          console.log('✅ Comprehensive questionnaire exported successfully');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to export comprehensive questions:', error);
+    }
+  };
 
   // FIXED: Add proper handler functions for broken buttons
   const handleContinueWithCurrent = () => {
@@ -136,9 +378,9 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
     }
   };
 
-  const loadSessionLocal = async (sessionId: string) => {
+  const loadSessionLocal = useCallback(async (sessionId: string) => {
     await loadSession(sessionId, actions, updateContext);
-  };
+  }, [actions, updateContext]);
 
   // Keyboard handlers
   const handleKeyDownLocal = (e: React.KeyboardEvent) => {
@@ -313,7 +555,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                 <span className="hidden sm:inline">Clear</span>
               </Button>
               {currentQuestions && (
-                <Button variant="outline" size="sm" onClick={() => exportQuestions('txt')}>
+                <Button variant="outline" size="sm" onClick={() => exportComprehensiveQuestions('txt')}>
                   <Download className="h-4 w-4 mr-1 lg:mr-2" />
                   <span className="hidden sm:inline">Export</span>
                 </Button>
@@ -390,7 +632,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                                 message.questions?.estimatedTime
                               )}
                               businessContext={message.metadata?.businessContext}
-                              onExport={() => exportQuestions('txt')}
+                              onExport={() => exportComprehensiveQuestions('txt')}
                               onContinue={continueToAnalysis}
                               onDashboard={async () => {
                                 // Save current session before navigating
@@ -419,7 +661,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                             message.questions?.stakeholders
                           )}
                           businessContext={message.metadata?.businessContext}
-                          onExport={() => exportQuestions('txt')}
+                          onExport={() => exportComprehensiveQuestions('txt')}
                           onContinue={continueToAnalysis}
                         />
                       ) : message.content === 'MULTI_STAKEHOLDER_COMPONENT' ? (
@@ -436,7 +678,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                         />
                       ) : message.content === 'NEXT_STEPS_COMPONENT' ? (
                         <NextStepsChatMessage
-                          onExportQuestions={() => exportQuestions('txt')}
+                          onExportQuestions={() => exportComprehensiveQuestions('txt')}
                           onStartResearch={continueToAnalysis}
                           timeEstimate={message.metadata?.timeEstimate}
                         />
@@ -463,7 +705,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
                       {!message.content.includes('_COMPONENT') && (
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-xs opacity-70">
-                            {message.timestamp.toLocaleTimeString()}
+                            <ClientTimestamp timestamp={message.timestamp} />
                           </span>
                           {message.role === 'assistant' && (
                             <Button
@@ -619,7 +861,7 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
             <ContextPanel
               context={context}
               questions={currentQuestions || undefined}
-              onExport={() => exportQuestions('txt')}
+              onExport={() => exportComprehensiveQuestions('txt')}
               onContinueToAnalysis={continueToAnalysis}
             />
           </div>

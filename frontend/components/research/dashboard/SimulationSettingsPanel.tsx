@@ -15,12 +15,12 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Settings, 
-  Zap, 
-  Users, 
-  Clock, 
-  Brain, 
+import {
+  Settings,
+  Zap,
+  Users,
+  Clock,
+  Brain,
   Target,
   AlertCircle,
   Play
@@ -43,7 +43,7 @@ export function SimulationSettingsPanel({
     depth: 'detailed',
     personas_per_stakeholder: 2,
     response_style: 'realistic',
-    include_insights: true,
+    include_insights: false, // Always false - simulation only generates interview files
     temperature: 0.7
   });
 
@@ -55,7 +55,11 @@ export function SimulationSettingsPanel({
     const loadDefaults = async () => {
       try {
         const defaults = await getDefaultConfig();
-        setConfig(defaults.default_config);
+        // Override include_insights to always be false
+        setConfig({
+          ...defaults.default_config,
+          include_insights: false
+        });
       } catch (error) {
         console.error('Failed to load default config:', error);
       }
@@ -69,15 +73,15 @@ export function SimulationSettingsPanel({
     const calculateTime = () => {
       const totalStakeholders = Object.values(questionsData.stakeholders).flat().length;
       const totalPersonas = totalStakeholders * config.personas_per_stakeholder;
-      
+
       // Base time estimates (in minutes)
       const baseTimePerPersona = config.depth === 'quick' ? 1 : config.depth === 'detailed' ? 2 : 3;
       const baseTimePerInterview = config.depth === 'quick' ? 2 : config.depth === 'detailed' ? 4 : 6;
-      
+
       const personaTime = totalPersonas * baseTimePerPersona;
       const interviewTime = totalPersonas * baseTimePerInterview;
       const processingTime = 2; // Fixed processing overhead
-      
+
       return personaTime + interviewTime + processingTime;
     };
 
@@ -222,20 +226,6 @@ export function SimulationSettingsPanel({
           </div>
         </div>
 
-        {/* Include Insights */}
-        <div className="flex items-center justify-between">
-          <div>
-            <Label className="text-sm font-medium">Generate Insights</Label>
-            <div className="text-xs text-muted-foreground">
-              Automatically analyze simulation results for patterns and recommendations.
-            </div>
-          </div>
-          <Switch
-            checked={config.include_insights}
-            onCheckedChange={(checked) => setConfig({...config, include_insights: checked})}
-          />
-        </div>
-
         <Separator />
 
         {/* Start Simulation Button */}
@@ -246,9 +236,9 @@ export function SimulationSettingsPanel({
               Select a questionnaire to enable simulation
             </div>
           )}
-          
-          <Button 
-            onClick={handleStartSimulation} 
+
+          <Button
+            onClick={handleStartSimulation}
             disabled={loading || disabled}
             className="w-full"
             size="lg"

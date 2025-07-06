@@ -2,7 +2,16 @@
 Research Session Models for Customer Research Feature
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Boolean, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    JSON,
+    Boolean,
+    ForeignKey,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -10,6 +19,7 @@ from pydantic import BaseModel
 
 # Import the shared Base from database.py
 from backend.database import Base
+
 
 class ResearchSession(Base):
     """Database model for research sessions."""
@@ -27,7 +37,9 @@ class ResearchSession(Base):
     industry = Column(String, default="general")
 
     # Session metadata
-    stage = Column(String, default="initial")  # initial, business_idea, target_customer, validation, completed
+    stage = Column(
+        String, default="initial"
+    )  # initial, business_idea, target_customer, validation, completed
     status = Column(String, default="active")  # active, completed, abandoned
 
     # Conversation data
@@ -46,6 +58,7 @@ class ResearchSession(Base):
     # Relationships
     exports = relationship("ResearchExport", back_populates="session")
 
+
 class ResearchExport(Base):
     """Database model for research exports."""
 
@@ -63,12 +76,14 @@ class ResearchExport(Base):
     # Relationships
     session = relationship("ResearchSession", back_populates="exports")
 
+
 # Pydantic models for API
 class ResearchSessionCreate(BaseModel):
     user_id: Optional[str] = None
     business_idea: Optional[str] = None
     target_customer: Optional[str] = None
     problem: Optional[str] = None
+
 
 class ResearchSessionUpdate(BaseModel):
     business_idea: Optional[str] = None
@@ -81,6 +96,7 @@ class ResearchSessionUpdate(BaseModel):
     conversation_context: Optional[str] = None
     questions_generated: Optional[bool] = None
     research_questions: Optional[Dict[str, Any]] = None
+
 
 class ResearchSessionResponse(BaseModel):
     id: int
@@ -100,17 +116,29 @@ class ResearchSessionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ResearchSessionSummary(BaseModel):
     """Summary model for dashboard display."""
-    id: int
+
+    id: str  # Use session_id as the main id for frontend compatibility
     session_id: str
+    title: str  # Derived from business_idea
     business_idea: Optional[str]
+    target_customer: Optional[str]
+    problem: Optional[str]
     industry: str
     stage: str
     status: str
     questions_generated: bool
+    has_questionnaire: bool  # Same as questions_generated
+    questionnaire_exported: bool  # Based on exports
     created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime]
     message_count: int
+    question_count: int  # Count of questions in research_questions
+    stakeholder_count: int  # Count of stakeholders in research_questions
+    last_message_at: Optional[datetime]  # Last message timestamp
 
     class Config:
         from_attributes = True

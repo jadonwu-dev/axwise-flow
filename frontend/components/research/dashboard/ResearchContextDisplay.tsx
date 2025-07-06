@@ -1,16 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Target, 
-  Users, 
-  Lightbulb, 
-  CheckCircle2, 
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Target,
+  Users,
+  Lightbulb,
+  CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  MessageSquare,
+  Edit3,
+  Eye,
+  Save
 } from 'lucide-react';
 
 interface ResearchContext {
@@ -28,12 +36,40 @@ interface ResearchContext {
   };
 }
 
+type ContextMode = 'view' | 'chat' | 'manual';
+
 interface ResearchContextDisplayProps {
   context: ResearchContext;
   completeness: number;
+  onContextUpdate?: (updates: Partial<ResearchContext>) => void;
+  onStartChat?: () => void;
 }
 
-export function ResearchContextDisplay({ context, completeness }: ResearchContextDisplayProps) {
+export function ResearchContextDisplay({
+  context,
+  completeness,
+  onContextUpdate,
+  onStartChat
+}: ResearchContextDisplayProps) {
+  const [mode, setMode] = useState<ContextMode>('view');
+  const [editedContext, setEditedContext] = useState<ResearchContext>(context);
+
+  const handleSaveContext = () => {
+    if (onContextUpdate) {
+      onContextUpdate(editedContext);
+    }
+    setMode('view');
+  };
+
+  const handleStartChat = () => {
+    if (onStartChat) {
+      onStartChat();
+    } else {
+      // Default behavior - navigate to chat
+      window.location.href = '/customer-research';
+    }
+  };
+
   const getStageColor = (stage?: string) => {
     switch (stage) {
       case 'initial': return 'bg-gray-100 text-gray-800';
@@ -81,8 +117,8 @@ export function ResearchContextDisplay({ context, completeness }: ResearchContex
             <span className="text-muted-foreground">Context Completeness</span>
             <span className="font-medium">{completeness}%</span>
           </div>
-          <Progress 
-            value={completeness} 
+          <Progress
+            value={completeness}
             className="h-2"
             style={{
               background: 'var(--muted)',
@@ -90,8 +126,26 @@ export function ResearchContextDisplay({ context, completeness }: ResearchContex
           />
         </div>
 
-        {/* Context Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Mode Tabs */}
+        <Tabs value={mode} onValueChange={(value) => setMode(value as ContextMode)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="view" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              View
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="flex items-center gap-2">
+              <Edit3 className="h-4 w-4" />
+              Manual
+            </TabsTrigger>
+          </TabsList>
+
+          {/* View Mode - Current Context Display */}
+          <TabsContent value="view" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Business Idea */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -179,6 +233,71 @@ export function ResearchContextDisplay({ context, completeness }: ResearchContex
             </div>
           </div>
         )}
+          </TabsContent>
+
+          {/* Chat Mode */}
+          <TabsContent value="chat" className="space-y-4">
+            <div className="text-center py-8">
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Refine Context with AI Chat</h3>
+              <p className="text-muted-foreground mb-4">
+                Continue your conversation with the AI research assistant to improve and expand your business context.
+              </p>
+              <Button onClick={handleStartChat} className="bg-primary hover:bg-primary/90">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Start Research Chat
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Manual Mode */}
+          <TabsContent value="manual" className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="business-idea">Business Idea</Label>
+                <Textarea
+                  id="business-idea"
+                  placeholder="Describe your business idea in detail..."
+                  value={editedContext.businessIdea || ''}
+                  onChange={(e) => setEditedContext({...editedContext, businessIdea: e.target.value})}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="target-customer">Target Customer</Label>
+                <Textarea
+                  id="target-customer"
+                  placeholder="Who are your target customers?"
+                  value={editedContext.targetCustomer || ''}
+                  onChange={(e) => setEditedContext({...editedContext, targetCustomer: e.target.value})}
+                  className="min-h-[60px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="problem">Problem</Label>
+                <Textarea
+                  id="problem"
+                  placeholder="What problem does your business solve?"
+                  value={editedContext.problem || ''}
+                  onChange={(e) => setEditedContext({...editedContext, problem: e.target.value})}
+                  className="min-h-[60px]"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleSaveContext} className="flex-1">
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={() => setMode('view')}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

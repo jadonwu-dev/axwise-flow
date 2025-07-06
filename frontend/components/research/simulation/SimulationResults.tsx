@@ -16,6 +16,12 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Users,
   MessageSquare,
   TrendingUp,
@@ -27,13 +33,13 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
-import { SimulationResponse } from '@/lib/api/simulation';
+import { SimulationResponse, SimulatedInterview, AIPersona } from '@/lib/api/simulation';
 
 interface SimulationResultsProps {
   simulationResponse: SimulationResponse;
   onAnalyzeResults: () => void;
   onViewDetails: () => void;
-  onExportData: () => void;
+  onExportData?: () => void;
   onClose?: () => void;
 }
 
@@ -47,6 +53,93 @@ export function SimulationResults({
   const [activeTab, setActiveTab] = useState('overview');
 
   const { personas, interviews, simulation_insights, metadata } = simulationResponse;
+
+  // Download functions
+  const downloadInterviewsAsText = () => {
+    if (!interviews || interviews.length === 0) {
+      alert('No interviews available to download');
+      return;
+    }
+
+    const content = interviews.map((interview, index) => {
+      const persona = personas?.find(p => p.id === interview.persona_id);
+
+      return `INTERVIEW ${index + 1}
+================
+
+Persona: ${persona?.name || 'Unknown'}
+Stakeholder Type: ${interview.stakeholder_type}
+
+RESPONSES:
+----------
+
+${interview.responses.map((response, i) => `Q${i + 1}: ${response.question}
+
+A${i + 1}: ${response.response}
+`).join('\n---\n')}
+
+================
+`;
+    }).join('\n\n');
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `simulation_interviews_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPersonasAsText = () => {
+    if (!personas || personas.length === 0) {
+      alert('No personas available to download');
+      return;
+    }
+
+    const content = personas.map((persona, index) => `PERSONA ${index + 1}
+=============
+
+Name: ${persona.name}
+Stakeholder Type: ${persona.stakeholder_type}
+Background: ${persona.background}
+
+=============
+`).join('\n\n');
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `simulation_personas_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadAllAsJSON = () => {
+    const data = {
+      simulation_id: simulationResponse.simulation_id,
+      metadata: simulationResponse.metadata,
+      personas: simulationResponse.personas,
+      interviews: simulationResponse.interviews,
+      insights: simulationResponse.simulation_insights,
+      exported_at: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `simulation_complete_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Debug logging
   console.log('SimulationResults received:', simulationResponse);
@@ -173,14 +266,41 @@ export function SimulationResults({
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </Button>
-                <Button onClick={onExportData} variant="outline" className="w-full">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Data
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Files
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={downloadInterviewsAsText}>
+                      Download Interviews (TXT)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadPersonasAsText}>
+                      Download Personas (TXT)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadAllAsJSON}>
+                      Download All Data (JSON)
+                    </DropdownMenuItem>
+                    {onExportData && (
+                      <DropdownMenuItem onClick={onExportData}>
+                        Export to Analysis
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </TabsContent>
 
             <TabsContent value="personas" className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Generated Personas</h3>
+                <Button onClick={downloadPersonasAsText} variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Personas
+                </Button>
+              </div>
               {personas?.map((persona, index) => (
                 <Card key={persona.id}>
                   <CardHeader>
@@ -220,6 +340,13 @@ export function SimulationResults({
             </TabsContent>
 
             <TabsContent value="interviews" className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Simulated Interviews</h3>
+                <Button onClick={downloadInterviewsAsText} variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Interviews
+                </Button>
+              </div>
               {interviews?.map((interview, index) => (
                 <Card key={interview.persona_id}>
                   <CardHeader>

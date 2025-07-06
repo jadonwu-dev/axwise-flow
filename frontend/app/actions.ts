@@ -532,7 +532,7 @@ export async function getRedirectUrl(analysisId: string): Promise<string> {
 
   // Add timestamp to prevent caching issues
   const timestamp = Date.now();
-  const url = `/unified-dashboard/visualize?analysisId=${analysisId}&visualizationTab=themes&timestamp=${timestamp}`;
+  const url = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=themes&timestamp=${timestamp}`;
   console.log(`[Server Action - getRedirectUrl] Generated URL: ${url}`);
   return url;
 }

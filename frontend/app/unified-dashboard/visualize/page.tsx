@@ -13,18 +13,20 @@ interface VisualizePageProps {
 /**
  * VisualizePage Component
  *
- * This page now redirects to the main dashboard with the analysisId parameter.
- * The main dashboard now serves as the visualization hub.
+ * This page redirects to the main dashboard with the analysisId parameter when an ID is provided.
+ * If no analysisId is provided, it redirects to the analysis history page for selection.
  */
 export default function VisualizePage({ searchParams }: VisualizePageProps): never {
-  const analysisId = searchParams.analysisId || '';
+  const analysisId = searchParams.analysisId;
   const visualizationTab = searchParams.visualizationTab || 'themes';
 
-  // Redirect to the main dashboard with the analysisId parameter
-  const timestamp = Date.now();
-  // Make sure we always have a visualization tab
-  const tab = visualizationTab || 'themes';
-  const redirectUrl = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=${tab}&timestamp=${timestamp}`;
-
-  return redirect(redirectUrl);
+  if (analysisId) {
+    // Redirect to the main dashboard with the analysisId parameter
+    const timestamp = Date.now();
+    const redirectUrl = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=${visualizationTab}&timestamp=${timestamp}`;
+    return redirect(redirectUrl);
+  } else {
+    // No analysis ID provided, redirect to analysis history for selection
+    return redirect('/unified-dashboard/analysis-history');
+  }
 }

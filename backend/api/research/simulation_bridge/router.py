@@ -4,7 +4,7 @@ FastAPI router for the Simulation Bridge system.
 
 import logging
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 
 from .models import SimulationRequest, SimulationResponse, SimulationProgress
@@ -28,6 +28,30 @@ async def health_check():
     return {"status": "healthy", "service": "simulation-bridge"}
 
 
+@router.post("/debug-request")
+async def debug_request(request: Request):
+    """Debug endpoint to see raw request data"""
+    try:
+        body = await request.body()
+        json_data = await request.json()
+
+        logger.info(f"🔍 Debug - Raw body: {body}")
+        logger.info(f"🔍 Debug - JSON data: {json_data}")
+        logger.info(f"🔍 Debug - Headers: {dict(request.headers)}")
+
+        return {
+            "success": True,
+            "body_length": len(body),
+            "json_keys": (
+                list(json_data.keys()) if isinstance(json_data, dict) else "not_dict"
+            ),
+            "data": json_data,
+        }
+    except Exception as e:
+        logger.error(f"Debug request failed: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
 @router.post("/simulate", response_model=SimulationResponse)
 async def create_simulation(
     request: SimulationRequest, background_tasks: BackgroundTasks
@@ -44,13 +68,24 @@ async def create_simulation(
     try:
         logger.info("Starting new simulation request")
 
+        # Handle raw questionnaire content with PydanticAI parsing
+        if request.raw_questionnaire_content:
+            logger.info("Processing raw questionnaire content with PydanticAI")
+            # Parse questionnaire using PydanticAI - delegate to orchestrator
+            parsed_request = await orchestrator.parse_raw_questionnaire(
+                request.raw_questionnaire_content, request.config
+            )
+            # Update request with parsed data
+            request.questions_data = parsed_request.questions_data
+            request.business_context = parsed_request.business_context
+
         # Validate request
-        if not request.questions_data.stakeholders:
+        if not request.questions_data or not request.questions_data.stakeholders:
             raise HTTPException(
                 status_code=400, detail="No stakeholders provided in questions data"
             )
 
-        if not request.business_context.business_idea:
+        if not request.business_context or not request.business_context.business_idea:
             raise HTTPException(
                 status_code=400, detail="Business idea is required for simulation"
             )
@@ -130,6 +165,46 @@ async def cancel_simulation(simulation_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to cancel simulation")
 
 
+@router.get("/completed")
+async def list_completed_simulations() -> Dict[str, Any]:
+    """
+    List all completed simulations.
+    """
+    try:
+        completed = orchestrator.list_completed_simulations()
+        return {"success": True, "simulations": completed, "count": len(completed)}
+    except Exception as e:
+        logger.error(f"Failed to list completed simulations: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list simulations: {str(e)}"
+        )
+
+
+@router.get("/completed/{simulation_id}")
+async def get_completed_simulation(simulation_id: str) -> SimulationResponse:
+    """
+    Get a completed simulation result by ID.
+    """
+    try:
+        result = orchestrator.get_completed_simulation(simulation_id)
+
+        if not result:
+            raise HTTPException(
+                status_code=404, detail="Completed simulation not found"
+            )
+
+        logger.info(f"Retrieved completed simulation: {simulation_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get completed simulation: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get simulation: {str(e)}"
+        )
+
+
 @router.post("/test-personas")
 async def test_persona_generation(
     business_context: Dict[str, Any],
@@ -156,7 +231,7 @@ async def test_persona_generation(
         if not api_key:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
 
-        model = GeminiModel("gemini-2.0-flash-exp")
+        model = GeminiModel("gemini-2.5-flash")
         generator = PersonaGenerator(model)
         personas = await generator.generate_personas(
             stakeholder, business_ctx, sim_config
@@ -201,7 +276,7 @@ async def test_interview_simulation(
         if not api_key:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
 
-        model = GeminiModel("gemini-2.0-flash-exp")
+        model = GeminiModel("gemini-2.5-flash")
         simulator = InterviewSimulator(model)
         interview = await simulator.simulate_interview(
             persona, stakeholder, business_ctx, sim_config

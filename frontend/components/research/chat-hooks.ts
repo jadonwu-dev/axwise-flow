@@ -139,12 +139,19 @@ export const useSessionLoading = (
   loadSessionId: string | undefined,
   loadSession: (sessionId: string) => Promise<void>
 ) => {
-  // Load session when loadSessionId changes
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
+
+  // Load session when loadSessionId changes, but only once per session
   useEffect(() => {
-    if (loadSessionId) {
-      loadSession(loadSessionId);
+    if (loadSessionId && loadSessionId !== loadedSessionId) {
+      console.log('🔄 Loading session (once):', loadSessionId);
+      loadSession(loadSessionId).then(() => {
+        setLoadedSessionId(loadSessionId);
+      }).catch((error) => {
+        console.error('❌ Failed to load session:', error);
+      });
     }
-  }, [loadSessionId, loadSession]);
+  }, [loadSessionId]); // Remove loadSession from dependencies to prevent infinite loop
 };
 
 /**

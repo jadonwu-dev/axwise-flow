@@ -14,9 +14,10 @@ from backend.models.research_session import (
     ResearchSessionCreate,
     ResearchSessionUpdate,
     ResearchSessionResponse,
-    ResearchSessionSummary
+    ResearchSessionSummary,
 )
 from backend.database import get_db
+
 
 class ResearchSessionService:
     """Service for managing research sessions."""
@@ -24,11 +25,13 @@ class ResearchSessionService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_session(self, session_data: ResearchSessionCreate) -> ResearchSession:
+    def create_session(
+        self, session_data: ResearchSessionCreate, session_id: str = None
+    ) -> ResearchSession:
         """Create a new research session."""
 
         session = ResearchSession(
-            session_id=str(uuid.uuid4()),
+            session_id=session_id or str(uuid.uuid4()),
             user_id=session_data.user_id,
             business_idea=session_data.business_idea,
             target_customer=session_data.target_customer,
@@ -37,7 +40,7 @@ class ResearchSessionService:
             conversation_context="",
             industry="general",
             stage="initial",
-            status="active"
+            status="active",
         )
 
         self.db.add(session)
@@ -48,11 +51,15 @@ class ResearchSessionService:
 
     def get_session(self, session_id: str) -> Optional[ResearchSession]:
         """Get a research session by ID."""
-        return self.db.query(ResearchSession).filter(
-            ResearchSession.session_id == session_id
-        ).first()
+        return (
+            self.db.query(ResearchSession)
+            .filter(ResearchSession.session_id == session_id)
+            .first()
+        )
 
-    def update_session(self, session_id: str, update_data: ResearchSessionUpdate) -> Optional[ResearchSession]:
+    def update_session(
+        self, session_id: str, update_data: ResearchSessionUpdate
+    ) -> Optional[ResearchSession]:
         """Update a research session."""
 
         session = self.get_session(session_id)
@@ -70,7 +77,9 @@ class ResearchSessionService:
 
         return session
 
-    def add_message(self, session_id: str, message: Dict[str, Any]) -> Optional[ResearchSession]:
+    def add_message(
+        self, session_id: str, message: Dict[str, Any]
+    ) -> Optional[ResearchSession]:
         """Add a message to the session."""
 
         session = self.get_session(session_id)
@@ -90,7 +99,9 @@ class ResearchSessionService:
 
         return session
 
-    def complete_session(self, session_id: str, research_questions: Dict[str, Any]) -> Optional[ResearchSession]:
+    def complete_session(
+        self, session_id: str, research_questions: Dict[str, Any]
+    ) -> Optional[ResearchSession]:
         """Mark a session as completed with generated questions."""
 
         session = self.get_session(session_id)
@@ -110,15 +121,31 @@ class ResearchSessionService:
 
     def get_user_sessions(self, user_id: str, limit: int = 50) -> List[ResearchSession]:
         """Get all sessions for a user."""
-        return self.db.query(ResearchSession).filter(
-            ResearchSession.user_id == user_id
-        ).order_by(desc(ResearchSession.updated_at)).limit(limit).all()
+        return (
+            self.db.query(ResearchSession)
+            .filter(ResearchSession.user_id == user_id)
+            .order_by(desc(ResearchSession.updated_at))
+            .limit(limit)
+            .all()
+        )
+
+    def get_all_sessions(self, limit: int = 50) -> List[ResearchSession]:
+        """Get all sessions (for development/testing purposes)."""
+        return (
+            self.db.query(ResearchSession)
+            .order_by(desc(ResearchSession.updated_at))
+            .limit(limit)
+            .all()
+        )
 
     def get_recent_sessions(self, limit: int = 20) -> List[ResearchSession]:
         """Get recent sessions (for admin/analytics)."""
-        return self.db.query(ResearchSession).order_by(
-            desc(ResearchSession.updated_at)
-        ).limit(limit).all()
+        return (
+            self.db.query(ResearchSession)
+            .order_by(desc(ResearchSession.updated_at))
+            .limit(limit)
+            .all()
+        )
 
     def get_session_summary(self, session_id: str) -> Optional[ResearchSessionSummary]:
         """Get a summary of a research session."""
@@ -138,17 +165,23 @@ class ResearchSessionService:
             status=session.status,
             questions_generated=session.questions_generated,
             created_at=session.created_at,
-            message_count=message_count
+            message_count=message_count,
         )
 
-    def create_export(self, session_id: str, export_type: str, export_format: str, file_path: Optional[str] = None) -> ResearchExport:
+    def create_export(
+        self,
+        session_id: str,
+        export_type: str,
+        export_format: str,
+        file_path: Optional[str] = None,
+    ) -> ResearchExport:
         """Create an export record."""
 
         export = ResearchExport(
             session_id=session_id,
             export_type=export_type,
             export_format=export_format,
-            file_path=file_path
+            file_path=file_path,
         )
 
         self.db.add(export)
@@ -159,9 +192,12 @@ class ResearchSessionService:
 
     def get_session_exports(self, session_id: str) -> List[ResearchExport]:
         """Get all exports for a session."""
-        return self.db.query(ResearchExport).filter(
-            ResearchExport.session_id == session_id
-        ).order_by(desc(ResearchExport.created_at)).all()
+        return (
+            self.db.query(ResearchExport)
+            .filter(ResearchExport.session_id == session_id)
+            .order_by(desc(ResearchExport.created_at))
+            .all()
+        )
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a research session and its exports."""
@@ -180,6 +216,28 @@ class ResearchSessionService:
         self.db.commit()
 
         return True
+
+    def add_message(
+        self, session_id: str, message_data: dict
+    ) -> Optional[ResearchSession]:
+        """Add a message to a research session."""
+        session = self.get_session(session_id)
+        if not session:
+            return None
+
+        # Initialize messages list if it doesn't exist
+        if not session.messages:
+            session.messages = []
+
+        # Add the new message
+        session.messages.append(message_data)
+        session.updated_at = datetime.now()
+
+        self.db.commit()
+        self.db.refresh(session)
+
+        return session
+
 
 def get_research_session_service(db: Session = None) -> ResearchSessionService:
     """Get research session service instance."""

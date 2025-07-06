@@ -187,11 +187,16 @@ class ConversationRoutineService:
                 )
             )
 
-            # Format for frontend - wrap stakeholder data in expected format
-            result = {"stakeholders": stakeholder_data}
+            # Format for frontend - use V3 format expected by ComprehensiveQuestionsComponent
+            result = {
+                "primaryStakeholders": stakeholder_data.get("primary", []),
+                "secondaryStakeholders": stakeholder_data.get("secondary", []),
+                "timeEstimate": time_estimates,
+            }
             logger.info(
                 f"✅ Generated questions for {len(stakeholder_data.get('primary', []))} primary + {len(stakeholder_data.get('secondary', []))} secondary stakeholders"
             )
+            logger.info(f"🔍 Returning questions data: {list(result.keys())}")
             return result
 
         except Exception as e:
@@ -311,13 +316,20 @@ Based on the conversation routine framework and current context, provide your re
 If you determine that questions should be generated, include "GENERATE_QUESTIONS" in your response.
 """
 
-            # Single LLM call with embedded decision logic
-            response_data = await self.llm_service.analyze(
-                text=full_prompt,
-                task="text_generation",
-                data={"temperature": 0.7, "max_tokens": 1000},
-            )
-            response_content = response_data.get("text", "")
+            # Use PydanticAI agent instead of direct LLM call
+            try:
+                agent_response = await self.agent.run(full_prompt)
+                response_content = str(agent_response.data)
+                logger.info(f"🤖 Agent response: {response_content[:200]}...")
+            except Exception as e:
+                logger.error(f"🔴 Agent execution failed: {e}")
+                # Fallback to direct LLM call
+                response_data = await self.llm_service.analyze(
+                    text=full_prompt,
+                    task="text_generation",
+                    data={"temperature": 0.7, "max_tokens": 1000},
+                )
+                response_content = response_data.get("text", "")
 
             # Check if questions should be generated
             questions_generated = False
@@ -359,22 +371,49 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                 )
             )
 
+            # Disable the old manual question generation logic
+            # The PydanticAI agent should handle this automatically via tools
+            # TODO: Remove this entire section once PydanticAI integration is complete
+
+            # For now, check if the user is explicitly asking for questions
+            user_wants_questions = any(
+                phrase in request.input.lower()
+                for phrase in [
+                    "generate questionnaire",
+                    "generate questions",
+                    "create questions",
+                ]
+            )
+
+            logger.info(
+                f"🔍 Question generation check: user_wants_questions={user_wants_questions}, questions_generated={questions_generated}, input='{request.input.lower()}'"
+            )
+
+            # Also check if the response content indicates questions were generated
+            response_has_questions = (
+                "Here are comprehensive research questions" in response_content
+            )
+
+            # Check if we should generate questions (either explicit request or agent already generated them)
             if (
-                "GENERATE_QUESTIONS" in response_content
-                or is_validation_confirmation
-                or should_force_generation
-            ):
+                user_wants_questions or response_has_questions
+            ) and not questions_generated:
+                logger.info("🎯 User explicitly requested questions - generating...")
+                # Only generate if the agent didn't already handle it
                 questions_generated = True
-                # Extract context for question generation
                 extracted_context = await self._extract_conversation_context_tool(
                     conversation_history
                 )
+                logger.info(f"📋 Extracted context: {extracted_context}")
 
                 if (
                     extracted_context.get("business_idea")
                     and extracted_context.get("target_customer")
                     and extracted_context.get("problem")
                 ):
+                    logger.info(
+                        "✅ All required context available - generating stakeholder questions"
+                    )
                     generated_questions = (
                         await self._generate_stakeholder_questions_tool(
                             business_idea=extracted_context["business_idea"],
@@ -382,11 +421,13 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                             problem=extracted_context["problem"],
                         )
                     )
-
-                # Remove the trigger from response if present
-                response_content = response_content.replace(
-                    "GENERATE_QUESTIONS", ""
-                ).strip()
+                    logger.info(
+                        f"🎯 Generated questions result: {type(generated_questions)} - {list(generated_questions.keys()) if generated_questions else 'None'}"
+                    )
+                else:
+                    logger.warning(
+                        f"❌ Missing required context - business_idea: {bool(extracted_context.get('business_idea'))}, target_customer: {bool(extracted_context.get('target_customer'))}, problem: {bool(extracted_context.get('problem'))}"
+                    )
 
                 # If this was a validation confirmation, replace with generation message
                 if is_validation_confirmation and not generated_questions:
@@ -422,6 +463,8 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
             logger.info(
                 f"✅ Conversation routine completed - Questions generated: {questions_generated}"
             )
+            logger.info(f"🔍 Generated questions data: {generated_questions}")
+            logger.info(f"📋 Response questions field: {response.questions}")
             return response
 
         except Exception as e:

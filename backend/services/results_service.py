@@ -139,48 +139,77 @@ class ResultsService:
                                 )
 
                         except Exception as e:
-                            logger.error(f"Error mapping persona from JSON: {str(e)}", exc_info=True)
+                            logger.error(
+                                f"Error mapping persona from JSON: {str(e)}",
+                                exc_info=True,
+                            )
                             # Log the problematic persona data structure
                             logger.debug(f"Problematic persona data: {p_data}")
                             if isinstance(p_data, dict):
-                                logger.debug(f"Persona data keys: {list(p_data.keys())}")
+                                logger.debug(
+                                    f"Persona data keys: {list(p_data.keys())}"
+                                )
                                 # Check for missing or None trait fields
-                                for trait_field in ['demographics', 'goals_and_motivations', 'skills_and_expertise',
-                                                   'workflow_and_environment', 'challenges_and_frustrations',
-                                                   'needs_and_desires', 'technology_and_tools',
-                                                   'attitude_towards_research', 'attitude_towards_ai',
-                                                   'role_context', 'key_responsibilities', 'tools_used',
-                                                   'collaboration_style', 'analysis_approach', 'pain_points']:
+                                for trait_field in [
+                                    "demographics",
+                                    "goals_and_motivations",
+                                    "skills_and_expertise",
+                                    "workflow_and_environment",
+                                    "challenges_and_frustrations",
+                                    "needs_and_desires",
+                                    "technology_and_tools",
+                                    "attitude_towards_research",
+                                    "attitude_towards_ai",
+                                    "role_context",
+                                    "key_responsibilities",
+                                    "tools_used",
+                                    "collaboration_style",
+                                    "analysis_approach",
+                                    "pain_points",
+                                ]:
                                     trait_value = p_data.get(trait_field)
                                     if trait_value is None:
-                                        logger.debug(f"Trait field '{trait_field}' is None")
+                                        logger.debug(
+                                            f"Trait field '{trait_field}' is None"
+                                        )
                                     elif not isinstance(trait_value, dict):
-                                        logger.debug(f"Trait field '{trait_field}' is not a dictionary: {type(trait_value)}")
+                                        logger.debug(
+                                            f"Trait field '{trait_field}' is not a dictionary: {type(trait_value)}"
+                                        )
 
-                # Create formatted response
+                # Create formatted response (flattened structure to match frontend expectations)
                 formatted_results = {
                     "status": "completed",
                     "result_id": analysis_result.result_id,
+                    "id": str(
+                        analysis_result.result_id
+                    ),  # Add id field for frontend compatibility
                     "analysis_date": analysis_result.analysis_date,
-                    "results": {
-                        "themes": results_dict.get("themes", []),
-                        "enhanced_themes": results_dict.get(
-                            "enhanced_themes", []
-                        ),  # Include enhanced themes
-                        "patterns": results_dict.get("patterns", []),
-                        "sentiment": results_dict.get("sentiment", []),
-                        "sentimentOverview": results_dict.get(
-                            "sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW
-                        ),
-                        "sentimentStatements": results_dict.get(
-                            "sentimentStatements",
-                            {"positive": [], "neutral": [], "negative": []},
-                        ),
-                        "insights": results_dict.get("insights", []),
-                        "personas": persona_list,  # Use personas from the results JSON
-                    },
-                    "llm_provider": analysis_result.llm_provider,
-                    "llm_model": analysis_result.llm_model,
+                    "createdAt": analysis_result.analysis_date.isoformat(),  # Add createdAt field for frontend compatibility
+                    "fileName": (
+                        analysis_result.interview_data.filename
+                        if analysis_result.interview_data
+                        else "Unknown"
+                    ),
+                    "fileSize": None,  # We don't store this currently
+                    "llmProvider": analysis_result.llm_provider,
+                    "llmModel": analysis_result.llm_model,
+                    # Flatten the results structure to match frontend expectations
+                    "themes": results_dict.get("themes", []),
+                    "enhanced_themes": results_dict.get(
+                        "enhanced_themes", []
+                    ),  # Include enhanced themes
+                    "patterns": results_dict.get("patterns", []),
+                    "sentiment": results_dict.get("sentiment", []),
+                    "sentimentOverview": results_dict.get(
+                        "sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW
+                    ),
+                    "sentimentStatements": results_dict.get(
+                        "sentimentStatements",
+                        {"positive": [], "neutral": [], "negative": []},
+                    ),
+                    "insights": results_dict.get("insights", []),
+                    "personas": persona_list,  # Use personas from the results JSON
                 }
 
                 # Log whether sentimentStatements were found
@@ -190,9 +219,7 @@ class ResultsService:
                 )
 
                 # If no sentiment statements are provided, extract them from themes and patterns
-                sentimentStatements = formatted_results["results"][
-                    "sentimentStatements"
-                ]
+                sentimentStatements = formatted_results["sentimentStatements"]
                 if (
                     not sentimentStatements["positive"]
                     and not sentimentStatements["neutral"]
@@ -203,20 +230,26 @@ class ResultsService:
                     )
 
                     sentimentStatements = self._extract_sentiment_statements_from_data(
-                        formatted_results["results"]["themes"],
-                        formatted_results["results"]["patterns"],
+                        formatted_results["themes"],
+                        formatted_results["patterns"],
                     )
 
-                    formatted_results["results"][
-                        "sentimentStatements"
-                    ] = sentimentStatements
+                    formatted_results["sentimentStatements"] = sentimentStatements
                     logger.info(
                         f"Extracted sentiment statements: positive={len(sentimentStatements['positive'])}, "
                         + f"neutral={len(sentimentStatements['neutral'])}, "
                         + f"negative={len(sentimentStatements['negative'])}"
                     )
 
-                return formatted_results
+                # Return the formatted results wrapped in the expected ResultResponse structure
+                return {
+                    "status": "completed",
+                    "result_id": analysis_result.result_id,
+                    "analysis_date": analysis_result.analysis_date,
+                    "results": formatted_results,  # Wrap the analysis data in 'results' field
+                    "llm_provider": analysis_result.llm_provider,
+                    "llm_model": analysis_result.llm_model,
+                }
 
             except (json.JSONDecodeError, AttributeError, KeyError) as e:
                 logger.error(f"Error formatting results: {str(e)}")
@@ -438,7 +471,12 @@ class ResultsService:
         from backend.schemas import PersonaTrait, Persona as PersonaSchema
 
         # Helper function to safely create a PersonaTrait with proper defaults
-        def create_trait(trait_data, default_value="Unknown", default_confidence=0.5, default_evidence=None):
+        def create_trait(
+            trait_data,
+            default_value="Unknown",
+            default_confidence=0.5,
+            default_evidence=None,
+        ):
             """Create a PersonaTrait with proper defaults and type checking"""
             if default_evidence is None:
                 default_evidence = []
@@ -447,7 +485,7 @@ class ResultsService:
             trait = {
                 "value": default_value,
                 "confidence": default_confidence,
-                "evidence": default_evidence
+                "evidence": default_evidence,
             }
 
             # Only use trait_data if it's a dictionary
@@ -465,15 +503,19 @@ class ResultsService:
                         pass
 
                 # Extract evidence with type checking
-                if "evidence" in trait_data and isinstance(trait_data["evidence"], list):
+                if "evidence" in trait_data and isinstance(
+                    trait_data["evidence"], list
+                ):
                     # Filter out non-string items
-                    trait["evidence"] = [str(item) for item in trait_data["evidence"] if item is not None]
+                    trait["evidence"] = [
+                        str(item) for item in trait_data["evidence"] if item is not None
+                    ]
 
             # Create and return the PersonaTrait
             return PersonaTrait(
                 value=trait["value"],
                 confidence=trait["confidence"],
-                evidence=trait["evidence"]
+                evidence=trait["evidence"],
             )
 
         # Extract basic fields with safe fallbacks
@@ -483,7 +525,9 @@ class ResultsService:
 
         # Handle confidence with type checking
         try:
-            confidence = float(p_data.get("confidence", p_data.get("overall_confidence", 0.7)))
+            confidence = float(
+                p_data.get("confidence", p_data.get("overall_confidence", 0.7))
+            )
         except (ValueError, TypeError):
             confidence = 0.7
 
@@ -528,14 +572,19 @@ class ResultsService:
             key_quotes_data = {
                 "value": "Representative quotes from the interview",
                 "confidence": 0.9,
-                "evidence": key_quotes_data
+                "evidence": key_quotes_data,
             }
         # If key_quotes is empty or missing, create a placeholder
         elif not key_quotes_data:
             # Look for quotes in other fields' evidence
             all_quotes = []
-            for field_name in ["demographics", "goals_and_motivations", "skills_and_expertise",
-                              "challenges_and_frustrations", "needs_and_desires"]:
+            for field_name in [
+                "demographics",
+                "goals_and_motivations",
+                "skills_and_expertise",
+                "challenges_and_frustrations",
+                "needs_and_desires",
+            ]:
                 field_data = p_data.get(field_name, {})
                 if isinstance(field_data, dict) and "evidence" in field_data:
                     all_quotes.extend(field_data.get("evidence", []))
@@ -545,20 +594,18 @@ class ResultsService:
                 key_quotes_data = {
                     "value": "Quotes extracted from other fields",
                     "confidence": 0.7,
-                    "evidence": all_quotes[:5]
+                    "evidence": all_quotes[:5],
                 }
             else:
-                key_quotes_data = {
-                    "value": "",
-                    "confidence": 0.5,
-                    "evidence": []
-                }
+                key_quotes_data = {"value": "", "confidence": 0.5, "evidence": []}
 
         # Map legacy fields to new fields when new fields are empty or invalid
         # This ensures we don't lose data when only legacy fields are populated
 
         # If demographics is empty, populate from role_context
-        if not isinstance(demographics_data, dict) and isinstance(role_context_data, dict):
+        if not isinstance(demographics_data, dict) and isinstance(
+            role_context_data, dict
+        ):
             demographics_data = {
                 "value": f"Professional with experience in {role_context_data.get('value', 'their field')}",
                 "confidence": role_context_data.get("confidence", 0.5),
@@ -574,7 +621,9 @@ class ResultsService:
             }
 
         # If skills_and_expertise is empty, derive from key_responsibilities and tools_used
-        if not isinstance(skills_data, dict) and (isinstance(key_resp_data, dict) or isinstance(tools_data, dict)):
+        if not isinstance(skills_data, dict) and (
+            isinstance(key_resp_data, dict) or isinstance(tools_data, dict)
+        ):
             skills_value = "Skilled in "
             if isinstance(key_resp_data, dict) and key_resp_data.get("value"):
                 skills_value += key_resp_data.get("value")
@@ -582,12 +631,26 @@ class ResultsService:
                 skills_value += f" using {tools_data.get('value')}"
 
             # Calculate confidence safely
-            key_resp_confidence = key_resp_data.get("confidence", 0.5) if isinstance(key_resp_data, dict) else 0.5
-            tools_confidence = tools_data.get("confidence", 0.5) if isinstance(tools_data, dict) else 0.5
+            key_resp_confidence = (
+                key_resp_data.get("confidence", 0.5)
+                if isinstance(key_resp_data, dict)
+                else 0.5
+            )
+            tools_confidence = (
+                tools_data.get("confidence", 0.5)
+                if isinstance(tools_data, dict)
+                else 0.5
+            )
 
             # Combine evidence safely
-            key_resp_evidence = key_resp_data.get("evidence", []) if isinstance(key_resp_data, dict) else []
-            tools_evidence = tools_data.get("evidence", []) if isinstance(tools_data, dict) else []
+            key_resp_evidence = (
+                key_resp_data.get("evidence", [])
+                if isinstance(key_resp_data, dict)
+                else []
+            )
+            tools_evidence = (
+                tools_data.get("evidence", []) if isinstance(tools_data, dict) else []
+            )
 
             skills_data = {
                 "value": skills_value,
@@ -626,92 +689,59 @@ class ResultsService:
             description=description,
             # Include all new fields with mapping from legacy when needed
             demographics=create_trait(
-                demographics_data,
-                "Professional in their field",
-                0.5
+                demographics_data, "Professional in their field", 0.5
             ),
             goals_and_motivations=create_trait(
-                goals_data,
-                "Professional growth and efficiency",
-                0.5
+                goals_data, "Professional growth and efficiency", 0.5
             ),
             skills_and_expertise=create_trait(
-                skills_data,
-                "Domain-specific skills",
-                0.5
+                skills_data, "Domain-specific skills", 0.5
             ),
             workflow_and_environment=create_trait(
-                workflow_data,
-                "Professional work environment",
-                0.5
+                workflow_data, "Professional work environment", 0.5
             ),
             challenges_and_frustrations=create_trait(
-                challenges_data,
-                "Common professional challenges",
-                0.5
+                challenges_data, "Common professional challenges", 0.5
             ),
             needs_and_desires=create_trait(
-                needs_data,
-                "Efficiency and professional growth",
-                0.5
+                needs_data, "Efficiency and professional growth", 0.5
             ),
             technology_and_tools=create_trait(
-                tech_tools_data,
-                "Industry-standard tools",
-                0.5
+                tech_tools_data, "Industry-standard tools", 0.5
             ),
             attitude_towards_research=create_trait(
-                research_attitude_data,
-                "Values data-driven approaches",
-                0.5
+                research_attitude_data, "Values data-driven approaches", 0.5
             ),
             attitude_towards_ai=create_trait(
-                ai_attitude_data,
-                "Open to technological advancements",
-                0.5
+                ai_attitude_data, "Open to technological advancements", 0.5
             ),
             key_quotes=create_trait(
                 key_quotes_data,
                 "Representative quotes from the interview",
                 0.7,
-                []  # Empty evidence list as default
+                [],  # Empty evidence list as default
             ),
             # Include all legacy fields
             role_context=create_trait(
-                role_context_data,
-                "Professional role",
-                confidence,
-                evidence
+                role_context_data, "Professional role", confidence, evidence
             ),
             key_responsibilities=create_trait(
-                key_resp_data,
-                "Professional responsibilities",
-                confidence,
-                evidence
+                key_resp_data, "Professional responsibilities", confidence, evidence
             ),
             tools_used=create_trait(
-                tools_data,
-                "Professional tools",
-                confidence,
-                evidence
+                tools_data, "Professional tools", confidence, evidence
             ),
             collaboration_style=create_trait(
-                collab_style_data,
-                "Professional collaboration",
-                confidence,
-                evidence
+                collab_style_data, "Professional collaboration", confidence, evidence
             ),
             analysis_approach=create_trait(
                 analysis_approach_data,
                 "Professional analysis approach",
                 confidence,
-                evidence
+                evidence,
             ),
             pain_points=create_trait(
-                pain_points_data,
-                "Professional challenges",
-                confidence,
-                evidence
+                pain_points_data, "Professional challenges", confidence, evidence
             ),
             # Overall persona information
             patterns=patterns,
@@ -875,7 +905,9 @@ class ResultsService:
         """
         sentiment_statements = {"positive": [], "neutral": [], "negative": []}
 
-        logger.info(f"Extracting sentiment statements from {len(themes)} themes and {len(patterns)} patterns")
+        logger.info(
+            f"Extracting sentiment statements from {len(themes)} themes and {len(patterns)} patterns"
+        )
 
         # Process themes based on their sentiment scores
         for theme in themes:
@@ -918,9 +950,27 @@ class ResultsService:
             # If no explicit sentiment score, try to infer from impact
             if sentiment_score == 0 and "impact" in pattern:
                 impact = pattern.get("impact", "").lower()
-                if any(word in impact for word in ["positive", "improves", "enhances", "increases", "strengthens"]):
+                if any(
+                    word in impact
+                    for word in [
+                        "positive",
+                        "improves",
+                        "enhances",
+                        "increases",
+                        "strengthens",
+                    ]
+                ):
                     sentiment_score = 0.5
-                elif any(word in impact for word in ["negative", "frustration", "slows", "diminishes", "friction"]):
+                elif any(
+                    word in impact
+                    for word in [
+                        "negative",
+                        "frustration",
+                        "slows",
+                        "diminishes",
+                        "friction",
+                    ]
+                ):
                     sentiment_score = -0.5
 
             statements = pattern.get("evidence", [])
@@ -950,6 +1000,8 @@ class ResultsService:
         sentiment_statements["neutral"] = sentiment_statements["neutral"][:20]
         sentiment_statements["negative"] = sentiment_statements["negative"][:20]
 
-        logger.info(f"Extracted sentiment statements: positive={len(sentiment_statements['positive'])}, neutral={len(sentiment_statements['neutral'])}, negative={len(sentiment_statements['negative'])}")
+        logger.info(
+            f"Extracted sentiment statements: positive={len(sentiment_statements['positive'])}, neutral={len(sentiment_statements['neutral'])}, negative={len(sentiment_statements['negative'])}"
+        )
 
         return sentiment_statements

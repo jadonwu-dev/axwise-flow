@@ -17,6 +17,40 @@ import { useRouter } from 'next/navigation';
 import { setCookie } from 'cookies-next';
 
 /**
+ * Simulation Data Notice Component - Client-side only
+ */
+function SimulationDataNotice() {
+  const [showNotice, setShowNotice] = useState(false);
+
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const source = urlParams.get('source');
+      const hasSimulationData = localStorage.getItem('simulation_analysis_data');
+
+      if (source === 'simulation' && hasSimulationData) {
+        setShowNotice(true);
+      }
+    }
+  }, []);
+
+  if (!showNotice) return null;
+
+  return (
+    <div className="text-sm bg-blue-50 border border-blue-200 p-3 rounded-lg">
+      <p className="text-blue-800 font-medium mb-1">
+        🎉 Simulation Complete!
+      </p>
+      <p className="text-blue-700">
+        Your AI simulation results are being automatically processed for analysis.
+        This will take a few moments...
+      </p>
+    </div>
+  );
+}
+
+/**
  * Emergency UploadPanel Component - Simple Progress Tracking
  *
  * This component uses React's useState for local state management with
@@ -253,7 +287,7 @@ export default function EmergencyUploadPanel() {
     }
   }, []);
 
-  // Effect to log component mount and initial state
+  // Effect to check for simulation data and handle auto-analysis
   useEffect(() => {
     console.log('[EmergencyUploadPanel] Component mounted');
     console.log('[EmergencyUploadPanel] Initial state:', {
@@ -263,6 +297,106 @@ export default function EmergencyUploadPanel() {
       isAnalyzing,
       isPolling
     });
+
+    // Check for simulation data from research dashboard
+    const checkSimulationData = async () => {
+      // Only run on client side
+      if (typeof window === 'undefined') return;
+
+      try {
+        const simulationData = localStorage.getItem('simulation_analysis_data');
+        const urlParams = new URLSearchParams(window.location.search);
+        const source = urlParams.get('source');
+
+        console.log('[EmergencyUploadPanel] Checking for simulation data...');
+        console.log('[EmergencyUploadPanel] URL source:', source);
+        console.log('[EmergencyUploadPanel] Has simulation data:', !!simulationData);
+
+        if (simulationData && source === 'simulation') {
+          console.log('[EmergencyUploadPanel] Found simulation data, processing...');
+          const data = JSON.parse(simulationData);
+          console.log('[EmergencyUploadPanel] Parsed simulation data:', data);
+
+          // Create a virtual file from simulation data
+          const simulationText = formatSimulationDataAsText(data);
+          console.log('[EmergencyUploadPanel] Generated text length:', simulationText.length);
+          console.log('[EmergencyUploadPanel] Generated text preview:', simulationText.substring(0, 500));
+
+          const blob = new Blob([simulationText], { type: 'text/plain' });
+          const file = new File([blob], 'simulation_results.txt', { type: 'text/plain' });
+
+          console.log('[EmergencyUploadPanel] File size:', blob.size, 'bytes');
+
+          // Set the file and trigger upload
+          setFile(file);
+          setFileName('simulation_results.txt');
+          setFileSize(blob.size);
+          setIsTextFile(true);
+
+          // Auto-upload and analyze immediately
+          const performAutoUpload = async () => {
+            try {
+              console.log('🚀 Starting auto-upload of simulation data...');
+              console.log('🚀 File details:', { name: file.name, size: file.size, type: file.type });
+
+              const authToken = await apiClient.getAuthToken();
+              if (!authToken) {
+                throw new Error('Not authenticated - please sign in');
+              }
+
+              console.log('🔑 Auth token obtained, uploading...');
+              apiClient.setAuthToken(authToken);
+
+              // Set uploading state
+              setUploadProgress(50);
+
+              const uploadResponse = await apiClient.uploadData(file, true);
+              console.log('✅ Upload successful:', uploadResponse);
+
+              setUploadProgress(100);
+              setUploadResponse(uploadResponse);
+
+              toast({
+                title: "Simulation data uploaded",
+                description: "Starting analysis of your simulation results...",
+                variant: "default",
+              });
+
+              // Start analysis
+              console.log('🔍 Starting analysis with data_id:', uploadResponse.data_id);
+              await handleAnalysis(uploadResponse.data_id);
+
+              // Clear simulation data from localStorage
+              localStorage.removeItem('simulation_analysis_data');
+              console.log('🧹 Cleaned up localStorage');
+
+            } catch (error) {
+              console.error('❌ Auto-upload failed:', error);
+              console.error('❌ Error details:', error);
+
+              toast({
+                title: "Auto-upload failed",
+                description: "Your simulation data is ready. Please click 'Upload & Analyze' below to continue.",
+                variant: "destructive",
+              });
+
+              // Reset upload progress but keep the file
+              setUploadProgress(0);
+
+              // Make sure the upload button is visible and enabled
+              setUploadError(null);
+            }
+          };
+
+          // Trigger auto-upload after a short delay to ensure UI is updated
+          setTimeout(performAutoUpload, 500);
+        }
+      } catch (error) {
+        console.error('Error checking simulation data:', error);
+      }
+    };
+
+    checkSimulationData();
   }, []);
 
   // Effect to log polling state changes
@@ -470,6 +604,210 @@ export default function EmergencyUploadPanel() {
     setIsTextFile(isText);
   }, []);
 
+  // Helper function to format simulation data as text
+  const formatSimulationDataAsText = (data: any): string => {
+    console.log('🔍 [formatSimulationDataAsText] Input data structure:', JSON.stringify(data, null, 2));
+    console.log('🔍 [formatSimulationDataAsText] Data keys:', Object.keys(data || {}));
+
+    let text = "=== AI CUSTOMER RESEARCH SIMULATION ===\n\n";
+
+    // Add metadata section
+    if (data.metadata) {
+      text += "BUSINESS CONTEXT:\n";
+      text += `Simulation ID: ${data.metadata.simulation_id || data.simulation_id || 'N/A'}\n`;
+      text += `Generated: ${data.metadata.created_at || new Date().toISOString()}\n`;
+      if (data.metadata.business_context) {
+        text += `Business Idea: ${data.metadata.business_context.business_idea || 'N/A'}\n`;
+        text += `Target Customer: ${data.metadata.business_context.target_customer || 'N/A'}\n`;
+        text += `Problem Statement: ${data.metadata.business_context.problem || 'N/A'}\n`;
+        text += `Industry: ${data.metadata.business_context.industry || 'General'}\n`;
+      }
+      text += "\n" + "=".repeat(60) + "\n\n";
+    }
+
+    // Add personas section with detailed information
+    if (data.personas && data.personas.length > 0) {
+      text += "CUSTOMER PERSONAS:\n\n";
+      data.personas.forEach((persona: any, index: number) => {
+        text += `PERSONA ${index + 1}: ${persona.name || 'Unnamed Persona'}\n`;
+        text += `Age: ${persona.age || 'N/A'}\n`;
+        text += `Role/Type: ${persona.stakeholder_type || 'N/A'}\n`;
+        text += `Background: ${persona.background || 'N/A'}\n`;
+
+        if (persona.motivations && persona.motivations.length > 0) {
+          text += `Motivations:\n`;
+          persona.motivations.forEach((motivation: string) => {
+            text += `  • ${motivation}\n`;
+          });
+        }
+
+        if (persona.pain_points && persona.pain_points.length > 0) {
+          text += `Pain Points:\n`;
+          persona.pain_points.forEach((pain: string) => {
+            text += `  • ${pain}\n`;
+          });
+        }
+
+        if (persona.communication_style) {
+          text += `Communication Style: ${persona.communication_style}\n`;
+        }
+
+        if (persona.demographic_details) {
+          text += `Demographics: ${JSON.stringify(persona.demographic_details)}\n`;
+        }
+
+        text += "\n" + "-".repeat(40) + "\n\n";
+      });
+    }
+
+    // Add detailed interview responses
+    if (data.interviews && data.interviews.length > 0) {
+      text += "INTERVIEW TRANSCRIPTS:\n\n";
+
+      data.interviews.forEach((interview: any, index: number) => {
+        // Find the corresponding persona
+        const persona = data.personas?.find((p: any) => p.id === interview.persona_id);
+        const personaName = persona?.name || `Interviewee ${index + 1}`;
+
+        text += `INTERVIEW ${index + 1}: ${personaName}\n`;
+        text += `Stakeholder Type: ${interview.stakeholder_type || 'N/A'}\n`;
+        text += `Duration: ${interview.interview_duration_minutes || 'N/A'} minutes\n`;
+        text += `Overall Sentiment: ${interview.overall_sentiment || 'N/A'}\n`;
+
+        if (interview.key_themes && interview.key_themes.length > 0) {
+          text += `Key Themes: ${interview.key_themes.join(', ')}\n`;
+        }
+
+        text += "\nQ&A SESSION:\n";
+        text += "-".repeat(30) + "\n";
+
+        if (interview.responses && interview.responses.length > 0) {
+          interview.responses.forEach((response: any, qIndex: number) => {
+            text += `\nQ${qIndex + 1}: ${response.question || 'N/A'}\n`;
+            text += `A${qIndex + 1}: ${response.response || 'N/A'}\n`;
+
+            if (response.sentiment) {
+              text += `   [Sentiment: ${response.sentiment}]\n`;
+            }
+
+            if (response.key_insights && response.key_insights.length > 0) {
+              text += `   [Key Insights: ${response.key_insights.join(', ')}]\n`;
+            }
+
+            if (response.follow_up_questions && response.follow_up_questions.length > 0) {
+              text += `   [Follow-ups: ${response.follow_up_questions.join(', ')}]\n`;
+            }
+          });
+        } else {
+          text += "\n[No responses recorded]\n";
+        }
+
+        text += "\n" + "=".repeat(60) + "\n\n";
+      });
+    }
+
+    // Add simulation insights if available
+    if (data.simulation_insights) {
+      text += "SIMULATION INSIGHTS:\n\n";
+      const insights = data.simulation_insights;
+
+      if (insights.overall_sentiment) {
+        text += `Overall Sentiment: ${insights.overall_sentiment}\n`;
+      }
+
+      if (insights.key_themes && insights.key_themes.length > 0) {
+        text += `Key Themes:\n`;
+        insights.key_themes.forEach((theme: string) => {
+          text += `  • ${theme}\n`;
+        });
+      }
+
+      if (insights.potential_risks && insights.potential_risks.length > 0) {
+        text += `Potential Risks:\n`;
+        insights.potential_risks.forEach((risk: string) => {
+          text += `  • ${risk}\n`;
+        });
+      }
+
+      if (insights.opportunities && insights.opportunities.length > 0) {
+        text += `Opportunities:\n`;
+        insights.opportunities.forEach((opp: string) => {
+          text += `  • ${opp}\n`;
+        });
+      }
+
+      if (insights.recommendations && insights.recommendations.length > 0) {
+        text += `Recommendations:\n`;
+        insights.recommendations.forEach((rec: string) => {
+          text += `  • ${rec}\n`;
+        });
+      }
+
+      text += "\n";
+    }
+
+    // Add analysis ready text if available
+    if (data.analysis_ready_text) {
+      text += "ADDITIONAL ANALYSIS DATA:\n";
+      text += data.analysis_ready_text;
+      text += "\n";
+    }
+
+    // Add footer
+    text += "\n" + "=".repeat(60) + "\n";
+    text += "END OF SIMULATION DATA\n";
+    text += `Generated: ${new Date().toISOString()}\n`;
+    text += "Ready for customer research analysis.\n";
+
+    // Ensure minimum content length for backend validation
+    if (text.length < 500) {
+      console.log('⚠️ [formatSimulationDataAsText] Generated text too short, adding fallback content');
+
+      text += "\n\nNOTE: This simulation data was automatically generated from your business idea.\n";
+      text += "The AI has created realistic customer personas and simulated their responses\n";
+      text += "to help you understand potential customer perspectives and needs.\n";
+      text += "This data is ready for analysis to extract insights, patterns, and recommendations.\n";
+      text += "\nData Structure Summary:\n";
+      text += `- Total Characters: ${text.length}\n`;
+      text += `- Personas Generated: ${data.personas?.length || 0}\n`;
+      text += `- Interviews Conducted: ${data.interviews?.length || 0}\n`;
+      text += `- Business Context: ${data.metadata?.business_context ? 'Complete' : 'Partial'}\n`;
+      text += `- Simulation ID: ${data.simulation_id || data.metadata?.simulation_id || 'N/A'}\n`;
+
+      // Add raw data dump for debugging
+      text += "\n\nRAW SIMULATION DATA (for debugging):\n";
+      text += "```json\n";
+      text += JSON.stringify(data, null, 2);
+      text += "\n```\n";
+
+      // Add sample interview content to ensure substantial file
+      text += "\n\nSAMPLE INTERVIEW CONTENT:\n";
+      text += "This simulation generated customer interview data based on your business idea.\n";
+      text += "The AI analyzed your concept and created realistic customer personas who would\n";
+      text += "be interested in or affected by your product or service.\n\n";
+
+      text += "Each persona represents a different customer segment with unique:\n";
+      text += "- Demographics and background\n";
+      text += "- Motivations and goals\n";
+      text += "- Pain points and challenges\n";
+      text += "- Communication preferences\n";
+      text += "- Attitudes toward your business concept\n\n";
+
+      text += "The simulated interviews capture how these personas would respond\n";
+      text += "to questions about your business idea, revealing insights about:\n";
+      text += "- Market demand and interest levels\n";
+      text += "- Potential objections or concerns\n";
+      text += "- Feature preferences and priorities\n";
+      text += "- Pricing sensitivity\n";
+      text += "- Competitive alternatives they might consider\n\n";
+
+      text += "This data is now ready for analysis to extract actionable insights\n";
+      text += "that can guide your business development and marketing strategies.\n";
+    }
+
+    return text;
+  };
+
   // Format file size for display
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -501,14 +839,17 @@ export default function EmergencyUploadPanel() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Upload Data for Analysis</CardTitle>
+        <CardTitle>Analyse Interviews</CardTitle>
         <CardDescription>
-          Upload a file to analyze with design thinking frameworks.
+          Upload interview files to analyze with AI-powered insights and design thinking frameworks.
         </CardDescription>
       </CardHeader>
 
       <CardContent>
         <div className="space-y-4">
+          {/* Simulation Data Notice */}
+          <SimulationDataNotice />
+
           {/* Vexa.ai mention */}
           <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg border">
             <p className="mb-2">

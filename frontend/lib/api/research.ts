@@ -252,27 +252,29 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
 
       const result = await response.json();
 
-      // Store the conversation locally for anonymous users
+      // Store the conversation both locally and on backend
       if (typeof window !== 'undefined') {
         const currentSession = LocalResearchStorage.getCurrentSession();
         const messages = currentSession?.messages || [];
 
         // Add user message
-        messages.push({
+        const userMessage: Message = {
           id: `user_${Date.now()}`,
           content: request.input,
-          role: 'user',
+          role: 'user' as const,
           timestamp: new Date().toISOString(),
-        });
+        };
+        messages.push(userMessage);
 
         // Add assistant response
-        messages.push({
+        const assistantMessage: Message = {
           id: `assistant_${Date.now()}`,
           content: result.content,
-          role: 'assistant',
+          role: 'assistant' as const,
           timestamp: new Date().toISOString(),
           metadata: result.metadata,
-        });
+        };
+        messages.push(assistantMessage);
 
         // Update or create session
         const session: ResearchSession = {
@@ -346,35 +348,233 @@ export async function generateResearchQuestions(
 
 /**
  * Get list of research sessions
- * Only supports local sessions now (no backend persistence)
+ * Fetches from backend API with localStorage fallback
  */
 export async function getResearchSessions(limit: number = 20, userId?: string): Promise<ResearchSession[]> {
-  // Only local sessions are supported now
-  const localSessions = LocalResearchStorage.getSessions();
-  return localSessions
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    .slice(0, limit);
+  try {
+    // Try to fetch from backend first
+    const response = await fetch(`${API_BASE_URL}/api/research/sessions?limit=${limit}${userId ? `&user_id=${userId}` : ''}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const backendSessions = await response.json();
+
+      // Convert backend format to frontend format
+      const convertedSessions: ResearchSession[] = backendSessions.map((session: any) => ({
+        id: session.id,
+        session_id: session.session_id,
+        user_id: session.user_id,
+        business_idea: session.business_idea,
+        target_customer: session.target_customer,
+        problem: session.problem,
+        industry: session.industry,
+        stage: session.stage,
+        status: session.status,
+        questions_generated: session.questions_generated,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        completed_at: session.completed_at,
+        message_count: session.message_count,
+        messages: [], // Messages loaded separately
+        isLocal: false
+      }));
+
+      // Merge with local sessions for offline support
+      const localSessions = LocalResearchStorage.getSessions();
+      const allSessions = [...convertedSessions, ...localSessions.filter(local =>
+        !convertedSessions.some(backend => backend.session_id === local.session_id)
+      )];
+
+      return allSessions
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, limit);
+    } else {
+      throw new Error(`Backend responded with ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Failed to fetch sessions from backend, using localStorage:', error);
+
+    // Fallback to local sessions
+    const localSessions = LocalResearchStorage.getSessions();
+    return localSessions
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, limit);
+  }
 }
 
 /**
  * Get a specific research session by ID
- * Only supports local sessions now
+ * Fetches from backend API with localStorage fallback
  */
 export async function getResearchSession(sessionId: string): Promise<ResearchSession> {
-  // Only local sessions are supported
-  const localSession = LocalResearchStorage.getSession(sessionId);
-  if (localSession) {
+  try {
+    // Try to fetch from backend first
+    const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const backendSession = await response.json();
+
+      // Fetch messages separately
+      let messages: Message[] = [];
+      try {
+        const messagesResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}/messages`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          messages = messagesData.messages || [];
+        }
+      } catch (error) {
+        console.warn('Failed to fetch messages for session:', error);
+      }
+
+      // Convert backend format to frontend format
+      const convertedSession: ResearchSession = {
+        id: backendSession.id,
+        session_id: backendSession.session_id,
+        user_id: backendSession.user_id,
+        business_idea: backendSession.business_idea,
+        target_customer: backendSession.target_customer,
+        problem: backendSession.problem,
+        industry: backendSession.industry,
+        stage: backendSession.stage,
+        status: backendSession.status,
+        questions_generated: backendSession.questions_generated,
+        created_at: backendSession.created_at,
+        updated_at: backendSession.updated_at,
+        completed_at: backendSession.completed_at,
+        message_count: messages.length,
+        messages: messages,
+        isLocal: false
+      };
+
+      return convertedSession;
+    } else {
+      throw new Error(`Backend responded with ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Failed to fetch session from backend, trying localStorage:', error);
+
+    // Fallback to local session
+    const localSession = LocalResearchStorage.getSession(sessionId);
+    if (localSession) {
+      return localSession;
+    }
+    throw new Error('Session not found');
+  }
+}
+
+/**
+ * Create a new research session
+ * Creates on backend with localStorage fallback
+ */
+export async function createResearchSession(sessionData: {
+  business_idea?: string;
+  target_customer?: string;
+  problem?: string;
+  user_id?: string;
+}): Promise<ResearchSession> {
+  try {
+    // Try to create on backend first
+    const response = await fetch(`${API_BASE_URL}/api/research/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sessionData),
+    });
+
+    if (response.ok) {
+      const backendSession = await response.json();
+
+      // Convert backend format to frontend format
+      const convertedSession: ResearchSession = {
+        id: backendSession.id,
+        session_id: backendSession.session_id,
+        user_id: backendSession.user_id,
+        business_idea: backendSession.business_idea,
+        target_customer: backendSession.target_customer,
+        problem: backendSession.problem,
+        industry: backendSession.industry,
+        stage: backendSession.stage,
+        status: backendSession.status,
+        questions_generated: backendSession.questions_generated,
+        created_at: backendSession.created_at,
+        updated_at: backendSession.updated_at,
+        completed_at: backendSession.completed_at,
+        message_count: 0,
+        messages: [],
+        isLocal: false
+      };
+
+      return convertedSession;
+    } else {
+      throw new Error(`Backend responded with ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Failed to create session on backend, creating locally:', error);
+
+    // Fallback to local session creation
+    const sessionId = `local_${Date.now()}`;
+    const localSession: ResearchSession = {
+      id: Date.now(), // Use timestamp as numeric ID for local sessions
+      session_id: sessionId,
+      user_id: sessionData.user_id,
+      business_idea: sessionData.business_idea,
+      target_customer: sessionData.target_customer,
+      problem: sessionData.problem,
+      industry: 'general',
+      stage: 'initial',
+      status: 'active',
+      questions_generated: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: undefined,
+      message_count: 0,
+      messages: [],
+      isLocal: true
+    };
+
+    LocalResearchStorage.saveSession(localSession);
     return localSession;
   }
-  throw new Error('Session not found');
 }
 
 /**
  * Delete a research session
- * Only supports local sessions now
+ * Deletes from backend and localStorage
  */
 export async function deleteResearchSession(sessionId: string): Promise<void> {
-  // Only local sessions are supported
+  try {
+    // Try to delete from backend first
+    const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(`Failed to delete session from backend: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Failed to delete session from backend:', error);
+  }
+
+  // Always delete from localStorage as well
   LocalResearchStorage.deleteSession(sessionId);
 }
 

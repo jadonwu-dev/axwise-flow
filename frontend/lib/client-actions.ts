@@ -37,11 +37,11 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
 
     // Get auth token from localStorage or cookies in the browser
     let authToken = '';
-    
+
     // Try to get token from localStorage first
     if (typeof window !== 'undefined') {
       authToken = localStorage.getItem('auth_token') || '';
-      
+
       // If not in localStorage, try to get from cookies
       if (!authToken) {
         const cookies = document.cookie.split(';');
@@ -67,7 +67,7 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
 
     // Create a new FormData to send to the API
     const apiFormData = new FormData();
-    
+
     // Add the file to FormData
     apiFormData.append('file', file);
     apiFormData.append('is_free_text', String(isTextFile));
@@ -83,7 +83,7 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
 
     if (!response.ok) {
       let errorMessage = `Upload failed with status: ${response.status}`;
-      
+
       try {
         const errorData = await response.json();
         if (errorData) {
@@ -111,7 +111,7 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
           console.error('Failed to read error response as text:', textError);
         }
       }
-      
+
       throw new Error(errorMessage);
     }
 
@@ -124,16 +124,16 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
     };
   } catch (error) {
     console.error('Upload error:', error);
-    
+
     let errorMessage = 'Unknown upload error';
-    
+
     if (error instanceof Error) {
       errorMessage = error.message;
     } else if (typeof error === 'string') {
       errorMessage = error;
     } else if (error && typeof error === 'object') {
       const errorObj = error as any;
-      
+
       if (typeof errorObj.message === 'string') {
         errorMessage = errorObj.message;
       } else if (typeof errorObj.error === 'string') {
@@ -142,7 +142,7 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
         errorMessage = errorObj.detail;
       }
     }
-    
+
     return {
       success: false,
       error: errorMessage
@@ -162,11 +162,11 @@ export async function analyzeAction(
   try {
     // Get auth token from localStorage or cookies in the browser
     let authToken = '';
-    
+
     // Try to get token from localStorage first
     if (typeof window !== 'undefined') {
       authToken = localStorage.getItem('auth_token') || '';
-      
+
       // If not in localStorage, try to get from cookies
       if (!authToken) {
         const cookies = document.cookie.split(';');
@@ -212,7 +212,7 @@ export async function analyzeAction(
 export function getRedirectUrl(analysisId: string): string {
   // Add timestamp to prevent caching issues
   const timestamp = Date.now();
-  const url = `/unified-dashboard/visualize?analysisId=${analysisId}&visualizationTab=themes&timestamp=${timestamp}`;
+  const url = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=themes&timestamp=${timestamp}`;
   return url;
 }
 
@@ -228,10 +228,10 @@ export async function getClientSideAnalysis(analysisId: string): Promise<Detaile
   try {
     // Get auth token from localStorage or cookies
     let authToken = '';
-    
+
     if (typeof window !== 'undefined') {
       authToken = localStorage.getItem('auth_token') || '';
-      
+
       if (!authToken) {
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {
@@ -268,10 +268,10 @@ export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResu
   try {
     // Get auth token from localStorage or cookies
     let authToken = '';
-    
+
     if (typeof window !== 'undefined') {
       authToken = localStorage.getItem('auth_token') || '';
-      
+
       if (!authToken) {
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {
@@ -331,10 +331,10 @@ export async function fetchAnalysisHistory(page: number = 1, pageSize: number = 
   try {
     // Get auth token from localStorage or cookies
     let authToken = '';
-    
+
     if (typeof window !== 'undefined') {
       authToken = localStorage.getItem('auth_token') || '';
-      
+
       if (!authToken) {
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {

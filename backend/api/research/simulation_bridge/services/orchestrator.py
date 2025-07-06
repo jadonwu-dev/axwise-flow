@@ -20,6 +20,9 @@ from ..models import (
     SimulationInsights,
     AIPersona,
     SimulatedInterview,
+    QuestionsData,
+    BusinessContext,
+    Stakeholder,
 )
 from .persona_generator import PersonaGenerator
 from .interview_simulator import InterviewSimulator
@@ -38,13 +41,81 @@ class SimulationOrchestrator:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
 
-        # Use working model name (PydanticAI may not support gemini-2.5-flash yet)
-        # This maps to the latest available Gemini model in PydanticAI
-        self.model = GeminiModel("gemini-2.0-flash-exp")
+        # Use gemini-2.5-flash as preferred by user
+        # PydanticAI will map this to the appropriate model version
+        self.model = GeminiModel("gemini-2.5-flash")
         self.persona_generator = PersonaGenerator(self.model)
         self.interview_simulator = InterviewSimulator(self.model)
         self.data_formatter = DataFormatter()
         self.active_simulations: Dict[str, SimulationProgress] = {}
+        self.completed_simulations: Dict[str, SimulationResponse] = {}
+
+    async def parse_raw_questionnaire(self, content: str, config) -> SimulationRequest:
+        """Parse raw questionnaire content using PydanticAI."""
+        from pydantic_ai import Agent
+        from pydantic import BaseModel
+        from typing import List
+
+        class ParsedQuestionnaire(BaseModel):
+            business_idea: str
+            target_customer: str
+            problem: str
+            questions: List[str]
+
+        # Create PydanticAI agent for parsing
+        parser_agent = Agent(
+            model=self.model,
+            result_type=ParsedQuestionnaire,
+            system_prompt="""You are an expert at parsing customer research questionnaires.
+            Extract the business context and all interview questions from the provided content.
+            Clean up questions by removing numbering and formatting.
+            Ensure business_idea is never empty - infer from context if needed.""",
+        )
+
+        prompt = f"""
+        Parse this questionnaire file and extract:
+        1. Business idea (main business concept)
+        2. Target customer (who the business serves)
+        3. Problem (what problem the business solves)
+        4. All interview questions (clean, no numbering)
+
+        Content:
+        {content}
+        """
+
+        logger.info("🤖 Using PydanticAI to parse questionnaire")
+        result = await parser_agent.run(prompt)
+        parsed = result.data
+
+        logger.info(
+            f"✅ Parsed: {parsed.business_idea} | {len(parsed.questions)} questions"
+        )
+
+        # Create structured data
+        stakeholder = Stakeholder(
+            id="primary_stakeholder",
+            name=parsed.target_customer,
+            description=f"Primary stakeholder for {parsed.business_idea}",
+            questions=parsed.questions,
+        )
+
+        questions_data = QuestionsData(
+            stakeholders={"primary": [stakeholder], "secondary": []},
+            timeEstimate={"totalQuestions": len(parsed.questions)},
+        )
+
+        business_context = BusinessContext(
+            business_idea=parsed.business_idea,
+            target_customer=parsed.target_customer,
+            problem=parsed.problem,
+            industry="general",
+        )
+
+        return SimulationRequest(
+            questions_data=questions_data,
+            business_context=business_context,
+            config=config,
+        )
 
     async def run_simulation(self, request: SimulationRequest) -> SimulationResponse:
         """Run the complete simulation process."""
@@ -137,7 +208,11 @@ class SimulationOrchestrator:
                 recommendations=insights.recommendations if insights else [],
             )
 
+            # Save completed simulation for later retrieval
+            self.completed_simulations[simulation_id] = response
+
             logger.info(f"Simulation completed successfully: {simulation_id}")
+            logger.info(f"Saved simulation results for ID: {simulation_id}")
             return response
 
         except Exception as e:
@@ -309,3 +384,31 @@ class SimulationOrchestrator:
             logger.info(f"Cancelled simulation: {simulation_id}")
             return True
         return False
+
+    def get_completed_simulation(
+        self, simulation_id: str
+    ) -> Optional[SimulationResponse]:
+        """Get a completed simulation result."""
+        return self.completed_simulations.get(simulation_id)
+
+    def list_completed_simulations(self) -> Dict[str, Dict[str, Any]]:
+        """List all completed simulations with basic info."""
+        return {
+            sim_id: {
+                "simulation_id": response.simulation_id,
+                "success": response.success,
+                "message": response.message,
+                "created_at": (
+                    response.metadata.get("created_at") if response.metadata else None
+                ),
+                "total_personas": (
+                    response.metadata.get("total_personas") if response.metadata else 0
+                ),
+                "total_interviews": (
+                    response.metadata.get("total_interviews")
+                    if response.metadata
+                    else 0
+                ),
+            }
+            for sim_id, response in self.completed_simulations.items()
+        }

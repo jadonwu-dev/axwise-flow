@@ -52,8 +52,8 @@ export interface InterviewResponse {
   question: string;
   response: string;
   sentiment: string;
-  insights: string[];
-  follow_ups?: string[];
+  key_insights: string[];
+  follow_up_questions?: string[];
 }
 
 export interface SimulatedInterview {
@@ -99,10 +99,39 @@ export interface SimulationProgress {
 }
 
 export async function createSimulation(
-  questionsData: QuestionsData,
+  questionsDataOrRaw: QuestionsData | { raw_questionnaire_content: string },
   businessContext: BusinessContext,
   config: SimulationConfig
 ): Promise<SimulationResponse> {
+
+  let requestData: any;
+
+  // Check if we're sending raw content or structured data
+  if ('raw_questionnaire_content' in questionsDataOrRaw) {
+    // Send raw questionnaire content for PydanticAI parsing
+    requestData = {
+      raw_questionnaire_content: questionsDataOrRaw.raw_questionnaire_content,
+      config: config,
+    };
+  } else {
+    // Transform structured frontend format to backend format
+    const backendQuestionsData = {
+      stakeholders: {
+        primary: questionsDataOrRaw.stakeholders.primary || [],
+        secondary: questionsDataOrRaw.stakeholders.secondary || []
+      },
+      timeEstimate: questionsDataOrRaw.timeEstimate
+    };
+
+    requestData = {
+      questions_data: backendQuestionsData,
+      business_context: businessContext,
+      config: config,
+    };
+  }
+
+  console.log('🔄 Sending to backend:', requestData);
+
   const response = await fetch(
     `${API_BASE_URL}/api/research/simulation-bridge/simulate`,
     {
@@ -110,16 +139,17 @@ export async function createSimulation(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        questions_data: questionsData,
-        business_context: businessContext,
-        config: config,
-      }),
+      body: JSON.stringify(requestData),
     }
   );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error('❌ Simulation API Error:', {
+      status: response.status,
+      statusText: response.statusText,
+      errorData: errorData
+    });
     throw new Error(errorData.detail || `Simulation failed: ${response.statusText}`);
   }
 

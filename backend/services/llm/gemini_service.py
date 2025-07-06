@@ -1855,14 +1855,9 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
 
     def get_pydantic_ai_model(self) -> str:
         """Get PydanticAI compatible model string for Google Gemini"""
-        # Map our internal model names to PydanticAI format
-        # Based on PydanticAI docs: https://ai.pydantic.dev/models/google/
-        model_mapping = {
-            "gemini-2.5-flash": "gemini-2.0-flash-exp",
-            "gemini-2.5-flash-preview-05-20": "gemini-2.0-flash-exp",
-            "gemini-1.5-flash": "gemini-1.5-flash",
-            "gemini-1.5-pro": "gemini-1.5-pro",
-        }
+        # PydanticAI now supports gemini-2.5-flash directly, no mapping needed
+        # Based on PydanticAI docs: https://ai.pydantic.dev/api/models/gemini/
+        # LatestGeminiModelNames includes "gemini-2.5-flash" natively
 
-        # Default to gemini-1.5-flash if model not found in mapping
-        return model_mapping.get(self.default_model_name, "gemini-1.5-flash")
+        # Return the model name as-is since PydanticAI supports it directly
+        return self.default_model_name

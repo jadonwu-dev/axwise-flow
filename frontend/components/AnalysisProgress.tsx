@@ -74,7 +74,7 @@ const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   };
 
   const handleViewResults = (): void => { // Add return type
-    window.location.href = `/unified-dashboard/visualize?analysisId=${analysisId}`;
+    window.location.href = `/unified-dashboard?analysisId=${analysisId}&visualizationTab=themes`;
   };
 
   const handleRetry = (): void => { // Add return type

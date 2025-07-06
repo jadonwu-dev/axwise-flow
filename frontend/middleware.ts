@@ -53,8 +53,12 @@ export default clerkMiddleware(async (auth, req) => {
     return;
   }
 
-  // Protect routes that require authentication
-  if (isProtectedRoute(req)) {
+  // Check if Clerk validation is disabled in development
+  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Protect routes that require authentication (only if Clerk validation is enabled or in production)
+  if (isProtectedRoute(req) && (isProduction || enableClerkValidation)) {
     await auth.protect();
   }
 

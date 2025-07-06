@@ -23,10 +23,11 @@ export default function HistoryPanel(): JSX.Element {
   const router = useRouter();
   const { showToast } = useToast();
 
-  // Local state to replace Zustand
-  const [history, setHistory] = useState<DetailedAnalysisResult[]>([]);
+  // Local state for unified history
+  const [history, setHistory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'analyses' | 'simulations' | 'chats'>('all');
 
   // Force component to render on client side
   const [isMounted, setIsMounted] = useState(false);
@@ -71,15 +72,8 @@ export default function HistoryPanel(): JSX.Element {
     try {
       console.log('HistoryPanel: Fetching history with filters:', filters);
 
-      // Use server-side API route to avoid CORS issues
-      const queryParams = new URLSearchParams();
-
-      // Convert filters to query string
-      if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
-      if (filters.sortDirection) queryParams.append('sortDirection', filters.sortDirection);
-      if (filters.status && filters.status !== 'all') queryParams.append('status', filters.status);
-
-      const url = `/api/history${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      // Fetch simulation data instead of old analysis data
+      const url = '/api/research/simulation-bridge/completed';
       console.log('HistoryPanel: Making API call to:', url);
 
       const response = await fetch(url, {
@@ -91,8 +85,23 @@ export default function HistoryPanel(): JSX.Element {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('HistoryPanel: API call successful, received', data.length, 'analyses');
-        setHistory(Array.isArray(data) ? data : []);
+        console.log('HistoryPanel: API call successful, received simulation data:', data);
+
+        // Convert simulation data to history format
+        const simulationHistory = Object.values(data.simulations || {}).map((sim: any) => ({
+          id: sim.simulation_id,
+          fileName: `Simulation ${sim.simulation_id.slice(0, 8)}`,
+          createdAt: sim.created_at || new Date().toISOString(),
+          status: sim.success ? 'completed' : 'failed',
+          fileSize: undefined,
+          llmProvider: 'Gemini 2.5 Flash',
+          type: 'simulation',
+          totalPersonas: sim.total_personas,
+          totalInterviews: sim.total_interviews
+        }));
+
+        console.log('HistoryPanel: Converted to history format:', simulationHistory.length, 'simulations');
+        setHistory(simulationHistory);
       } else if (response.status === 401) {
         // Handle authentication errors gracefully
         console.log('HistoryPanel: Authentication required');
@@ -115,7 +124,7 @@ export default function HistoryPanel(): JSX.Element {
   // Memoize the handleSelectAnalysis function
   const handleSelectAnalysis = useCallback((analysis: DetailedAnalysisResult) => {
     // Navigate to visualization tab with the analysis ID
-    const analyzeUrl = `/unified-dashboard/visualize?analysisId=${analysis.id}&timestamp=${Date.now()}`;
+    const analyzeUrl = `/unified-dashboard?analysisId=${analysis.id}&visualizationTab=themes&timestamp=${Date.now()}`;
 
     // Use Next.js router for navigation
     router.push(analyzeUrl);
@@ -152,6 +161,54 @@ export default function HistoryPanel(): JSX.Element {
     }
   }, []); // Removed useMemo, simplified return
 
+  // Handle download for simulations
+  const handleDownload = async (simulationId: string) => {
+    try {
+      const response = await fetch(`/api/research/simulation-bridge/completed/${simulationId}`);
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      // Generate clean interview TXT content
+      const content = result.interviews.map((interview: any, index: number) => {
+        const persona = result.personas?.find((p: any) => p.id === interview.persona_id);
+
+        return `INTERVIEW ${index + 1}
+================
+
+Persona: ${persona?.name || 'Unknown'}
+Stakeholder Type: ${interview.stakeholder_type}
+
+RESPONSES:
+----------
+
+${interview.responses.map((response: any, i: number) => `Q${i + 1}: ${response.question}
+
+A${i + 1}: ${response.response}
+`).join('\n---\n')}
+
+================
+`;
+      }).join('\n\n');
+
+      // Download immediately
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `simulation_interviews_${simulationId.slice(0, 8)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
   // Don't render anything until mounted (prevents hydration issues)
   if (!isMounted) {
     return (
@@ -173,7 +230,7 @@ export default function HistoryPanel(): JSX.Element {
         <CardContent className="flex justify-center items-center py-12">
           <div className="flex flex-col items-center space-y-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Loading analysis history...</p>
+            <p className="text-muted-foreground">Loading simulation history...</p>
           </div>
         </CardContent>
       </Card>
@@ -193,9 +250,9 @@ export default function HistoryPanel(): JSX.Element {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Analysis History</CardTitle>
+        <CardTitle>Activity History</CardTitle>
         <CardDescription>
-          View and manage your previous analyses
+          Comprehensive view of all your research activities: simulations, file analyses, and chat sessions
         </CardDescription>
       </CardHeader>
 
@@ -291,8 +348,8 @@ export default function HistoryPanel(): JSX.Element {
                     </div>
                   </TableHead>
                   <TableHead className="hidden md:table-cell">Status</TableHead>
-                  <TableHead className="hidden md:table-cell">Size</TableHead>
-                  <TableHead className="hidden md:table-cell">Provider</TableHead>
+                  <TableHead className="hidden md:table-cell">Personas</TableHead>
+                  <TableHead className="hidden md:table-cell">Interviews</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -311,22 +368,19 @@ export default function HistoryPanel(): JSX.Element {
                       {getStatusBadge(analysis.status)}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {formatFileSize(analysis.fileSize)}
+                      {(analysis as any).totalPersonas || 0}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {analysis.llmProvider || 'Unknown'}
+                      {(analysis as any).totalInterviews || 0}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => handleSelectAnalysis(analysis)}
+                        onClick={() => handleDownload(analysis.id)}
                         disabled={analysis.status !== 'completed'}
                       >
-                        <span className="sr-only md:not-sr-only md:inline-block mr-2">
-                          View
-                        </span>
-                        <ChevronRight className="h-4 w-4" />
+                        Download Interviews
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -336,9 +390,9 @@ export default function HistoryPanel(): JSX.Element {
           </div>
         ) : (
           <div className="text-center py-8 border rounded-md">
-            <p className="text-muted-foreground">No analyses found.</p>
+            <p className="text-muted-foreground">No simulations found.</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload a file and run an analysis to get started.
+              Upload a questionnaire file to run a simulation and get started.
             </p>
           </div>
         )}

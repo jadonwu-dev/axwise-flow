@@ -9,67 +9,165 @@
 
 'use client';
 
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { UsageWarning } from '@/components/usage-warning';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
+import { FileText, BarChart3, MessageSquare, Users, FlaskConical, BookOpen, Upload, Clock, TrendingUp, History } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 import type { ReactNode } from 'react';
 
-export default function UnifiedDashboardLayout({
-  children,
-}: {
-  children: ReactNode;
-}): JSX.Element {
-  // Get the current path to determine active tab
+interface SubNavItem {
+  href: string;
+  label: string;
+  active: boolean;
+}
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: any;
+  active: boolean;
+  subItems?: SubNavItem[];
+}
+
+function NavigationContent({ children }: { children: ReactNode }): JSX.Element {
+  // Get the current path to determine active nav item
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Get subscription status for usage warnings
   const { subscription, loading: subscriptionLoading } = useSubscriptionStatus();
 
-  // Determine active tab based on pathname
-  let activeTab = 'dashboard';
-  if (pathname?.includes('/upload')) {
-    activeTab = 'upload';
-  } else if (pathname?.includes('/history')) {
-    activeTab = 'history';
-  } else if (pathname?.includes('/documentation')) {
-    activeTab = 'documentation';
-  }
+  // Get current visualization tab from URL params
+  const currentTab = searchParams.get('visualizationTab');
+
+  // Navigation items (following logical workflow order)
+  const navItems: NavItem[] = [
+    {
+      href: '/unified-dashboard',
+      label: 'Dashboard',
+      icon: BarChart3,
+      active: pathname === '/unified-dashboard'
+    },
+    {
+      href: '/unified-dashboard/research-chat',
+      label: 'Research Chat',
+      icon: MessageSquare,
+      active: pathname === '/unified-dashboard/research-chat'
+    },
+    {
+      href: '/unified-dashboard/research-chat-history',
+      label: 'Research Chat History',
+      icon: History,
+      active: pathname === '/unified-dashboard/research-chat-history'
+    },
+    {
+      href: '/unified-dashboard/questionnaire-history',
+      label: 'Generated Questionnaires',
+      icon: FileText,
+      active: pathname?.includes('/questionnaire-history')
+    },
+    {
+      href: '/unified-dashboard/research',
+      label: 'Interview Simulation',
+      icon: FlaskConical,
+      active: pathname === '/unified-dashboard/research'
+    },
+    {
+      href: '/unified-dashboard/simulation-history',
+      label: 'Interview Simulation History',
+      icon: FlaskConical,
+      active: pathname?.includes('/simulation-history')
+    },
+    {
+      href: '/unified-dashboard/upload',
+      label: 'Analyse Interviews',
+      icon: Upload,
+      active: pathname?.includes('/upload') || (pathname === '/unified-dashboard' && currentTab && searchParams.get('analysisId')),
+      subItems: [
+        {
+          href: '/unified-dashboard/analysis-history',
+          label: 'Visualize Results',
+          active: pathname === '/unified-dashboard' && currentTab && searchParams.get('analysisId')
+        }
+      ]
+    },
+    {
+      href: '/unified-dashboard/analysis-history',
+      label: 'Analyse Interview History',
+      icon: Users,
+      active: pathname?.includes('/analysis-history')
+    },
+    {
+      href: '/unified-dashboard/history',
+      label: 'Activity History',
+      icon: Clock,
+      active: pathname?.includes('/history')
+    },
+    {
+      href: '/unified-dashboard/documentation',
+      label: 'Documentation',
+      icon: BookOpen,
+      active: pathname?.includes('/documentation')
+    }
+  ];
 
   return (
-    <div className="w-full mb-8">
-      <Tabs value={activeTab} className="w-full mb-8">
-        <TabsList className="w-full grid grid-cols-4">
-          <TabsTrigger value="dashboard" asChild>
-            <Link href="/unified-dashboard">
-              Dashboard
-            </Link>
-          </TabsTrigger>
+    <div className="flex h-screen bg-background">
+      {/* Left Sidebar */}
+      <div className="w-64 bg-muted/30 border-r border-border flex flex-col">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Dashboard</h2>
+        </div>
 
-          <TabsTrigger value="upload" asChild>
-            <Link href="/unified-dashboard/upload">
-              Upload
-            </Link>
-          </TabsTrigger>
+        <nav className="flex-1 p-4 space-y-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                    item.active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
 
-          <TabsTrigger value="history" asChild>
-            <Link href="/unified-dashboard/history">
-              History
-            </Link>
-          </TabsTrigger>
+                {/* Sub-items */}
+                {item.subItems && item.active && (
+                  <div className="ml-6 mt-1 space-y-1">
+                    {item.subItems.map((subItem) => (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        className={cn(
+                          "block px-3 py-1 rounded-md text-xs transition-colors",
+                          subItem.active
+                            ? "bg-primary/20 text-primary font-medium"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        {subItem.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
 
-          <TabsTrigger value="documentation" asChild>
-            <Link href="/unified-dashboard/documentation">
-              Documentation
-            </Link>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Usage Warning - Show when subscription data is available */}
+        {/* Usage Warning in Sidebar */}
         {!subscriptionLoading && subscription && subscription.limits && subscription.currentUsage && (
-          <div className="mt-4">
+          <div className="p-4 border-t border-border">
             <UsageWarning
               currentUsage={{
                 analyses: subscription.currentUsage.analyses || 0,
@@ -83,13 +181,42 @@ export default function UnifiedDashboardLayout({
             />
           </div>
         )}
+      </div>
 
-        <div className="mt-6">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 overflow-auto p-6">
           {children}
-        </div>
-      </Tabs>
-
-
+        </main>
+      </div>
     </div>
+  );
+}
+
+export default function UnifiedDashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen bg-background">
+        <div className="w-64 bg-muted/30 border-r border-border flex flex-col">
+          <div className="p-4 border-b border-border">
+            <h2 className="text-lg font-semibold">Dashboard</h2>
+          </div>
+          <div className="flex-1 p-4">
+            <div className="text-muted-foreground">Loading navigation...</div>
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <main className="flex-1 overflow-auto p-6">
+            {children}
+          </main>
+        </div>
+      </div>
+    }>
+      <NavigationContent>{children}</NavigationContent>
+    </Suspense>
   );
 }

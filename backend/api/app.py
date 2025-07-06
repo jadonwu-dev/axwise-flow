@@ -295,6 +295,13 @@ from backend.api.research.simulation_bridge.router import (
 
 app.include_router(simulation_bridge_router)
 
+# Include research sessions router - manages research session CRUD operations
+from backend.api.research.sessions.router import (
+    router as research_sessions_router,
+)
+
+app.include_router(research_sessions_router)
+
 # Initialize database tables (optional for conversation routines)
 try:
     create_tables()
