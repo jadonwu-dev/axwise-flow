@@ -79,10 +79,17 @@ class ResearchExport(Base):
 
 # Pydantic models for API
 class ResearchSessionCreate(BaseModel):
+    session_id: Optional[str] = None  # Allow custom session_id for local session sync
     user_id: Optional[str] = None
     business_idea: Optional[str] = None
     target_customer: Optional[str] = None
     problem: Optional[str] = None
+    industry: Optional[str] = None
+    stage: Optional[str] = None
+    status: Optional[str] = None
+    messages: Optional[List[Dict[str, Any]]] = None
+    conversation_context: Optional[str] = None
+    questions_generated: Optional[bool] = None
 
 
 class ResearchSessionUpdate(BaseModel):
@@ -109,6 +116,9 @@ class ResearchSessionResponse(BaseModel):
     stage: str
     status: str
     questions_generated: bool
+    messages: Optional[List[Dict[str, Any]]] = []
+    conversation_context: Optional[str] = None
+    research_questions: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]

@@ -444,7 +444,7 @@ export default function InterviewSimulationPage() {
   };
 
   const handleViewQuestionnaire = (sessionId: string) => {
-    router.push(`/unified-dashboard/questionnaire-history?session=${sessionId}`);
+    router.push(`/unified-dashboard/research-chat-history?tab=questionnaires&session=${sessionId}`);
   };
 
   const downloadSingleInterview = (interview: any, interviewNumber: number) => {

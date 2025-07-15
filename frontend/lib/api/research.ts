@@ -122,7 +122,23 @@ export class LocalResearchStorage {
 
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.sessions);
-      return stored ? JSON.parse(stored) : [];
+      const sessions = stored ? JSON.parse(stored) : [];
+
+      // Process sessions to set questions_generated flag based on message content
+      return sessions.map((session: any) => {
+        // Check if session has questionnaire data in messages - use same logic as questionnaire page
+        // Also check for COMPREHENSIVE_QUESTIONS_COMPONENT content type
+        const hasQuestionnaire = session.messages?.some((msg: any) =>
+          msg.metadata?.comprehensiveQuestions ||
+          (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
+        );
+
+        return {
+          ...session,
+          questions_generated: hasQuestionnaire || session.questions_generated || false,
+          isLocal: true
+        };
+      });
     } catch (error) {
       console.error('Error reading sessions from localStorage:', error);
       return [];
@@ -389,8 +405,111 @@ export async function generateResearchQuestions(
 }
 
 /**
+ * Clean up empty sessions (sessions with 0 messages and no questionnaires)
+ */
+export async function cleanupEmptySessions(): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/research/sessions?limit=100`);
+    if (!response.ok) return;
+
+    const sessions = await response.json();
+    const emptySessions = sessions.filter((session: any) =>
+      !session.questions_generated &&
+      (!session.messages || session.messages.length === 0) &&
+      session.session_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) // Only UUID sessions, not local_* sessions
+    );
+
+    console.log(`🧹 Cleaning up ${emptySessions.length} empty sessions...`);
+
+    for (const session of emptySessions) {
+      try {
+        await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}`, {
+          method: 'DELETE'
+        });
+        console.log(`🗑️ Deleted empty session: ${session.session_id}`);
+      } catch (error) {
+        console.warn(`Failed to delete session ${session.session_id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to cleanup empty sessions:', error);
+  }
+}
+
+/**
+ * Sync local session with questionnaire to database
+ */
+export async function syncLocalSessionToDatabase(session: ResearchSession): Promise<void> {
+  if (!session.questions_generated || !session.messages) return;
+
+  try {
+    // Find questionnaire message
+    const questionnaireMessage = session.messages.find((msg: any) =>
+      msg.metadata?.comprehensiveQuestions
+    );
+
+    if (!questionnaireMessage?.metadata?.comprehensiveQuestions) return;
+
+    // Create/update session in database with the original session_id
+    const sessionData = {
+      session_id: session.session_id,  // Preserve original session_id
+      user_id: session.user_id,
+      business_idea: session.business_idea,
+      target_customer: session.target_customer,
+      problem: session.problem,
+      industry: session.industry,
+      stage: session.stage,
+      status: session.status,
+      messages: session.messages,
+      conversation_context: "",
+      questions_generated: true
+    };
+
+    // Try to create session with specific ID
+    let response = await fetch(`${API_BASE_URL}/api/research/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sessionData)
+    });
+
+    // If session already exists (500 error due to unique constraint), try to update it
+    if (!response.ok && (response.status === 400 || response.status === 500)) {
+      console.log(`🔄 Session ${session.session_id} already exists, updating instead...`);
+      response = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_idea: sessionData.business_idea,
+          target_customer: sessionData.target_customer,
+          problem: sessionData.problem,
+          industry: sessionData.industry,
+          stage: sessionData.stage,
+          status: sessionData.status,
+          messages: sessionData.messages,
+          conversation_context: sessionData.conversation_context,
+          questions_generated: sessionData.questions_generated
+        })
+      });
+    }
+
+    if (response.ok) {
+      // Save questionnaire data
+      await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(questionnaireMessage.metadata.comprehensiveQuestions)
+      });
+
+      console.log(`✅ Synced local session ${session.session_id} to database`);
+    }
+  } catch (error) {
+    console.warn(`Failed to sync session ${session.session_id} to database:`, error);
+  }
+}
+
+/**
  * Get list of research sessions
- * Fetches from backend API with localStorage fallback
+ * Fetches from backend API with localStorage fallback and syncs local questionnaires
  */
 export async function getResearchSessions(limit: number = 20, userId?: string): Promise<ResearchSession[]> {
   try {
@@ -405,31 +524,158 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
     if (response.ok) {
       const backendSessions = await response.json();
 
-      // Convert backend format to frontend format
-      const convertedSessions: ResearchSession[] = backendSessions.map((session: any) => ({
-        id: session.id,
-        session_id: session.session_id,
-        user_id: session.user_id,
-        business_idea: session.business_idea,
-        target_customer: session.target_customer,
-        problem: session.problem,
-        industry: session.industry,
-        stage: session.stage,
-        status: session.status,
-        questions_generated: session.questions_generated,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-        completed_at: session.completed_at,
-        message_count: session.message_count,
-        messages: session.messages || [], // Preserve messages from backend
-        isLocal: false
+      // Convert backend format to frontend format and fetch questionnaire data
+      const convertedSessions: ResearchSession[] = await Promise.all(backendSessions.map(async (session: any) => {
+        // If session has questionnaire data, add it to messages for compatibility
+        const messages = session.messages || [];
+        let questionnaireData = session.research_questions;
+
+        // If session has questionnaires but no research_questions data, fetch it separately
+        if (session.questions_generated && !questionnaireData) {
+          try {
+            console.log(`🔄 Fetching questionnaire data for session ${session.session_id}`);
+            const questionnaireResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`);
+            if (questionnaireResponse.ok) {
+              const questionnaireResult = await questionnaireResponse.json();
+              questionnaireData = questionnaireResult.questionnaire;
+              console.log(`✅ Fetched questionnaire data for session ${session.session_id}`);
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch questionnaire for session ${session.session_id}:`, error);
+          }
+        }
+
+        console.log(`🔍 Session ${session.session_id} questionnaire data:`, {
+          questions_generated: session.questions_generated,
+          has_research_questions: !!questionnaireData,
+          research_questions_type: typeof questionnaireData,
+          research_questions_keys: questionnaireData ? Object.keys(questionnaireData) : null
+        });
+
+        if (session.questions_generated && questionnaireData) {
+          // Check if questionnaire message already exists
+          const hasQuestionnaireMessage = messages.some((msg: any) =>
+            msg.metadata?.comprehensiveQuestions
+          );
+
+          if (!hasQuestionnaireMessage) {
+            // Add questionnaire message for compatibility with frontend logic
+            console.log(`🔧 Adding questionnaire message for session ${session.session_id}`);
+            messages.push({
+              id: `questionnaire_${Date.now()}`,
+              content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
+              role: 'assistant',
+              timestamp: session.completed_at || session.updated_at,
+              metadata: {
+                type: 'component',
+                comprehensiveQuestions: questionnaireData,
+                businessContext: session.business_idea
+              }
+            });
+          }
+        }
+
+        const convertedSession = {
+          id: session.id,
+          session_id: session.session_id,
+          user_id: session.user_id,
+          business_idea: session.business_idea,
+          target_customer: session.target_customer,
+          problem: session.problem,
+          industry: session.industry,
+          stage: session.stage,
+          status: session.status,
+          questions_generated: session.questions_generated,
+          created_at: session.created_at,
+          updated_at: session.updated_at,
+          completed_at: session.completed_at,
+          message_count: session.message_count,
+          messages: messages,
+          isLocal: false
+        };
+
+        console.log(`🔍 Converted session ${session.session_id}:`, {
+          questions_generated: convertedSession.questions_generated,
+          messages_count: convertedSession.messages?.length || 0,
+          has_questionnaire_message: convertedSession.messages?.some(m => m.metadata?.comprehensiveQuestions)
+        });
+
+        return convertedSession;
       }));
 
       // Merge with local sessions for offline support
-      const localSessions = LocalResearchStorage.getSessions();
-      const allSessions = [...convertedSessions, ...localSessions.filter(local =>
-        !convertedSessions.some(backend => backend.session_id === local.session_id)
-      )];
+      let localSessions = LocalResearchStorage.getSessions();
+
+      // Check if we should force restore (for testing)
+      const forceRestore = window.location.search.includes('forceRestore=true');
+      if (forceRestore) {
+        console.log(`🔧 Force restore mode enabled`);
+      }
+
+      // Sync local sessions with questionnaires to database (background operation)
+      // Temporarily disabled to test auto-restore
+      if (!forceRestore) {
+        localSessions
+          .filter(session => session.questions_generated && session.session_id.startsWith('local_'))
+          .forEach(session => {
+            syncLocalSessionToDatabase(session).catch(err =>
+              console.warn('Background sync failed:', err)
+            );
+          });
+      }
+
+      // Clean up empty sessions (background operation)
+      cleanupEmptySessions().catch(err =>
+        console.warn('Background cleanup failed:', err)
+      );
+
+      // Auto-restore: If backend has sessions that don't exist locally, restore them to localStorage
+      let restoredCount = 0;
+      console.log(`🔍 Auto-restore check: ${convertedSessions.length} backend sessions, ${localSessions.length} local sessions`);
+
+      convertedSessions.forEach(backendSession => {
+        const existsLocally = localSessions.some(local => local.session_id === backendSession.session_id);
+        console.log(`🔍 Session ${backendSession.session_id}: existsLocally=${existsLocally}, isLocal=${backendSession.session_id.startsWith('local_')}, hasQuestions=${backendSession.questions_generated}`);
+
+        if ((forceRestore || !existsLocally) && backendSession.session_id.startsWith('local_') && backendSession.questions_generated) {
+          // Restore this session to localStorage for offline access
+          const restoredSession = {
+            ...backendSession,
+            isLocal: true
+          };
+          console.log(`🔄 ${forceRestore ? 'Force-restoring' : 'Auto-restoring'} session:`, restoredSession);
+          LocalResearchStorage.saveSession(restoredSession);
+          console.log(`🔄 ${forceRestore ? 'Force-restored' : 'Auto-restored'} session ${backendSession.session_id} to localStorage`);
+
+          // Debug: Verify the session was actually saved
+          const savedSession = LocalResearchStorage.getSession(backendSession.session_id);
+          console.log(`🔍 Verification - Session ${backendSession.session_id} saved:`, !!savedSession);
+
+          // Debug: Check localStorage directly
+          const directCheck = localStorage.getItem(STORAGE_KEYS.sessions);
+          console.log(`🔍 Direct localStorage check:`, directCheck ? 'EXISTS' : 'EMPTY');
+          restoredCount++;
+        }
+      });
+
+      // If we restored any sessions, refresh the local sessions list
+      if (restoredCount > 0) {
+        localSessions = LocalResearchStorage.getSessions();
+        console.log(`✅ Auto-restored ${restoredCount} sessions to localStorage`);
+      }
+
+      // Prioritize local sessions - they may have questionnaire data that backend doesn't have
+      const mergedSessions = [...localSessions];
+
+      // Add backend sessions that don't exist locally
+      convertedSessions.forEach(backendSession => {
+        const existsLocally = localSessions.some(local => local.session_id === backendSession.session_id);
+        if (!existsLocally) {
+          mergedSessions.push(backendSession);
+        }
+      });
+
+      const allSessions = mergedSessions;
 
       return allSessions
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())

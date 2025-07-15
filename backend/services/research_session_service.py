@@ -36,11 +36,12 @@ class ResearchSessionService:
             business_idea=session_data.business_idea,
             target_customer=session_data.target_customer,
             problem=session_data.problem,
-            messages=[],
-            conversation_context="",
-            industry="general",
-            stage="initial",
-            status="active",
+            messages=session_data.messages or [],
+            conversation_context=session_data.conversation_context or "",
+            industry=session_data.industry or "general",
+            stage=session_data.stage or "initial",
+            status=session_data.status or "active",
+            questions_generated=session_data.questions_generated or False,
         )
 
         self.db.add(session)

@@ -230,7 +230,7 @@ async def create_research_session(
         logger.info(f"📝 Creating new research session")
 
         service = ResearchSessionService(db)
-        session = service.create_session(session_data)
+        session = service.create_session(session_data, session_data.session_id)
 
         # Convert to response format
         response = ResearchSessionResponse(

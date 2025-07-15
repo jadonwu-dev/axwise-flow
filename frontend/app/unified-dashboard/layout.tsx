@@ -60,15 +60,9 @@ function NavigationContent({ children }: { children: ReactNode }): JSX.Element {
     },
     {
       href: '/unified-dashboard/research-chat-history',
-      label: 'Research Chat History',
+      label: 'Research History',
       icon: History,
       active: pathname === '/unified-dashboard/research-chat-history'
-    },
-    {
-      href: '/unified-dashboard/questionnaire-history',
-      label: 'Generated Questionnaires',
-      icon: FileText,
-      active: pathname?.includes('/questionnaire-history')
     },
     {
       href: '/unified-dashboard/research',
