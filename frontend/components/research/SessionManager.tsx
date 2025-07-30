@@ -65,7 +65,7 @@ export function SessionManager({ onLoadSession, currentSessionId }: SessionManag
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-GB', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

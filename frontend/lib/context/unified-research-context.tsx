@@ -210,7 +210,11 @@ export function UnifiedResearchProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     const handleOnline = () => {
       dispatch({ type: 'UPDATE_SYNC_STATUS', payload: { isOnline: true } });
-      sessionManager.syncPendingSessions();
+
+      // Debounce sync to prevent immediate mass syncing
+      setTimeout(() => {
+        sessionManager.syncPendingSessions();
+      }, 2000); // Wait 2 seconds after coming online
     };
 
     const handleOffline = () => {

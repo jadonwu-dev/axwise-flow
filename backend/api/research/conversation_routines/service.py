@@ -52,9 +52,25 @@ class ConversationRoutineService:
         ) -> Dict[str, Any]:
             """Generate comprehensive stakeholder-based research questions"""
             try:
+                # Clear LLM cache to prevent stale questionnaire data
+                from backend.services.processing.llm_request_cache import (
+                    LLMRequestCache,
+                )
+
+                LLMRequestCache.clear_cache()
+                logger.info(
+                    "🧹 Cleared LLM request cache to prevent stale questionnaire data"
+                )
+
                 logger.info(
                     f"🎯 Generating stakeholder questions for: {business_idea[:50]}..."
                 )
+
+                # Log full business context for debugging
+                logger.info(f"📋 Full business context:")
+                logger.info(f"   Business idea: {business_idea}")
+                logger.info(f"   Target customer: {target_customer}")
+                logger.info(f"   Problem: {problem}")
 
                 # Use existing stakeholder detector
                 context_analysis = {
@@ -161,9 +177,23 @@ class ConversationRoutineService:
     ) -> Dict[str, Any]:
         """Generate comprehensive stakeholder-based research questions"""
         try:
+            # Clear LLM cache to prevent stale questionnaire data
+            from backend.services.processing.llm_request_cache import LLMRequestCache
+
+            LLMRequestCache.clear_cache()
+            logger.info(
+                "🧹 Cleared LLM request cache to prevent stale questionnaire data"
+            )
+
             logger.info(
                 f"🎯 Generating stakeholder questions for: {business_idea[:50]}..."
             )
+
+            # Log full business context for debugging
+            logger.info(f"📋 Full business context:")
+            logger.info(f"   Business idea: {business_idea}")
+            logger.info(f"   Target customer: {target_customer}")
+            logger.info(f"   Problem: {problem}")
 
             # Use existing stakeholder detector
             context_analysis = {

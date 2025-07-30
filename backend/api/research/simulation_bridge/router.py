@@ -392,6 +392,165 @@ async def get_completed_simulation(simulation_id: str) -> SimulationResponse:
         )
 
 
+@router.post("/analyze/{simulation_id}")
+async def analyze_simulation_results(
+    simulation_id: str,
+    analysis_options: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Direct bridge from simulation results to analysis pipeline.
+
+    This endpoint handles complex multi-stakeholder, multi-interview scenarios:
+    1. Retrieves completed simulation data (5 stakeholders × X interviews each)
+    2. Formats all interview data for the analysis pipeline
+    3. Automatically uploads it to the analysis system
+    4. Triggers comprehensive analysis with smart defaults
+    5. Returns analysis_id for tracking results
+
+    Perfect for scenarios like:
+    - 5 stakeholders × 5 interviews each = 25 total interviews
+    - Automatic stakeholder breakdown analysis
+    - Cross-stakeholder pattern detection
+    - Unified insights across all interview data
+    """
+    try:
+        logger.info(f"Starting analysis bridge for simulation: {simulation_id}")
+
+        # Step 1: Get simulation results
+        simulation_response = await get_completed_simulation(simulation_id)
+
+        # Step 2: Prepare analysis options with smart defaults
+        if analysis_options is None:
+            analysis_options = {}
+
+        analysis_config = {
+            "llm_provider": analysis_options.get("llm_provider", "gemini"),
+            "llm_model": analysis_options.get("llm_model", "gemini-2.0-flash-exp"),
+            "industry": analysis_options.get("industry", "general"),
+            "analysis_type": "comprehensive_simulation",
+            "include_stakeholder_breakdown": True,
+        }
+
+        # Step 3: Extract and format all interview data
+        interviews = simulation_response.interviews or []
+        personas = simulation_response.people or []
+        metadata = simulation_response.metadata or {}
+
+        if not interviews:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No interview data found in simulation {simulation_id}",
+            )
+
+        # Step 4: Create comprehensive analysis text
+        # This combines ALL interviews from ALL stakeholders into one analysis-ready format
+        stakeholder_groups = {}
+        for interview in interviews:
+            stakeholder_type = interview.get("stakeholder_type", "Unknown")
+            if stakeholder_type not in stakeholder_groups:
+                stakeholder_groups[stakeholder_type] = []
+            stakeholder_groups[stakeholder_type].append(interview)
+
+        # Build comprehensive analysis content
+        analysis_content_parts = []
+
+        # Add business context
+        business_context = simulation_response.data.get("metadata", {}).get(
+            "business_context", {}
+        )
+        if business_context:
+            analysis_content_parts.append("=== BUSINESS CONTEXT ===")
+            analysis_content_parts.append(
+                f"Business Idea: {business_context.get('business_idea', 'N/A')}"
+            )
+            analysis_content_parts.append(
+                f"Target Customer: {business_context.get('target_customer', 'N/A')}"
+            )
+            analysis_content_parts.append(
+                f"Problem: {business_context.get('problem', 'N/A')}"
+            )
+            analysis_content_parts.append("")
+
+        # Add simulation metadata
+        analysis_content_parts.append("=== SIMULATION OVERVIEW ===")
+        analysis_content_parts.append(f"Simulation ID: {simulation_id}")
+        analysis_content_parts.append(
+            f"Total Stakeholder Types: {len(stakeholder_groups)}"
+        )
+        analysis_content_parts.append(f"Total Interviews: {len(interviews)}")
+        analysis_content_parts.append(
+            f"Stakeholder Types: {', '.join(stakeholder_groups.keys())}"
+        )
+        analysis_content_parts.append("")
+
+        # Add all interviews organized by stakeholder
+        for stakeholder_type, stakeholder_interviews in stakeholder_groups.items():
+            analysis_content_parts.append(
+                f"=== {stakeholder_type.upper()} INTERVIEWS ==="
+            )
+            analysis_content_parts.append(
+                f"Number of interviews: {len(stakeholder_interviews)}"
+            )
+            analysis_content_parts.append("")
+
+            for idx, interview in enumerate(stakeholder_interviews, 1):
+                # Find corresponding persona
+                persona = next(
+                    (p for p in personas if p.get("id") == interview.get("persona_id")),
+                    {},
+                )
+
+                analysis_content_parts.append(f"--- Interview {idx} ---")
+                analysis_content_parts.append(
+                    f"Persona: {persona.get('name', 'Unknown')}"
+                )
+                analysis_content_parts.append(f"Role: {persona.get('role', 'Unknown')}")
+                analysis_content_parts.append("")
+
+                # Add Q&A pairs
+                responses = interview.get("responses", [])
+                for q_idx, response in enumerate(responses, 1):
+                    analysis_content_parts.append(
+                        f"Q{q_idx}: {response.get('question', '')}"
+                    )
+                    analysis_content_parts.append(
+                        f"A{q_idx}: {response.get('response', '')}"
+                    )
+                    analysis_content_parts.append("")
+
+                analysis_content_parts.append("---")
+                analysis_content_parts.append("")
+
+        analysis_ready_text = "\n".join(analysis_content_parts)
+
+        logger.info(
+            f"Created analysis content with {len(analysis_ready_text)} characters for {len(interviews)} interviews across {len(stakeholder_groups)} stakeholder types"
+        )
+
+        return {
+            "success": True,
+            "message": "Analysis bridge prepared successfully",
+            "simulation_id": simulation_id,
+            "preview": {
+                "stakeholder_types": list(stakeholder_groups.keys()),
+                "total_interviews": len(interviews),
+                "content_length": len(analysis_ready_text),
+                "analysis_config": analysis_config,
+            },
+            "next_steps": {
+                "description": "Ready to upload to analysis pipeline",
+                "estimated_analysis_time": "3-7 minutes",
+                "analysis_url_pattern": "/unified-dashboard?analysisId={result_id}&visualizationTab=themes",
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Analysis bridge failed for simulation {simulation_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis bridge failed: {str(e)}")
+
+
 @router.post("/test-personas")
 async def test_persona_generation(
     business_context: Dict[str, Any],

@@ -17,11 +17,13 @@ function ClientTimestamp({ timestamp, format = 'localeString' }: { timestamp: st
 
   const date = new Date(timestamp);
   if (format === 'localeTimeString') {
-    return <span>{date.toLocaleTimeString()}</span>;
+    return <span>{date.toLocaleTimeString('en-GB')}</span>;
   } else if (format === 'localeDateString') {
-    return <span>{date.toLocaleDateString()}</span>;
+    // Use DD/MM/YYYY format as per user preferences
+    return <span>{date.toLocaleDateString('en-GB')}</span>;
   } else {
-    return <span>{date.toLocaleString()}</span>;
+    // Use DD/MM/YYYY format for full datetime
+    return <span>{date.toLocaleString('en-GB')}</span>;
   }
 }
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -99,7 +101,7 @@ export default function ResearchChatHistory() {
   // Helper function to generate comprehensive questionnaire text
   const generateComprehensiveQuestionnaireText = (questionnaire: any, title: string): string => {
     let content = `# Research Questionnaire: ${title}\n\n`;
-    content += `Generated on: ${new Date().toLocaleDateString()}\n\n`;
+    content += `Generated on: ${new Date().toLocaleDateString('en-GB')}\n\n`;
 
     if (questionnaire.timeEstimate) {
       content += `## Time Estimate\n`;

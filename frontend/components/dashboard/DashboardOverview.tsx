@@ -65,7 +65,7 @@ export default function DashboardOverview() {
           total: chats.length,
           withQuestionnaires: chats.filter((chat: any) => chat.has_questionnaire).length,
           recentActivity: chats.length > 0
-            ? new Date(chats[0].created_at).toLocaleDateString()
+            ? new Date(chats[0].created_at).toLocaleDateString('en-GB')
             : 'No activity'
         };
       }

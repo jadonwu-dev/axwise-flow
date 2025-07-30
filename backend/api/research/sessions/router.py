@@ -355,6 +355,20 @@ async def save_questionnaire(
         logger.info(f"💾 Saving questionnaire for session: {session_id}")
 
         service = ResearchSessionService(db)
+
+        # Check if session already has questionnaire to avoid unnecessary updates
+        existing_session = service.get_session(session_id)
+        if existing_session and existing_session.questions_generated:
+            logger.info(
+                f"⏭️ Session {session_id} already has questionnaire, skipping save"
+            )
+            return {
+                "success": True,
+                "message": "Questionnaire already exists for this session",
+                "session_id": session_id,
+                "questions_generated": True,
+            }
+
         session = service.complete_session(session_id, questionnaire_data)
 
         if not session:

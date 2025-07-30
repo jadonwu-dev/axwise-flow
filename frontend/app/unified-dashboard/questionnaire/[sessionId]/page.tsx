@@ -63,15 +63,35 @@ export default function QuestionnaireDetailPage() {
         // Handle local session
         if (typeof window !== 'undefined') {
           const { LocalResearchStorage } = await import('@/lib/api/research');
+
+          // Clean up any stale questionnaire data first
+          LocalResearchStorage.cleanupStaleQuestionnaires();
+
           const session = LocalResearchStorage.getSession(sessionId);
 
           if (session?.messages) {
-            const questionnaireMessage = session.messages.find((msg: any) =>
-              msg.metadata?.comprehensiveQuestions
+            // Find the MOST RECENT questionnaire message to avoid stale data
+            const questionnaireMessages = session.messages.filter((msg: any) =>
+              msg.metadata?.comprehensiveQuestions &&
+              msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT'
             );
 
-            if (questionnaireMessage?.metadata?.comprehensiveQuestions) {
-              questionnaireData = questionnaireMessage.metadata.comprehensiveQuestions;
+            if (questionnaireMessages.length > 0) {
+              // Get the most recent questionnaire message
+              const latestQuestionnaireMessage = questionnaireMessages.sort((a, b) =>
+                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              )[0];
+
+              questionnaireData = latestQuestionnaireMessage.metadata.comprehensiveQuestions;
+
+              console.log(`🔍 Found ${questionnaireMessages.length} questionnaire messages, using latest from ${latestQuestionnaireMessage.timestamp}`);
+              console.log('📋 Questionnaire data preview:', {
+                primaryCount: questionnaireData?.primaryStakeholders?.length || 0,
+                secondaryCount: questionnaireData?.secondaryStakeholders?.length || 0,
+                businessContext: questionnaireData?.businessContext
+              });
+            } else {
+              console.warn(`⚠️ No valid questionnaire messages found in session ${sessionId}`);
             }
           }
 
@@ -98,6 +118,24 @@ export default function QuestionnaireDetailPage() {
 
       if (!questionnaireData) {
         throw new Error('No questionnaire found for this session');
+      }
+
+      // Validate questionnaire data matches session context
+      if (sessionInfo && questionnaireData) {
+        const sessionBusinessIdea = sessionInfo.business_idea?.toLowerCase() || '';
+        const questionnaireContext = questionnaireData.businessContext?.toLowerCase() || '';
+
+        // Check if questionnaire context roughly matches session context
+        if (sessionBusinessIdea && questionnaireContext &&
+            !questionnaireContext.includes(sessionBusinessIdea.split(' ')[0]) &&
+            !sessionBusinessIdea.includes(questionnaireContext.split(' ')[0])) {
+
+          console.warn('⚠️ Questionnaire context mismatch detected:');
+          console.warn('Session business idea:', sessionBusinessIdea);
+          console.warn('Questionnaire context:', questionnaireContext);
+
+          // Still proceed but log the mismatch for debugging
+        }
       }
 
       setQuestionnaire(questionnaireData);

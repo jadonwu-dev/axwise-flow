@@ -26,7 +26,7 @@ function ClientTimestamp({ timestamp }: { timestamp: Date }) {
     return null; // Return null instead of empty string to avoid hydration mismatch
   }
 
-  return <span>{timestamp.toLocaleTimeString()}</span>;
+  return <span>{timestamp.toLocaleTimeString('en-GB')}</span>;
 }
 import { MultiStakeholderChatMessage } from './MultiStakeholderChatMessage';
 import { StakeholderAlert } from './StakeholderAlert';

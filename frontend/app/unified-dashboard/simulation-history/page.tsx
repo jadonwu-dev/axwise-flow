@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, FlaskConical, Download, User, ChevronRight, MessageSquare, Calendar, Users, Briefcase, MapPin, GraduationCap, DollarSign, Building } from 'lucide-react';
+import { Loader2, FlaskConical, Download, User, ChevronRight, MessageSquare, Calendar, Users, Briefcase, MapPin, GraduationCap, DollarSign, Building, BarChart3 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
@@ -399,6 +399,50 @@ export default function SimulationHistoryPage(): JSX.Element {
     });
   };
 
+  // Handle analysis for simulations - direct bridge to analysis pipeline
+  const handleAnalyze = async (simulationId: string) => {
+    try {
+      console.log('🔬 Starting analysis for simulation:', simulationId);
+
+      // Call the analysis bridge endpoint
+      const response = await fetch(`/api/research/simulation-bridge/analyze/${simulationId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          llm_provider: 'gemini',
+          llm_model: 'gemini-2.0-flash-exp',
+          analysis_type: 'comprehensive_simulation',
+          include_stakeholder_breakdown: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Analysis bridge result:', result);
+
+      if (result.success) {
+        showToast(
+          `Analysis started for ${result.preview.total_interviews} interviews across ${result.preview.stakeholder_types.length} stakeholder types`,
+          { variant: 'success' }
+        );
+
+        // TODO: Navigate to analysis results when ready
+        // For now, show success message with next steps
+        console.log('📊 Analysis will be available at:', result.next_steps.analysis_url_pattern);
+      } else {
+        throw new Error(result.message || 'Analysis failed');
+      }
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      showToast('Failed to start analysis', { variant: 'error' });
+    }
+  };
+
   // Handle download for simulations (works with both localStorage and backend data)
   const handleDownload = async (simulationId: string) => {
     try {
@@ -635,6 +679,30 @@ ${persona?.name || 'Interviewee'}: ${response.response}
                     </div>
                     <div className="flex items-center gap-2">
                       {getStatusBadge(simulation.status)}
+                      <div className="flex gap-1 ml-2">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(simulation.id);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2"
+                        >
+                          <Download className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAnalyze(simulation.id);
+                          }}
+                          variant="default"
+                          size="sm"
+                          className="h-7 px-2"
+                        >
+                          <BarChart3 className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <ChevronRight
                         className={`h-4 w-4 transition-transform ${
                           expandedSimulations.has(simulation.id) ? 'rotate-90' : ''

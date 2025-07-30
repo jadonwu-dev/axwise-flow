@@ -287,23 +287,59 @@ export class UnifiedSessionManager {
 
     console.log(`🔄 Syncing ${this.syncQueue.size} pending sessions...`);
 
-    const syncPromises = Array.from(this.syncQueue).map(async (sessionId) => {
+    // Filter sessions to only sync meaningful ones
+    const sessionsToSync = [];
+    for (const sessionId of this.syncQueue) {
       try {
         const session = await this.getSession(sessionId);
-        if (session && !session.syncStatus.isSynced) {
+        if (session && !session.syncStatus.isSynced && this.shouldSyncSession(session)) {
+          sessionsToSync.push({ sessionId, session });
+        } else {
+          // Remove sessions that don't need syncing
+          this.syncQueue.delete(sessionId);
+        }
+      } catch (error) {
+        console.error(`Failed to load session ${sessionId} for sync:`, error);
+        this.syncQueue.delete(sessionId);
+      }
+    }
+
+    console.log(`📋 Filtered to ${sessionsToSync.length} meaningful sessions (from ${this.syncQueue.size + sessionsToSync.length} total)`);
+
+    // Batch sync to prevent overwhelming backend
+    const MAX_CONCURRENT = 3;
+    for (let i = 0; i < sessionsToSync.length; i += MAX_CONCURRENT) {
+      const batch = sessionsToSync.slice(i, i + MAX_CONCURRENT);
+
+      await Promise.allSettled(batch.map(async ({ sessionId, session }) => {
+        try {
           await this.saveBackendSession(session);
           session.syncStatus.isSynced = true;
           session.syncStatus.lastSyncAt = new Date().toISOString();
           session.syncStatus.syncError = undefined;
           this.syncQueue.delete(sessionId);
+          console.log(`✅ Synced session ${sessionId}`);
+        } catch (error) {
+          console.error(`❌ Failed to sync session ${sessionId}:`, error);
         }
-      } catch (error) {
-        console.error(`Failed to sync session ${sessionId}:`, error);
-      }
-    });
+      }));
 
-    await Promise.allSettled(syncPromises);
+      // Small delay between batches
+      if (i + MAX_CONCURRENT < sessionsToSync.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
     console.log(`✅ Sync completed. ${this.syncQueue.size} sessions remaining in queue.`);
+  }
+
+  private shouldSyncSession(session: any): boolean {
+    // Only sync sessions with meaningful data
+    return !!(
+      session.business_idea?.trim() &&
+      session.questions_generated &&
+      session.messages?.length >= 3 // Meaningful conversation
+    );
   }
 
   // Private helper methods for storage operations
@@ -422,7 +458,43 @@ export class UnifiedSessionManager {
   private async processSyncQueue(): Promise<void> {
     if (this.syncQueue.size > 0) {
       console.log('🌐 Back online, processing sync queue...');
+
+      // Clean up old sessions before syncing
+      await this.cleanupOldSessions();
+
       await this.syncPendingSessions();
+    }
+  }
+
+  private async cleanupOldSessions(): Promise<void> {
+    try {
+      const { LocalResearchStorage } = await import('@/lib/api/research');
+      const sessions = LocalResearchStorage.getAllSessions();
+
+      // Remove sessions older than 7 days that don't have questionnaires
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 7);
+
+      let cleanedCount = 0;
+      sessions.forEach(session => {
+        const sessionDate = new Date(session.created_at);
+        const isOld = sessionDate < cutoffDate;
+        const hasNoQuestionnaire = !session.questions_generated;
+        const hasMinimalData = !session.business_idea?.trim() || session.messages?.length < 3;
+
+        if (isOld && (hasNoQuestionnaire || hasMinimalData)) {
+          LocalResearchStorage.deleteSession(session.session_id);
+          this.syncQueue.delete(session.session_id);
+          this.sessionCache.delete(session.session_id);
+          cleanedCount++;
+        }
+      });
+
+      if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} old sessions`);
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup old sessions:', error);
     }
   }
 }

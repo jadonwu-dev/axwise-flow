@@ -181,6 +181,50 @@ export class LocalResearchStorage {
     }
   }
 
+  static cleanupStaleQuestionnaires(): void {
+    if (typeof window === 'undefined') return;
+
+    console.log('🧹 Cleaning up stale questionnaire data...');
+
+    try {
+      const sessions = this.getSessions();
+      let cleanedCount = 0;
+
+      const cleanedSessions = sessions.map(session => {
+        if (session.messages) {
+          // Remove duplicate questionnaire messages, keep only the latest
+          const questionnaireMessages = session.messages.filter(msg =>
+            msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions
+          );
+
+          if (questionnaireMessages.length > 1) {
+            // Keep only the most recent questionnaire message
+            const latestQuestionnaire = questionnaireMessages.sort((a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            )[0];
+
+            // Remove all questionnaire messages and add back only the latest
+            session.messages = session.messages.filter(msg =>
+              !(msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
+            );
+            session.messages.push(latestQuestionnaire);
+
+            cleanedCount++;
+            console.log(`🔧 Cleaned ${questionnaireMessages.length - 1} duplicate questionnaires from session ${session.session_id}`);
+          }
+        }
+        return session;
+      });
+
+      if (cleanedCount > 0) {
+        localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(cleanedSessions));
+        console.log(`✅ Cleaned up ${cleanedCount} sessions with duplicate questionnaires`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up stale questionnaires:', error);
+    }
+  }
+
   static getCurrentSession(): ResearchSession | null {
     if (typeof window === 'undefined') return null;
 
@@ -455,15 +499,27 @@ export async function cleanupEmptySessions(): Promise<void> {
  * Sync local session with questionnaire to database
  */
 export async function syncLocalSessionToDatabase(session: ResearchSession): Promise<void> {
-  if (!session.questions_generated || !session.messages) return;
+  // Enhanced validation to prevent unnecessary syncs
+  if (!session.questions_generated ||
+      !session.messages ||
+      !session.business_idea ||
+      session.messages.length < 3) {  // Need meaningful conversation
+    console.log(`⏭️ Skipping sync for session ${session.session_id} - insufficient data`);
+    return;
+  }
 
   try {
+    console.log(`🔄 Syncing local session ${session.session_id} to database...`);
+
     // Find questionnaire message
     const questionnaireMessage = session.messages.find((msg: any) =>
       msg.metadata?.comprehensiveQuestions
     );
 
-    if (!questionnaireMessage?.metadata?.comprehensiveQuestions) return;
+    if (!questionnaireMessage?.metadata?.comprehensiveQuestions) {
+      console.log(`⏭️ Skipping sync for session ${session.session_id} - no questionnaire data`);
+      return;
+    }
 
     // Create/update session in database with the original session_id
     const sessionData = {
@@ -508,12 +564,24 @@ export async function syncLocalSessionToDatabase(session: ResearchSession): Prom
     }
 
     if (response.ok) {
-      // Save questionnaire data
-      await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(questionnaireMessage.metadata.comprehensiveQuestions)
-      });
+      // Only save questionnaire data if the session has one and it's not already saved
+      if (questionnaireMessage?.metadata?.comprehensiveQuestions && session.questions_generated) {
+        try {
+          const questionnaireResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(questionnaireMessage.metadata.comprehensiveQuestions)
+          });
+
+          if (questionnaireResponse.ok) {
+            console.log(`✅ Synced questionnaire for session ${session.session_id}`);
+          } else {
+            console.warn(`⚠️ Failed to sync questionnaire for session ${session.session_id}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error syncing questionnaire for session ${session.session_id}:`, error);
+        }
+      }
 
       console.log(`✅ Synced local session ${session.session_id} to database`);
     }

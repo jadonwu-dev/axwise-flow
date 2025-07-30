@@ -378,32 +378,31 @@ const processGeneratedQuestions = async (
         session.completed_at = new Date().toISOString();
         session.updated_at = new Date().toISOString();
 
-        // Ensure the questionnaire message is properly formatted
-        const questionnaireMessageExists = session.messages?.some(msg =>
-          msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' &&
-          msg.metadata?.comprehensiveQuestions
-        );
-
-        if (!questionnaireMessageExists) {
-          console.log('🔧 Adding missing questionnaire component to local session');
-
-          // Add the questionnaire message if it doesn't exist
-          const questionnaireMessage = {
-            id: `questionnaire_${Date.now()}`,
-            content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
-            role: 'assistant' as const,
-            timestamp: new Date().toISOString(),
-            metadata: {
-              type: 'component',
-              comprehensiveQuestions,
-              businessContext: session.business_idea
-            }
-          };
-
-          session.messages = session.messages || [];
-          session.messages.push(questionnaireMessage);
-          session.message_count = session.messages.length;
+        // Clean up any old questionnaire messages to prevent data conflicts
+        if (session.messages) {
+          session.messages = session.messages.filter(msg =>
+            !(msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
+          );
         }
+
+        // Add the new questionnaire message
+        console.log('🔧 Adding fresh questionnaire component to local session');
+
+        const questionnaireMessage = {
+          id: `questionnaire_${Date.now()}`,
+          content: 'COMPREHENSIVE_QUESTIONS_COMPONENT',
+          role: 'assistant' as const,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            type: 'component',
+            comprehensiveQuestions,
+            businessContext: session.business_idea || context.businessIdea
+          }
+        };
+
+        session.messages = session.messages || [];
+        session.messages.push(questionnaireMessage);
+        session.message_count = session.messages.length;
 
         // Save the updated session
         LocalResearchStorage.saveSession(session);
