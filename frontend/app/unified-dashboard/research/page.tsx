@@ -28,6 +28,7 @@ export default function InterviewSimulationPage() {
   const [completedSimulations, setCompletedSimulations] = useState<SimulationResult[]>([]);
   const [isLoadingQuestionnaires, setIsLoadingQuestionnaires] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingSessionId, setProcessingSessionId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -190,7 +191,18 @@ export default function InterviewSimulationPage() {
         localStorage.setItem('simulation_results', JSON.stringify(existingResults));
         console.log('💾 Saved simulation to localStorage:', result.simulation_id);
 
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new CustomEvent('localStorageUpdated', {
+          detail: { key: 'simulation_results', action: 'add', simulationId: result.simulation_id }
+        }));
+
         loadCompletedSimulations();
+
+        // Redirect to simulation history page to view results
+        setSuccess('Simulation completed successfully! Redirecting to results page...');
+        setTimeout(() => {
+          router.push('/unified-dashboard/simulation-history');
+        }, 2000); // Give user time to see success message
       } else {
         setError(result.detail || result.error || 'Failed to process questionnaire');
       }
@@ -231,13 +243,74 @@ export default function InterviewSimulationPage() {
             localStorage.setItem('simulation_results', JSON.stringify(existingResults));
             console.log('💾 Saved simulation to localStorage:', result.simulation_id);
 
+            // Dispatch custom event to notify other components
+            window.dispatchEvent(new CustomEvent('localStorageUpdated', {
+              detail: { key: 'simulation_results', action: 'add', simulationId: result.simulation_id }
+            }));
+
             loadCompletedSimulations();
+
+            // Redirect to simulation history page to view results
+            setSuccess('Simulation completed successfully! Redirecting to results page...');
+            setTimeout(() => {
+              router.push('/unified-dashboard/simulation-history');
+            }, 2000); // Give user time to see success message
           }
           setCurrentSimulationId(null);
           setIsProcessing(false);
           return false; // Stop polling
         }
         return true; // Continue polling
+      } else if (response.status === 404) {
+        // Simulation completed and removed from active simulations
+        console.log('Simulation completed (404 from progress endpoint)');
+
+        // Try to fetch the completed simulation results
+        try {
+          const resultResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/research/simulation-bridge/completed/${simulationId}`);
+          if (resultResponse.ok) {
+            const result = await resultResponse.json();
+            setLastSimulationResult(result);
+            setCompletedInterviews(result.interviews || []);
+
+            // Save simulation result to localStorage for simulation history
+            const existingResults = JSON.parse(localStorage.getItem('simulation_results') || '[]');
+            const newSimulationEntry = {
+              simulation_id: result.simulation_id || simulationId,
+              timestamp: new Date().toISOString(),
+              results: result,
+              source: '404_completion'
+            };
+            existingResults.push(newSimulationEntry);
+            localStorage.setItem('simulation_results', JSON.stringify(existingResults));
+            console.log('💾 Saved simulation to localStorage from 404 handler:', result.simulation_id || simulationId);
+
+            // Dispatch custom event to notify other components
+            window.dispatchEvent(new CustomEvent('localStorageUpdated', {
+              detail: { key: 'simulation_results', action: 'add', simulationId: result.simulation_id || simulationId }
+            }));
+
+            // Dispatch custom event to notify other components
+            window.dispatchEvent(new CustomEvent('localStorageUpdated', {
+              detail: { key: 'simulation_results', action: 'add', simulationId: result.simulation_id || simulationId }
+            }));
+          } else {
+            console.warn('Could not fetch completed simulation results');
+          }
+        } catch (fetchError) {
+          console.error('Error fetching completed simulation:', fetchError);
+        }
+
+        setSuccess('Simulation completed successfully! Redirecting to results page...');
+        setIsProcessing(false);
+        setCurrentSimulationId(null);
+
+        // Redirect to simulation history to view results
+        setTimeout(() => {
+          router.push('/unified-dashboard/simulation-history');
+        }, 2000);
+
+        return false; // Stop polling
       }
     } catch (error) {
       console.error('Progress polling error:', error);
@@ -256,6 +329,7 @@ export default function InterviewSimulationPage() {
     setCompletedInterviews([]);
     setSimulationProgress(null);
     setIsProcessing(true);
+    setProcessingSessionId(sessionId);
 
     try {
       let questionnaireData = null;
@@ -268,6 +342,11 @@ export default function InterviewSimulationPage() {
         console.log('🔍 All localStorage sessions:', Object.keys(localSessions));
         console.log('🔍 Looking for session:', sessionId);
 
+        // Log all session IDs and business ideas for debugging
+        Object.values(localSessions).forEach((s: any) => {
+          console.log(`🔍 Session ${s.session_id}: "${s.business_idea}"`);
+        });
+
         // Find session by session_id since localStorage uses numeric keys
         const session = Object.values(localSessions).find((s: any) => s.session_id === sessionId) as any;
 
@@ -278,6 +357,12 @@ export default function InterviewSimulationPage() {
         }
 
         console.log('✅ Found session:', session);
+        console.log('🎯 SELECTED SESSION DETAILS:');
+        console.log('   Session ID:', session.session_id);
+        console.log('   Business Idea:', session.business_idea);
+        console.log('   Target Customer:', session.target_customer);
+        console.log('   Problem:', session.problem);
+        console.log('   Messages Count:', session.messages?.length || 0);
 
         // Find questionnaire message with comprehensive questions
         const questionnaireMessage = session.messages?.find((msg: any) =>
@@ -285,7 +370,18 @@ export default function InterviewSimulationPage() {
         );
 
         if (!questionnaireMessage?.metadata?.comprehensiveQuestions) {
-          throw new Error('No questionnaire data found in local session');
+          // Check if this is an old format session
+          const hasOldFormat = session.messages?.some((msg: any) =>
+            msg.content?.includes('COMPREHENSIVE_QUESTIONS_COMPONENT') ||
+            msg.metadata?.questions ||
+            msg.metadata?.stakeholders
+          );
+
+          if (hasOldFormat) {
+            throw new Error(`This questionnaire session uses an outdated format and is no longer compatible. Please generate a new questionnaire to run batch simulations.`);
+          } else {
+            throw new Error('No questionnaire data found in local session. Please generate a questionnaire first.');
+          }
         }
 
         const rawQuestionnaireData = questionnaireMessage.metadata.comprehensiveQuestions;
@@ -294,6 +390,8 @@ export default function InterviewSimulationPage() {
         console.log('🔍 Secondary stakeholders:', rawQuestionnaireData.secondaryStakeholders);
         console.log('🔍 Primary stakeholders count:', rawQuestionnaireData.primaryStakeholders?.length);
         console.log('🔍 Secondary stakeholders count:', rawQuestionnaireData.secondaryStakeholders?.length);
+        console.log('⏱️ Raw timeEstimate:', rawQuestionnaireData.timeEstimate);
+        console.log('⏱️ Raw timeEstimate type:', typeof rawQuestionnaireData.timeEstimate);
 
         // Transform the questionnaire data to match the backend Stakeholder model
         const transformStakeholder = (stakeholder: any, index: number) => {
@@ -317,24 +415,58 @@ export default function InterviewSimulationPage() {
         console.log('🔄 Transformed primary stakeholders:', primaryStakeholders);
         console.log('🔄 Transformed secondary stakeholders:', secondaryStakeholders);
 
+        // Handle timeEstimate properly - it should be a dict or null
+        let timeEstimate = null;
+        if (rawQuestionnaireData.timeEstimate) {
+          if (typeof rawQuestionnaireData.timeEstimate === 'object') {
+            // Already an object, use as is
+            timeEstimate = rawQuestionnaireData.timeEstimate;
+          } else if (typeof rawQuestionnaireData.timeEstimate === 'string') {
+            // Convert string to object
+            timeEstimate = {
+              estimatedTime: rawQuestionnaireData.timeEstimate,
+              totalQuestions: 0
+            };
+          }
+        }
+
         questionnaireData = {
           stakeholders: {
             primary: primaryStakeholders,
             secondary: secondaryStakeholders
           },
-          timeEstimate: rawQuestionnaireData.timeEstimate || {
-            totalQuestions: 0
-          }
+          timeEstimate: timeEstimate
         };
 
         businessContext = {
           business_idea: session.business_idea || '',
           target_customer: session.target_customer || '',
-          problem: session.problem || ''
+          problem: session.problem || '',
+          industry: session.industry || 'general'
         };
 
         console.log('✅ Transformed questionnaire data:', questionnaireData);
+        console.log('✅ Final timeEstimate:', questionnaireData.timeEstimate);
+        console.log('✅ Final timeEstimate type:', typeof questionnaireData.timeEstimate);
         console.log('✅ Business context:', businessContext);
+
+        // Validate required data before sending to API
+        if (!businessContext.business_idea || !businessContext.target_customer || !businessContext.problem) {
+          throw new Error(`Missing required business context: business_idea="${businessContext.business_idea}", target_customer="${businessContext.target_customer}", problem="${businessContext.problem}"`);
+        }
+
+        if (!questionnaireData.stakeholders.primary?.length && !questionnaireData.stakeholders.secondary?.length) {
+          throw new Error('No stakeholders found in questionnaire data');
+        }
+
+        // Validate stakeholder structure
+        const allStakeholders = [...(questionnaireData.stakeholders.primary || []), ...(questionnaireData.stakeholders.secondary || [])];
+        for (const stakeholder of allStakeholders) {
+          if (!stakeholder.name || !stakeholder.questions?.length) {
+            console.warn('⚠️ Invalid stakeholder found:', stakeholder);
+            throw new Error(`Invalid stakeholder: name="${stakeholder.name}", questions count=${stakeholder.questions?.length || 0}`);
+          }
+        }
       } else {
         // Handle backend session - fetch from API
         console.log('🔍 Loading backend session data for:', sessionId);
@@ -419,8 +551,19 @@ export default function InterviewSimulationPage() {
         localStorage.setItem('simulation_results', JSON.stringify(existingResults));
         console.log('💾 Saved simulation to localStorage:', result.simulation_id);
 
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new CustomEvent('localStorageUpdated', {
+          detail: { key: 'simulation_results', action: 'add', simulationId: result.simulation_id }
+        }));
+
         loadCompletedSimulations();
         setIsProcessing(false);
+
+        // Redirect to simulation history page to view results
+        setSuccess('Simulation completed successfully! Redirecting to results page...');
+        setTimeout(() => {
+          router.push('/unified-dashboard/simulation-history');
+        }, 2000); // Give user time to see success message
       }
     } catch (error) {
       console.error('❌ Simulation error:', error);
@@ -432,14 +575,27 @@ export default function InterviewSimulationPage() {
       } else if (typeof error === 'string') {
         errorMessage = error;
       } else if (error && typeof error === 'object') {
-        // Handle API error objects
-        errorMessage = JSON.stringify(error, null, 2);
+        // Handle API error objects properly
+        const errorObj = error as any;
+        if (errorObj.detail) {
+          errorMessage = errorObj.detail;
+        } else if (errorObj.message) {
+          errorMessage = errorObj.message;
+        } else {
+          // Last resort: stringify but make it readable
+          try {
+            errorMessage = `API Error: ${JSON.stringify(error, null, 2)}`;
+          } catch {
+            errorMessage = 'Unknown API error occurred';
+          }
+        }
       }
 
       console.error('❌ Error message:', errorMessage);
       setError(errorMessage);
     } finally {
       setIsProcessing(false);
+      setProcessingSessionId(null);
     }
   };
 
@@ -658,17 +814,26 @@ A${i + 1}: ${response.response}
             {success && (
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                 <p className="text-sm text-green-600">{success}</p>
-                {lastSimulationResult && (
+                <div className="flex gap-2 mt-2">
+                  {lastSimulationResult && (
+                    <Button
+                      onClick={() => downloadInterviewsFromData(lastSimulationResult)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Interviews
+                    </Button>
+                  )}
                   <Button
-                    onClick={() => downloadInterviewsFromData(lastSimulationResult)}
-                    variant="outline"
+                    onClick={() => router.push('/unified-dashboard/simulation-history')}
+                    variant="default"
                     size="sm"
-                    className="mt-2"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Interviews
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Results
                   </Button>
-                )}
+                </div>
               </div>
             )}
 
@@ -743,7 +908,7 @@ A${i + 1}: ${response.response}
                             onClick={() => handleStartSimulationFromSession(session.session_id)}
                             title="Batch simulation (original)"
                           >
-                            {isProcessing ? (
+                            {isProcessing && processingSessionId === session.session_id ? (
                               <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 Processing...

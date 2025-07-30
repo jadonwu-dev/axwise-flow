@@ -199,13 +199,33 @@ export async function createSimulation(
   );
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    let errorData: any = {};
+    try {
+      errorData = await response.json();
+    } catch (parseError) {
+      console.warn('Could not parse error response as JSON:', parseError);
+    }
+
     console.error('❌ Simulation API Error:', {
       status: response.status,
       statusText: response.statusText,
-      errorData: errorData
+      errorData: errorData,
+      requestData: requestData
     });
-    throw new Error(errorData.detail || `Simulation failed: ${response.statusText}`);
+
+    // Create a detailed error message
+    let errorMessage = `Simulation failed (${response.status})`;
+    if (errorData.detail) {
+      errorMessage = errorData.detail;
+    } else if (errorData.message) {
+      errorMessage = errorData.message;
+    } else if (response.status === 422) {
+      errorMessage = `Validation error: ${response.statusText}. Check the questionnaire data format.`;
+    } else {
+      errorMessage = `${errorMessage}: ${response.statusText}`;
+    }
+
+    throw new Error(errorMessage);
   }
 
   return response.json();

@@ -351,6 +351,32 @@ export default function SimulationHistoryPage(): JSX.Element {
     fetchSimulationHistory();
   }, [fetchSimulationHistory]);
 
+  // Add localStorage monitoring for real-time updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'simulation_results') {
+        console.log('🔄 localStorage simulation_results changed, refreshing...');
+        fetchSimulationHistory();
+      }
+    };
+
+    // Listen for storage events (from other tabs/windows)
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also listen for custom events (from same tab)
+    const handleCustomStorageChange = () => {
+      console.log('🔄 Custom storage change event, refreshing...');
+      fetchSimulationHistory();
+    };
+
+    window.addEventListener('localStorageUpdated', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageUpdated', handleCustomStorageChange);
+    };
+  }, [fetchSimulationHistory]);
+
   // Toggle simulation expansion
   const toggleSimulationExpansion = (simulationId: string) => {
     const newExpanded = new Set(expandedSimulations);
@@ -563,9 +589,21 @@ ${persona?.name || 'Interviewee'}: ${response.response}
       {/* Left Sidebar - Simulation History */}
       <div className="w-80 border-r bg-muted/30">
         <div className="p-4 border-b">
-          <div className="flex items-center gap-2 mb-2">
-            <FlaskConical className="h-5 w-5" />
-            <h2 className="font-semibold">Interview Simulations</h2>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5" />
+              <h2 className="font-semibold">Interview Simulations</h2>
+            </div>
+            <Button
+              onClick={() => {
+                console.log('🔄 Manual refresh triggered');
+                fetchSimulationHistory();
+              }}
+              variant="outline"
+              size="sm"
+            >
+              Refresh
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground">
             AI persona interview history
