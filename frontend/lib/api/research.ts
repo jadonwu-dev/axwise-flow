@@ -614,7 +614,8 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
         let questionnaireData = session.research_questions;
 
         // If session has questionnaires but no research_questions data, fetch it separately
-        if (session.questions_generated && !questionnaireData) {
+        // Skip API calls for local sessions (they don't exist on backend)
+        if (session.questions_generated && !questionnaireData && !session.session_id.startsWith('local_')) {
           try {
             console.log(`🔄 Fetching questionnaire data for session ${session.session_id}`);
             const questionnaireResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`);
@@ -628,17 +629,13 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
           }
         }
 
-        console.log(`🔍 Session ${session.session_id} questionnaire data:`, {
-          questions_generated: session.questions_generated,
-          has_research_questions: !!questionnaireData,
-          research_questions_type: typeof questionnaireData,
-          research_questions_keys: questionnaireData ? Object.keys(questionnaireData) : null
-        });
+        // Debug logging removed for cleaner console
 
         if (session.questions_generated && questionnaireData) {
-          // Check if questionnaire message already exists
+          // Check if questionnaire message already exists - use consistent detection logic
           const hasQuestionnaireMessage = messages.some((msg: any) =>
-            msg.metadata?.comprehensiveQuestions
+            msg.metadata?.comprehensiveQuestions ||
+            (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
           );
 
           if (!hasQuestionnaireMessage) {
@@ -677,11 +674,7 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
           isLocal: false
         };
 
-        console.log(`🔍 Converted session ${session.session_id}:`, {
-          questions_generated: convertedSession.questions_generated,
-          messages_count: convertedSession.messages?.length || 0,
-          has_questionnaire_message: convertedSession.messages?.some(m => m.metadata?.comprehensiveQuestions)
-        });
+        // Debug logging removed for cleaner console
 
         return convertedSession;
       }));
@@ -718,7 +711,7 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
 
       convertedSessions.forEach(backendSession => {
         const existsLocally = localSessions.some(local => local.session_id === backendSession.session_id);
-        console.log(`🔍 Session ${backendSession.session_id}: existsLocally=${existsLocally}, isLocal=${backendSession.session_id.startsWith('local_')}, hasQuestions=${backendSession.questions_generated}`);
+        // Debug logging removed for cleaner console
 
         if ((forceRestore || !existsLocally) && backendSession.session_id.startsWith('local_') && backendSession.questions_generated) {
           // Restore this session to localStorage for offline access

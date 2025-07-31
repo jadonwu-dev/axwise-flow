@@ -71,9 +71,10 @@ export default function QuestionnaireDetailPage() {
 
           if (session?.messages) {
             // Find the MOST RECENT questionnaire message to avoid stale data
+            // Use the same detection logic as LocalResearchStorage.getSessions()
             const questionnaireMessages = session.messages.filter((msg: any) =>
-              msg.metadata?.comprehensiveQuestions &&
-              msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT'
+              msg.metadata?.comprehensiveQuestions ||
+              (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
             );
 
             if (questionnaireMessages.length > 0) {

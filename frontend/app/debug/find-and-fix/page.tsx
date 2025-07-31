@@ -15,7 +15,7 @@ export default function FindAndFixPage() {
   const loadAndAnalyzeSessions = () => {
     try {
       setLoading(true);
-      
+
       // Load all sessions
       const sessionsData = JSON.parse(localStorage.getItem('axwise_research_sessions') || '{}');
       const sessionsList = Object.values(sessionsData);
@@ -33,7 +33,8 @@ export default function FindAndFixPage() {
       // Analyze each API session
       const analyzedApiSessions = apiServiceSessions.map((session: any) => {
         const questionnaireMessage = session.messages?.find((msg: any) =>
-          msg.metadata?.comprehensiveQuestions
+          msg.metadata?.comprehensiveQuestions ||
+          (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
         );
 
         let stakeholderAnalysis = null;
@@ -43,17 +44,17 @@ export default function FindAndFixPage() {
             ...(questionnaire.primaryStakeholders || []),
             ...(questionnaire.secondaryStakeholders || [])
           ];
-          
+
           stakeholderAnalysis = {
             total: allStakeholders.length,
             primary: questionnaire.primaryStakeholders?.length || 0,
             secondary: questionnaire.secondaryStakeholders?.length || 0,
             names: allStakeholders.map((s: any) => s.name || s.title || 'Unknown'),
-            hasCaregiver: allStakeholders.some((s: any) => 
+            hasCaregiver: allStakeholders.some((s: any) =>
               (s.name || s.title || '').toLowerCase().includes('caregiver') ||
               (s.name || s.title || '').toLowerCase().includes('adult child')
             ),
-            isApiRelated: allStakeholders.some((s: any) => 
+            isApiRelated: allStakeholders.some((s: any) =>
               (s.name || s.title || '').toLowerCase().includes('developer') ||
               (s.name || s.title || '').toLowerCase().includes('technical') ||
               (s.name || s.title || '').toLowerCase().includes('integration') ||
@@ -71,7 +72,7 @@ export default function FindAndFixPage() {
 
       setSessions(sessionsList);
       setApiSessions(analyzedApiSessions);
-      
+
       console.log('📊 Total sessions:', sessionsList.length);
       console.log('🎯 API service sessions:', analyzedApiSessions.length);
       console.log('📋 API sessions details:', analyzedApiSessions);
@@ -86,7 +87,7 @@ export default function FindAndFixPage() {
   const runCorrectSimulation = async (sessionId: string) => {
     try {
       setProcessing(sessionId);
-      
+
       const session = sessions.find((s: any) => s.session_id === sessionId);
       if (!session) {
         alert('❌ Session not found');
@@ -205,7 +206,7 @@ export default function FindAndFixPage() {
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('❌ Simulation failed:', errorData);
-        
+
         setResults(prev => [...prev, {
           sessionId,
           simulationId: null,
@@ -300,7 +301,7 @@ export default function FindAndFixPage() {
                   const isProcessing = processing === session.session_id;
                   const hasCorrectStakeholders = session.stakeholderAnalysis?.isApiRelated;
                   const hasWrongStakeholders = session.stakeholderAnalysis?.hasCaregiver;
-                  
+
                   return (
                     <div key={session.session_id} className={`p-4 border rounded-lg ${
                       hasCorrectStakeholders ? 'bg-green-50 border-green-200' :
@@ -311,20 +312,20 @@ export default function FindAndFixPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h4 className="font-semibold">
-                              {hasCorrectStakeholders ? '✅' : hasWrongStakeholders ? '❌' : '⚠️'} 
+                              {hasCorrectStakeholders ? '✅' : hasWrongStakeholders ? '❌' : '⚠️'}
                               API Session {index + 1}
                             </h4>
                             {hasCorrectStakeholders && <CheckCircle className="h-4 w-4 text-green-600" />}
                             {hasWrongStakeholders && <AlertTriangle className="h-4 w-4 text-red-600" />}
                           </div>
-                          
+
                           <div className="space-y-1 text-sm">
                             <p><strong>Session ID:</strong> {session.session_id}</p>
                             <p><strong>Business Idea:</strong> {session.business_idea}</p>
                             <p><strong>Target Customer:</strong> {session.target_customer || 'None'}</p>
                             <p><strong>Problem:</strong> {session.problem || 'None'}</p>
                             <p><strong>Has Questionnaire:</strong> {session.hasQuestionnaire ? '✅ Yes' : '❌ No'}</p>
-                            
+
                             {session.stakeholderAnalysis && (
                               <div className="mt-2 p-2 bg-white rounded border">
                                 <p><strong>Stakeholders ({session.stakeholderAnalysis.total}):</strong></p>
@@ -341,7 +342,7 @@ export default function FindAndFixPage() {
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="flex gap-2 ml-4">
                           <Button
                             onClick={() => runCorrectSimulation(session.session_id)}
@@ -393,7 +394,7 @@ export default function FindAndFixPage() {
                       <div>
                         <p><strong>{result.success ? '✅' : '❌'} {result.businessIdea}</strong></p>
                         <p className="text-sm text-muted-foreground">
-                          Session: {result.sessionId} | 
+                          Session: {result.sessionId} |
                           {result.success ? ` Simulation: ${result.simulationId} | Interviews: ${result.interviewCount}` : ` Error: ${result.error}`}
                         </p>
                         <p className="text-xs text-muted-foreground">{new Date(result.timestamp).toLocaleString()}</p>

@@ -29,7 +29,8 @@ export default function FindCarsharingQuestionnairePage() {
       // Analyze each carsharing session
       const analyzedSessions = carsharingSessionsList.map((session: any) => {
         const questionnaireMessage = session.messages?.find((msg: any) =>
-          msg.metadata?.comprehensiveQuestions
+          msg.metadata?.comprehensiveQuestions ||
+          (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
         );
 
         let questionnaireAnalysis = null;

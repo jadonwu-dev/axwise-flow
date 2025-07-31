@@ -61,6 +61,43 @@ export default function ResearchChatHistory() {
     loadSessions();
   }, []);
 
+  // Calculate questionnaire stats when sessions change
+  useEffect(() => {
+    const calculateStats = async () => {
+      const stats: Record<string, { questions: number; stakeholders: number }> = {};
+
+      for (const session of sessions) {
+        if (session.questions_generated) {
+          // For local sessions, we need to get the full session data with messages
+          if (session.session_id.startsWith('local_')) {
+            try {
+              // Import LocalResearchStorage dynamically
+              const { LocalResearchStorage } = await import('@/lib/api/research');
+              const fullSession = LocalResearchStorage.getSession(session.session_id);
+              if (fullSession) {
+                stats[session.session_id] = calculateQuestionnaireStats(fullSession);
+              } else {
+                stats[session.session_id] = { questions: 0, stakeholders: 0 };
+              }
+            } catch (error) {
+              console.error(`Error loading local session ${session.session_id}:`, error);
+              stats[session.session_id] = { questions: 0, stakeholders: 0 };
+            }
+          } else {
+            // For backend sessions, use the session data we already have
+            stats[session.session_id] = calculateQuestionnaireStats(session);
+          }
+        }
+      }
+
+      setQuestionnaireStats(stats);
+    };
+
+    if (sessions.length > 0) {
+      calculateStats();
+    }
+  }, [sessions]);
+
   const loadSessions = async () => {
     try {
       setLoading(true);
@@ -189,6 +226,62 @@ export default function ResearchChatHistory() {
     return content;
   };
 
+  // State to store questionnaire stats for each session
+  const [questionnaireStats, setQuestionnaireStats] = useState<Record<string, { questions: number; stakeholders: number }>>({});
+
+  // Helper function to calculate questionnaire stats from session data
+  const calculateQuestionnaireStats = (session: ResearchSession) => {
+    if (!session?.messages) return { questions: 0, stakeholders: 0 };
+
+    try {
+      // Use the same detection logic as other components
+      const questionnaireMessages = session.messages.filter((msg: any) =>
+        msg.metadata?.comprehensiveQuestions ||
+        (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
+      );
+
+      if (questionnaireMessages.length === 0) {
+        return { questions: 0, stakeholders: 0 };
+      }
+
+      // Get the most recent questionnaire message
+      const questionnaireMessage = questionnaireMessages.sort((a: any, b: any) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+
+      if (!questionnaireMessage?.metadata?.comprehensiveQuestions) {
+        return { questions: 0, stakeholders: 0 };
+      }
+
+      const questionnaire = questionnaireMessage.metadata.comprehensiveQuestions;
+      const primaryStakeholders = questionnaire.primaryStakeholders || [];
+      const secondaryStakeholders = questionnaire.secondaryStakeholders || [];
+      const allStakeholders = [...primaryStakeholders, ...secondaryStakeholders];
+
+      // Count total questions across all categories
+      const totalQuestions = allStakeholders.reduce((total: number, stakeholder: any) => {
+        const questions = stakeholder.questions || {};
+        return total +
+          (questions.problemDiscovery?.length || 0) +
+          (questions.solutionValidation?.length || 0) +
+          (questions.followUp?.length || 0);
+      }, 0);
+
+      return {
+        questions: totalQuestions,
+        stakeholders: allStakeholders.length
+      };
+    } catch (error) {
+      console.error('Error calculating questionnaire stats:', error);
+      return { questions: 0, stakeholders: 0 };
+    }
+  };
+
+  // Helper function to get questionnaire stats (now uses pre-calculated state)
+  const getQuestionnaireStats = (sessionId: string) => {
+    return questionnaireStats[sessionId] || { questions: 0, stakeholders: 0 };
+  };
+
   // Handle downloading questionnaire
   const handleDownloadQuestionnaire = async (sessionId: string, title: string) => {
     try {
@@ -203,8 +296,10 @@ export default function ResearchChatHistory() {
           const session = LocalResearchStorage.getSession(sessionId);
 
           if (session?.messages) {
+            // Use the same detection logic as other components
             const questionnaireMessage = session.messages.find((msg: any) =>
-              msg.metadata?.comprehensiveQuestions
+              msg.metadata?.comprehensiveQuestions ||
+              (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
             );
 
             if (questionnaireMessage?.metadata?.comprehensiveQuestions) {
@@ -604,6 +699,19 @@ export default function ResearchChatHistory() {
                               <Badge className="text-xs bg-green-100 text-green-800">
                                 Questionnaire Available
                               </Badge>
+                              {(() => {
+                                const stats = getQuestionnaireStats(session.session_id);
+                                return (
+                                  <>
+                                    <Badge variant="outline" className="text-xs">
+                                      {stats.questions} questions
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs">
+                                      {stats.stakeholders} stakeholders
+                                    </Badge>
+                                  </>
+                                );
+                              })()}
                             </div>
 
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">

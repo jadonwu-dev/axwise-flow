@@ -64,9 +64,10 @@ export default function SimulationChatPage() {
 
         console.log('📋 Loading session data:', sessionData);
 
-        // Look for questionnaire data in messages
+        // Look for questionnaire data in messages - use same logic as research chat history
         const questionnaireMessage = sessionData.messages?.find((msg: any) =>
-          msg.metadata?.comprehensiveQuestions
+          msg.metadata?.comprehensiveQuestions ||
+          (msg.content === 'COMPREHENSIVE_QUESTIONS_COMPONENT' && msg.metadata?.comprehensiveQuestions)
         );
 
         if (questionnaireMessage?.metadata?.comprehensiveQuestions) {
