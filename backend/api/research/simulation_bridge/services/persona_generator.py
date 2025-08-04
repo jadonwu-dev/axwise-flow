@@ -30,7 +30,6 @@ class PersonaGenerator:
             system_prompt=self._get_system_prompt(),
         )
         self.used_names_by_category = {}  # Track used names per stakeholder category
-        self.used_names_global = set()  # Track used names globally for chat simulations
 
     def _get_system_prompt(self) -> str:
         return """You are an expert persona generator for customer research simulations.
@@ -54,7 +53,6 @@ Return a list of AIPersona objects with all required fields populated."""
         stakeholder: Stakeholder,
         business_context: BusinessContext,
         config: SimulationConfig,
-        global_name_uniqueness: bool = False,
     ) -> List[SimulatedPerson]:
         """Generate individual simulated people for a specific stakeholder type."""
 
@@ -63,9 +61,7 @@ Return a list of AIPersona objects with all required fields populated."""
                 f"Generating {config.people_per_stakeholder} people for stakeholder: {stakeholder.name}"
             )
 
-            prompt = self._build_person_prompt(
-                stakeholder, business_context, config, global_name_uniqueness
-            )
+            prompt = self._build_person_prompt(stakeholder, business_context, config)
             logger.info(f"Person generation prompt: {prompt[:200]}...")
 
             # Try with retry logic for Gemini API issues
@@ -122,13 +118,8 @@ Keep responses concise and realistic."""
                     f"🏷️ Assigned stakeholder_type '{stakeholder.name}' to persona '{person.name}'"
                 )
 
-                # Track names for uniqueness
-                if global_name_uniqueness:
-                    # Track globally for chat simulations
-                    self.used_names_global.add(person.name)
-                else:
-                    # Track within stakeholder category for regular simulations
-                    self.used_names_by_category[stakeholder_key].add(person.name)
+                # Track names for uniqueness within stakeholder category
+                self.used_names_by_category[stakeholder_key].add(person.name)
 
             logger.info(
                 f"Successfully generated {len(people)} people for {stakeholder.name}"
@@ -147,25 +138,17 @@ Keep responses concise and realistic."""
         stakeholder: Stakeholder,
         business_context: BusinessContext,
         config: SimulationConfig,
-        global_name_uniqueness: bool = False,
     ) -> str:
         """Build the prompt for individual person generation."""
 
-        # Include used names to avoid duplicates
+        # Include used names to avoid duplicates within stakeholder category
         used_names_text = ""
-
-        if global_name_uniqueness:
-            # For chat simulations, ensure globally unique names
-            if self.used_names_global:
-                used_names_text = f"\n\nIMPORTANT: Do NOT use these names (already used globally): {', '.join(sorted(self.used_names_global))}"
-        else:
-            # For regular simulations, only avoid duplicates within stakeholder category
-            stakeholder_key = f"{stakeholder.name}_{stakeholder.description}"
-            if (
-                stakeholder_key in self.used_names_by_category
-                and self.used_names_by_category[stakeholder_key]
-            ):
-                used_names_text = f"\n\nIMPORTANT: Do NOT use these names (already used for {stakeholder.name}): {', '.join(sorted(self.used_names_by_category[stakeholder_key]))}"
+        stakeholder_key = f"{stakeholder.name}_{stakeholder.description}"
+        if (
+            stakeholder_key in self.used_names_by_category
+            and self.used_names_by_category[stakeholder_key]
+        ):
+            used_names_text = f"\n\nIMPORTANT: Do NOT use these names (already used for {stakeholder.name}): {', '.join(sorted(self.used_names_by_category[stakeholder_key]))}"
 
         return f"""Generate {config.people_per_stakeholder} realistic individual people for the following context:
 
@@ -215,13 +198,11 @@ The personas should feel like real people who would genuinely interact with this
         stakeholders: Dict[str, List[Stakeholder]],
         business_context: BusinessContext,
         config: SimulationConfig,
-        global_name_uniqueness: bool = True,  # Default to True for chat simulations
     ) -> List[SimulatedPerson]:
         """Generate individual people for all stakeholder types."""
 
         # Reset used names for each new simulation
         self.used_names_by_category.clear()
-        self.used_names_global.clear()
         all_people = []
 
         for stakeholder_category, stakeholder_list in stakeholders.items():
@@ -235,7 +216,7 @@ The personas should feel like real people who would genuinely interact with this
                 )
                 try:
                     people = await self.generate_people(
-                        stakeholder, business_context, config, global_name_uniqueness
+                        stakeholder, business_context, config
                     )
                     logger.info(
                         f"Generated {len(people)} people for {stakeholder.name}"

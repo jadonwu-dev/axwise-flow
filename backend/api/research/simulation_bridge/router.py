@@ -4,11 +4,9 @@ FastAPI router for the Simulation Bridge system.
 
 import logging
 import os
-import json
-import asyncio
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from .models import (
     SimulationRequest,
@@ -635,86 +633,6 @@ async def test_interview_simulation(
         )
 
 
-@router.post("/generate-personas")
-async def generate_personas_for_chat(request: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Generate personas for chat simulation.
-    Generates one persona per stakeholder type for interactive chat.
-    """
-    try:
-
-        # Parse request data
-        questions_data = QuestionsData(**request.get("questions_data", {}))
-        business_context = BusinessContext(**request.get("business_context", {}))
-        config = SimulationConfig(**request.get("config", {}))
-
-        # Generate personas using orchestrator with global name uniqueness for chat
-        personas = await orchestrator.persona_generator.generate_all_personas(
-            questions_data.stakeholders,
-            business_context,
-            config,
-            global_name_uniqueness=True,
-        )
-
-        return {
-            "success": True,
-            "personas": [persona.dict() for persona in personas],
-            "count": len(personas),
-        }
-
-    except Exception as e:
-        logger.error(f"Persona generation for chat failed: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Persona generation failed: {str(e)}"
-        )
-
-
-@router.post("/simulate-response")
-async def simulate_single_response(request: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Simulate a single response from a persona to a question.
-    Used for real-time chat simulation.
-    """
-    try:
-
-        # Parse request data
-        question = request.get("question", "")
-        persona_data = request.get("persona_data", {})
-        business_context_data = request.get("business_context", {})
-        config = request.get("config", {})
-
-        # Convert to proper models
-        persona = AIPersona(**persona_data)
-        business_context = BusinessContext(**business_context_data)
-
-        # Get API key
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
-
-        # Initialize simulator
-        model = GeminiModel("gemini-2.5-flash")
-        simulator = InterviewSimulator(model)
-
-        # Generate single response
-        response = await simulator.generate_single_response(
-            question, persona, business_context, config
-        )
-
-        return {
-            "success": True,
-            "response": response,
-            "persona_id": persona.id,
-            "question": question,
-        }
-
-    except Exception as e:
-        logger.error(f"Single response simulation failed: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Response simulation failed: {str(e)}"
-        )
-
-
 @router.get("/config/defaults")
 async def get_default_config() -> Dict[str, Any]:
     """
@@ -732,88 +650,3 @@ async def get_default_config() -> Dict[str, Any]:
             "temperature": {"min": 0.0, "max": 1.0, "default": 0.7},
         },
     }
-
-
-@router.post("/stream-persona-response")
-async def stream_persona_response(request: Dict[str, Any]) -> StreamingResponse:
-    """
-    Stream a persona response with typing effect.
-    """
-    try:
-        # Parse request data
-        persona_data = request.get("persona", {})
-        question = request.get("question", "")
-        stakeholder_data = request.get("stakeholder", {})
-        business_context_data = request.get("business_context", {})
-        config_data = request.get("config", {})
-
-        # Convert to proper models
-        persona = AIPersona(**persona_data)
-        stakeholder = Stakeholder(**stakeholder_data)
-        business_context = BusinessContext(**business_context_data)
-        config = SimulationConfig(**config_data)
-
-        async def generate_streaming_response():
-            """Generate streaming response with typing effect."""
-            try:
-                # Send start event
-                yield f"data: {json.dumps({'type': 'start'})}\n\n"
-                await asyncio.sleep(0.1)
-
-                # Create a temporary stakeholder with just this question for the API call
-                single_question_stakeholder = Stakeholder(
-                    id=stakeholder.id,
-                    name=stakeholder.name,
-                    description=stakeholder.description,
-                    questions=[question],
-                )
-
-                # Generate the response using the interview simulator
-                result = await orchestrator.interview_simulator.simulate_interview(
-                    persona, single_question_stakeholder, business_context, config
-                )
-
-                if result.responses and len(result.responses) > 0:
-                    response_text = result.responses[0].response
-
-                    # Stream the response word by word for typing effect
-                    words = response_text.split()
-                    for i, word in enumerate(words):
-                        word_with_space = word + (" " if i < len(words) - 1 else "")
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': word_with_space})}\n\n"
-                        # Vary the delay slightly for more natural typing
-                        await asyncio.sleep(0.05 + (0.02 * (len(word) / 10)))
-                else:
-                    # Fallback response
-                    fallback = "I'm not sure how to answer that question."
-                    for word in fallback.split():
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': word + ' '})}\n\n"
-                        await asyncio.sleep(0.08)
-
-                # Send end event
-                yield f"data: {json.dumps({'type': 'end'})}\n\n"
-
-            except Exception as e:
-                logger.error(f"Error in streaming response: {str(e)}")
-                error_msg = "I apologize, but I'm having trouble responding right now."
-                for word in error_msg.split():
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': word + ' '})}\n\n"
-                    await asyncio.sleep(0.08)
-                yield f"data: {json.dumps({'type': 'end'})}\n\n"
-
-        return StreamingResponse(
-            generate_streaming_response(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error setting up streaming response: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to stream response: {str(e)}"
-        )

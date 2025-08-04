@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-import { Upload, FileText, Users, Clock, Eye, Play, Loader2, Download, MessageSquare } from 'lucide-react';
+import { Upload, FileText, Users, Clock, Eye, Play, Loader2, Download } from 'lucide-react';
 import { createSimulation } from '@/lib/api/simulation';
 
 interface QuestionnaireSession {
@@ -421,10 +421,7 @@ export default function InterviewSimulationPage() {
     return true; // Continue polling on error
   };
 
-  const handleStartChatSimulation = (sessionId: string) => {
-    // Navigate to the simulation chat interface
-    router.push(`/unified-dashboard/research/simulation?session=${sessionId}`);
-  };
+
 
   const handleStartSimulationFromSession = async (sessionId: string) => {
     setError(null);
@@ -998,36 +995,25 @@ A${i + 1}: ${response.response}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleStartChatSimulation(session.session_id)}
-                            title="Interactive chat simulation"
-                          >
-                            <MessageSquare className="h-4 w-4 mr-2" />
-                            Chat Simulation
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isProcessing}
-                            onClick={() => handleStartSimulationFromSession(session.session_id)}
-                            title="Batch simulation (original)"
-                          >
-                            {isProcessing && processingSessionId === session.session_id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <Play className="h-4 w-4 mr-2" />
-                                Batch Simulation
-                              </>
-                            )}
-                          </Button>
-                        </div>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={isProcessing}
+                          onClick={() => handleStartSimulationFromSession(session.session_id)}
+                          title="Generate multiple interviews at once using AI simulation"
+                        >
+                          {isProcessing && processingSessionId === session.session_id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 mr-2" />
+                              Start Simulation
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
                   </div>

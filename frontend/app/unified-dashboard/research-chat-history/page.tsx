@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 // Client-side timestamp component to avoid hydration errors
 function ClientTimestamp({ timestamp, format = 'localeString' }: { timestamp: string; format?: 'localeString' | 'localeTimeString' | 'localeDateString' }) {
@@ -41,35 +41,34 @@ function ClientTimestamp({ timestamp, format = 'localeString' }: { timestamp: st
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+
 import {
   Clock,
-  Target,
-  Users,
-  CheckCircle,
   MessageSquare,
   Calendar,
-  Trash2,
+
   Eye,
   ArrowRight,
   Plus,
   FileText,
-  Download
+  Download,
+  Play,
+  BarChart
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
-import { getResearchSessions, deleteResearchSession, type ResearchSession } from '@/lib/api/research';
+import { getResearchSessions, type ResearchSession } from '@/lib/api/research';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function ResearchChatHistory() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<ResearchSession[]>([]);
   const [allSessions, setAllSessions] = useState<ResearchSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<ResearchSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'sessions');
   const [showOnlyWithQuestionnaires, setShowOnlyWithQuestionnaires] = useState(true);
+  const [stageFilter, setStageFilter] = useState<string>('all');
 
   // Function to fix only truly corrupted (invalid) timestamps in localStorage
   const fixCorruptedTimestamps = () => {
@@ -186,6 +185,22 @@ export default function ResearchChatHistory() {
     }
   }, [sessions]);
 
+  // Filter sessions based on stage and questionnaire filters
+  useEffect(() => {
+    let filtered = showOnlyWithQuestionnaires
+      ? allSessions.filter(s => s.questions_generated)
+      : allSessions;
+
+    if (stageFilter !== 'all') {
+      filtered = filtered.filter(session => {
+        const stage = getSessionStage(session);
+        return stage.id === stageFilter;
+      });
+    }
+
+    setSessions(filtered);
+  }, [allSessions, showOnlyWithQuestionnaires, stageFilter]);
+
   const loadSessions = async () => {
     try {
       setLoading(true);
@@ -229,30 +244,7 @@ export default function ResearchChatHistory() {
     }
   };
 
-  const viewSession = (sessionId: string) => {
-    const session = sessions.find(s => s.session_id === sessionId);
-    setSelectedSession(session || null);
-  };
 
-  const deleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this research chat session?')) {
-      return;
-    }
-
-    try {
-      await deleteResearchSession(sessionId);
-      setSessions(sessions.filter(s => s.session_id !== sessionId));
-
-      if (selectedSession && selectedSession.session_id === sessionId) {
-        setSelectedSession(null);
-      }
-
-      console.log('Session deleted successfully');
-    } catch (error) {
-      console.error('Error deleting session:', error);
-      alert(`Error deleting session: ${error}`);
-    }
-  };
 
   // Helper function to generate comprehensive questionnaire text
   const generateComprehensiveQuestionnaireText = (questionnaire: any, title: string): string => {
@@ -473,25 +465,76 @@ export default function ResearchChatHistory() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'active': return 'bg-blue-100 text-blue-800';
-      case 'abandoned': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+
+
+  // Workflow stage logic
+  interface SessionStage {
+    id: 'in-progress' | 'questionnaire-ready' | 'simulation-complete';
+    label: string;
+    description: string;
+    questionnaire: boolean;
+    simulation: boolean;
+    nextActions: string[];
+  }
+
+  const getSessionStage = (session: ResearchSession): SessionStage => {
+    // Check if simulation is complete (check localStorage for simulation results)
+    const simulationResults = JSON.parse(localStorage.getItem('simulation_results') || '[]');
+    const hasSimulationResults = simulationResults.some((sim: any) =>
+      sim.source_session_id === session.session_id ||
+      sim.metadata?.source_session_id === session.session_id
+    );
+
+    if (hasSimulationResults) {
+      return {
+        id: 'simulation-complete',
+        label: 'Simulation Complete',
+        description: 'Ready for analysis',
+        questionnaire: true,
+        simulation: true,
+        nextActions: ['View Results', 'Download', 'Analyze']
+      };
     }
+
+    // Check if questionnaire is generated
+    if (session.questions_generated) {
+      return {
+        id: 'questionnaire-ready',
+        label: 'Ready for Simulation',
+        description: 'Questionnaire generated',
+        questionnaire: true,
+        simulation: false,
+        nextActions: ['View Questions', 'Start Simulation', 'Continue Chat']
+      };
+    }
+
+    // Still in progress
+    return {
+      id: 'in-progress',
+      label: 'In Progress',
+      description: 'Building research context',
+      questionnaire: false,
+      simulation: false,
+      nextActions: ['Continue Chat']
+    };
   };
 
-  const getStageIcon = (stage: string) => {
-    switch (stage) {
-      case 'initial': return <Clock className="h-4 w-4" />;
-      case 'business_idea': return <Target className="h-4 w-4" />;
-      case 'target_customer': return <Users className="h-4 w-4" />;
-      case 'validation': return <CheckCircle className="h-4 w-4" />;
-      case 'conversation': return <MessageSquare className="h-4 w-4" />;
-      case 'completed': return <CheckCircle className="h-4 w-4" />;
-      default: return <Clock className="h-4 w-4" />;
-    }
+  // Workflow stage indicator component
+  const WorkflowStageIndicator = ({ stage }: { stage: SessionStage }) => {
+    const stageConfig = {
+      'in-progress': { color: 'bg-yellow-100 text-yellow-800', icon: '🔄' },
+      'questionnaire-ready': { color: 'bg-blue-100 text-blue-800', icon: '📋' },
+      'simulation-complete': { color: 'bg-green-100 text-green-800', icon: '✅' }
+    };
+
+    const config = stageConfig[stage.id];
+
+    return (
+      <Badge className={`text-xs ${config.color}`}>
+        <span className="mr-1">{config.icon}</span>
+        {stage.label}
+      </Badge>
+    );
   };
 
   if (loading) {
@@ -515,24 +558,44 @@ export default function ResearchChatHistory() {
           }
         </p>
 
-        {/* Filter Toggle */}
-        <div className="flex items-center gap-4 mt-4 p-3 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="questionnaire-filter"
-              checked={showOnlyWithQuestionnaires}
-              onChange={toggleSessionFilter}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="questionnaire-filter" className="text-sm font-medium">
-              Show only sessions with questionnaires
-            </label>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Showing {sessions.length} of {allSessions.length} sessions
-          </div>
-        </div>
+        {/* Enhanced Filter Controls */}
+        <Card className="mt-4">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="questionnaire-filter"
+                    checked={showOnlyWithQuestionnaires}
+                    onChange={toggleSessionFilter}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="questionnaire-filter" className="text-sm font-medium">
+                    Show only sessions with questionnaires
+                  </label>
+                </div>
+
+                {/* Stage-based filter */}
+                <Select value={stageFilter} onValueChange={setStageFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Filter by stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stages</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="questionnaire-ready">Ready for Simulation</SelectItem>
+                    <SelectItem value="simulation-complete">Simulation Complete</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Showing {sessions.length} of {allSessions.length} sessions
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex gap-3 mt-4">
           <Button
@@ -565,96 +628,136 @@ export default function ResearchChatHistory() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="sessions" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Chat Sessions
-          </TabsTrigger>
-          <TabsTrigger value="questionnaires" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Questionnaires
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sessions" className="mt-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
+      {/* Single Unified Session List */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 mt-6">
         {/* Sessions List */}
         <div className="xl:col-span-2">
           <Card className="h-fit">
             <CardHeader>
-              <CardTitle>Research Chat Sessions</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Research Sessions
+              </CardTitle>
               <CardDescription>
-                {sessions.length} total sessions
+                Your research journey from idea to analysis
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                {sessions.map((session) => (
-                  <Card
-                    key={session.session_id}
-                    className="p-3 lg:p-4 hover:bg-muted/50 transition-colors cursor-pointer border-l-4 border-l-primary"
-                    onClick={() => viewSession(session.session_id)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          {getStageIcon(session.stage)}
-                          <h3 className="font-medium truncate">
-                            {session.business_idea || 'Untitled Session'}
-                          </h3>
-                        </div>
+                {sessions.map((session) => {
+                  const stage = getSessionStage(session);
+                  const stats = getQuestionnaireStats(session.session_id);
+                  const isSelected = selectedSession?.session_id === session.session_id;
 
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <Badge variant="outline" className="text-xs">
-                            {session.industry}
-                          </Badge>
-                          <Badge className={`text-xs ${getStatusColor(session.status)}`}>
-                            {session.status}
-                          </Badge>
-                          {session.questions_generated && (
-                            <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-                              Questions Generated
-                            </Badge>
-                          )}
-                        </div>
+                  return (
+                    <Card
+                      key={session.session_id}
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-primary' : ''}`}
+                      onClick={() => setSelectedSession(session)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            {/* Business Idea Title */}
+                            <h3 className="font-medium truncate mb-2">
+                              {session.business_idea || 'Untitled Research Session'}
+                            </h3>
 
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            <ClientTimestamp timestamp={session.created_at} format="localeDateString" />
-                          </span>
-                          <span>{session.message_count || session.messages?.length || 0} messages</span>
-                        </div>
-                      </div>
+                            {/* Workflow Stage Indicator */}
+                            <div className="flex items-center gap-2 mb-3">
+                              <WorkflowStageIndicator stage={stage} />
+                              <Badge variant="outline" className="text-xs">
+                                {session.industry}
+                              </Badge>
+                            </div>
 
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            viewSession(session.session_id);
-                          }}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSession(session.session_id);
-                          }}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                            {/* Progress Information */}
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <MessageSquare className="h-3 w-3" />
+                                {session.message_count || session.messages?.length || 0} messages
+                              </span>
+
+                              {stage.questionnaire && (
+                                <span className="flex items-center gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  {stats.questions} questions, {stats.stakeholders} stakeholders
+                                </span>
+                              )}
+
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <ClientTimestamp timestamp={session.updated_at || session.created_at} format="localeDateString" />
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex items-center gap-1 ml-4">
+                            {/* Always show continue chat */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/unified-dashboard/research-chat?session=${session.session_id}`);
+                              }}
+                              title="Continue conversation"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+
+                            {/* Show questionnaire actions if available */}
+                            {stage.questionnaire && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/unified-dashboard/questionnaire/${session.session_id}`);
+                                  }}
+                                  title="View questionnaire"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+
+                                {!stage.simulation && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/unified-dashboard/research?session=${session.session_id}`);
+                                    }}
+                                    title="Start simulation"
+                                  >
+                                    <Play className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
+
+                            {/* Show results if simulation complete */}
+                            {stage.simulation && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/unified-dashboard/simulation-history`);
+                                }}
+                                title="View simulation results"
+                              >
+                                <BarChart className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
                 {sessions.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -673,281 +776,90 @@ export default function ResearchChatHistory() {
           </Card>
         </div>
 
-        {/* Session Details */}
+        {/* Enhanced Session Details */}
         <div>
-          <Card className="sticky top-4">
-            <CardHeader>
-              <CardTitle>Session Details</CardTitle>
-              <CardDescription>
-                {selectedSession ? 'Session information' : 'Click a session to view details'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedSession ? (
+          {selectedSession ? (
+            <Card className="sticky top-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <WorkflowStageIndicator stage={getSessionStage(selectedSession)} />
+                  Session Details
+                </CardTitle>
+                <CardDescription>{getSessionStage(selectedSession).description}</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Session Info</h4>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        // Navigate to research chat with session ID as URL parameter
-                        window.location.href = `/unified-dashboard/research-chat?session=${selectedSession.session_id}`;
-                      }}
-                    >
-                      Continue Session
-                    </Button>
+                  {/* Session Info */}
+                  <div>
+                    <h4 className="font-medium mb-2">Business Idea</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedSession.business_idea || 'No business idea specified'}
+                    </p>
                   </div>
 
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <span className="font-medium">Business Idea:</span>
-                      <p className="text-muted-foreground mt-1">{selectedSession.business_idea || 'Not specified'}</p>
-                    </div>
-
-                    {selectedSession.target_customer && (
-                      <div>
-                        <span className="font-medium">Target Customer:</span>
-                        <p className="text-muted-foreground mt-1">{selectedSession.target_customer}</p>
-                      </div>
-                    )}
-
-                    {selectedSession.problem && (
-                      <div>
-                        <span className="font-medium">Problem:</span>
-                        <p className="text-muted-foreground mt-1">{selectedSession.problem}</p>
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="font-medium">Status:</span>
-                      <Badge className={`ml-2 text-xs ${getStatusColor(selectedSession.status)}`}>
-                        {selectedSession.status}
-                      </Badge>
-                    </div>
-
-                    <div>
-                      <span className="font-medium">Created:</span>
-                      <p className="text-muted-foreground mt-1">
-                        <ClientTimestamp timestamp={selectedSession.created_at} />
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="font-medium">Messages:</span>
-                      <p className="text-muted-foreground mt-1">
-                        {selectedSession.message_count || selectedSession.messages?.length || 0} messages
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Questionnaire Actions */}
-                  {selectedSession.questions_generated && (
-                    <div className="mt-6">
-                      <h5 className="font-medium mb-3 flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Generated Questionnaire
-                      </h5>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/unified-dashboard/questionnaire/${selectedSession.session_id}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadQuestionnaire(selectedSession.session_id, selectedSession.business_idea || 'questionnaire')}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => router.push(`/unified-dashboard/research?session=${selectedSession.session_id}`)}
-                        >
-                          <ArrowRight className="h-4 w-4 mr-2" />
-                          Simulate
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Message History */}
-                  {selectedSession.messages && selectedSession.messages.length > 0 && (
-                    <div className="mt-6">
-                      <h5 className="font-medium mb-3">
-                        Messages ({selectedSession.messages?.length || 0})
-                      </h5>
-                      <ScrollArea className="h-40 border rounded p-3 bg-muted">
-                        {selectedSession.messages && selectedSession.messages.length > 0 ? (
-                          selectedSession.messages.map((msg: any, idx: number) => (
-                            <div key={idx} className="mb-3 last:mb-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Badge variant={msg.role === 'user' ? 'default' : 'secondary'} className="text-xs">
-                                  {msg.role}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  <ClientTimestamp timestamp={msg.timestamp} format="localeTimeString" />
-                                </span>
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {msg.content.length > 100 ? `${msg.content.substring(0, 100)}...` : msg.content}
-                              </p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No messages available</p>
-                        )}
-                      </ScrollArea>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Eye className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
-                  <p className="text-sm">Click on a session to view details</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="questionnaires" className="mt-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
-            {/* Questionnaires List */}
-            <div className="xl:col-span-2">
-              <Card className="h-fit">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Generated Questionnaires
-                  </CardTitle>
-                  <CardDescription>
-                    {sessions.filter(s => s.questions_generated).length} questionnaires available
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                    {sessions.filter(s => s.questions_generated).map((session) => (
-                      <Card
-                        key={session.session_id}
-                        className="p-3 lg:p-4 hover:bg-muted/50 transition-colors border-l-4 border-l-green-500"
+                  {/* Next Actions */}
+                  <div>
+                    <h4 className="font-medium mb-3">Available Actions</h4>
+                    <div className="space-y-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/unified-dashboard/research-chat?session=${selectedSession.session_id}`)}
+                        className="w-full justify-start"
                       >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <FileText className="h-4 w-4 text-green-600" />
-                              <h3 className="font-medium truncate">
-                                {session.business_idea || 'Untitled Questionnaire'}
-                              </h3>
-                            </div>
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Continue Conversation
+                      </Button>
 
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <Badge variant="outline" className="text-xs">
-                                {session.industry}
-                              </Badge>
-                              <Badge className="text-xs bg-green-100 text-green-800">
-                                Questionnaire Available
-                              </Badge>
-                              {(() => {
-                                const stats = getQuestionnaireStats(session.session_id);
-                                return (
-                                  <>
-                                    <Badge variant="outline" className="text-xs">
-                                      {stats.questions} questions
-                                    </Badge>
-                                    <Badge variant="outline" className="text-xs">
-                                      {stats.stakeholders} stakeholders
-                                    </Badge>
-                                  </>
-                                );
-                              })()}
-                            </div>
+                      {getSessionStage(selectedSession).questionnaire && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/unified-dashboard/questionnaire/${selectedSession.session_id}`)}
+                            className="w-full justify-start"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Questionnaire
+                          </Button>
 
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                <ClientTimestamp timestamp={session.created_at} format="localeDateString" />
-                              </span>
-                            </div>
-                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadQuestionnaire(selectedSession.session_id, selectedSession.business_idea || 'questionnaire')}
+                            className="w-full justify-start"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download Questions
+                          </Button>
 
-                          <div className="flex items-center gap-2 ml-4">
+                          {!getSessionStage(selectedSession).simulation && (
                             <Button
-                              variant="outline"
                               size="sm"
-                              onClick={() => router.push(`/unified-dashboard/questionnaire/${session.session_id}`)}
-                              className="h-8 px-3"
+                              onClick={() => router.push(`/unified-dashboard/research?session=${selectedSession.session_id}`)}
+                              className="w-full justify-start"
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Details
+                              <Play className="h-4 w-4 mr-2" />
+                              Start Simulation
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownloadQuestionnaire(session.session_id, session.business_idea || 'questionnaire')}
-                              className="h-8 px-3"
-                            >
-                              <Download className="h-4 w-4 mr-1" />
-                              Download
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.location.href = `/unified-dashboard/research?session=${session.session_id}`}
-                              className="h-8 px-3"
-                            >
-                              <ArrowRight className="h-4 w-4 mr-1" />
-                              Simulate
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                    {sessions.filter(s => s.questions_generated).length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p className="text-lg font-medium">No questionnaires generated yet</p>
-                        <p className="text-sm">Complete a research chat session to generate questionnaires</p>
-                        <Button
-                          className="mt-4"
-                          onClick={() => window.location.href = '/unified-dashboard/research-chat'}
-                        >
-                          Start Research Chat
-                        </Button>
-                      </div>
-                    )}
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Questionnaire Details */}
-            <div>
-              <Card className="sticky top-4">
-                <CardHeader>
-                  <CardTitle>Questionnaire Info</CardTitle>
-                  <CardDescription>
-                    Download questionnaires or use them for interview simulation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-12 text-muted-foreground">
-                    <FileText className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
-                    <p className="text-sm">Click download to get questionnaire files</p>
-                    <p className="text-xs mt-2">Or use "Simulate" to run interview simulations</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="sticky top-4">
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Select a session to view details</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
