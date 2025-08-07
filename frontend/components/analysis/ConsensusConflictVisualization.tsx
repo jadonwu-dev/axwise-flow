@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  CheckCircle, 
-  AlertTriangle, 
-  Users, 
-  TrendingUp, 
+import {
+  CheckCircle,
+  AlertTriangle,
+  Users,
+  TrendingUp,
   TrendingDown,
   BarChart3,
   Target,
@@ -17,15 +17,17 @@ import {
 interface ConsensusArea {
   topic: string;
   agreement_level: number;
-  stakeholder_groups: string[];
-  key_points: string[];
+  participating_stakeholders: string[];
+  shared_insights: string[];
+  business_impact: string;
 }
 
 interface ConflictZone {
   topic: string;
-  conflict_intensity: number;
-  opposing_stakeholders: string[];
-  conflict_description: string;
+  conflicting_stakeholders: string[];
+  conflict_severity: "low" | "medium" | "high" | "critical";
+  potential_resolutions: string[];
+  business_risk: string;
 }
 
 interface ConsensusConflictVisualizationProps {
@@ -55,13 +57,33 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
     return 'text-yellow-600 bg-yellow-100';
   };
 
+  const getConflictSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'text-red-600 bg-red-100';
+      case 'high': return 'text-red-600 bg-red-100';
+      case 'medium': return 'text-orange-600 bg-orange-100';
+      case 'low': return 'text-yellow-600 bg-yellow-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getConflictSeverityValue = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 100;
+      case 'high': return 80;
+      case 'medium': return 60;
+      case 'low': return 30;
+      default: return 0;
+    }
+  };
+
   const renderConsensusChart = () => {
     if (consensusAreas.length === 0) return null;
 
     return (
       <div className="space-y-4">
         {consensusAreas.map((area: ConsensusArea, index: number) => (
-          <Card 
+          <Card
             key={index}
             className={`cursor-pointer transition-all ${
               selectedConsensus === index ? 'ring-2 ring-green-500 shadow-lg' : 'hover:shadow-md'
@@ -87,24 +109,34 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
               </div>
 
               <div className="flex flex-wrap gap-2 mb-4">
-                {area.stakeholder_groups.map((stakeholder, idx) => (
-                  <Badge key={idx} variant="outline" className="text-xs">
-                    <Users className="h-3 w-3 mr-1" />
-                    {stakeholder}
-                  </Badge>
-                ))}
+                {area.participating_stakeholders && Array.isArray(area.participating_stakeholders) ?
+                  area.participating_stakeholders.map((stakeholder, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      <Users className="h-3 w-3 mr-1" />
+                      {stakeholder}
+                    </Badge>
+                  )) : (
+                    <Badge variant="outline" className="text-xs text-gray-500">
+                      No participating stakeholders available
+                    </Badge>
+                  )
+                }
               </div>
 
               {selectedConsensus === index && (
                 <div className="mt-4 pt-4 border-t">
-                  <h5 className="font-semibold mb-2 text-sm">Key Agreement Points:</h5>
+                  <h5 className="font-semibold mb-2 text-sm">Shared Insights:</h5>
                   <ul className="space-y-2">
-                    {area.key_points.map((point, idx) => (
-                      <li key={idx} className="flex items-start space-x-2">
-                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm">{point}</span>
-                      </li>
-                    ))}
+                    {area.shared_insights && Array.isArray(area.shared_insights) ?
+                      area.shared_insights.map((insight: string, idx: number) => (
+                        <li key={idx} className="flex items-start space-x-2">
+                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm">{insight}</span>
+                        </li>
+                      )) : (
+                        <li className="text-sm text-gray-500">No shared insights available</li>
+                      )
+                    }
                   </ul>
                 </div>
               )}
@@ -121,7 +153,7 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
     return (
       <div className="space-y-4">
         {conflictZones.map((conflict: ConflictZone, index: number) => (
-          <Card 
+          <Card
             key={index}
             className={`cursor-pointer transition-all ${
               selectedConflict === index ? 'ring-2 ring-red-500 shadow-lg' : 'hover:shadow-md'
@@ -136,32 +168,52 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
                 </div>
                 <div className="flex items-center space-x-2">
                   <TrendingDown className="h-4 w-4 text-red-600" />
-                  <span className={`px-2 py-1 rounded-full text-sm font-medium ${getConflictColor(conflict.conflict_intensity)}`}>
-                    {Math.round(conflict.conflict_intensity * 100)}% intensity
+                  <span className={`px-2 py-1 rounded-full text-sm font-medium ${getConflictSeverityColor(conflict.conflict_severity)}`}>
+                    {conflict.conflict_severity} severity
                   </span>
                 </div>
               </div>
 
               <div className="mb-4">
-                <Progress value={conflict.conflict_intensity * 100} className="h-3" />
+                <Progress value={getConflictSeverityValue(conflict.conflict_severity)} className="h-3" />
               </div>
 
               <div className="flex flex-wrap gap-2 mb-4">
-                {conflict.opposing_stakeholders.map((stakeholder, idx) => (
-                  <Badge key={idx} variant="destructive" className="text-xs">
-                    <AlertTriangle className="h-3 w-3 mr-1" />
-                    {stakeholder}
-                  </Badge>
-                ))}
+                {conflict.conflicting_stakeholders && Array.isArray(conflict.conflicting_stakeholders) ?
+                  conflict.conflicting_stakeholders.map((stakeholder: string, idx: number) => (
+                    <Badge key={idx} variant="destructive" className="text-xs">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      {stakeholder}
+                    </Badge>
+                  )) : (
+                    <Badge variant="outline" className="text-xs text-gray-500">
+                      No conflicting stakeholders available
+                    </Badge>
+                  )
+                }
               </div>
 
               {selectedConflict === index && (
                 <div className="mt-4 pt-4 border-t">
-                  <h5 className="font-semibold mb-2 text-sm">Conflict Description:</h5>
+                  <h5 className="font-semibold mb-2 text-sm">Business Risk:</h5>
                   <div className="flex items-start space-x-2">
                     <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-gray-700">{conflict.conflict_description}</p>
+                    <p className="text-sm text-gray-700">{conflict.business_risk}</p>
                   </div>
+
+                  {conflict.potential_resolutions && conflict.potential_resolutions.length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="font-semibold mb-2 text-sm">Potential Resolutions:</h5>
+                      <ul className="space-y-1">
+                        {conflict.potential_resolutions.map((resolution: string, idx: number) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <Target className="h-3 w-3 text-blue-600 mt-1 flex-shrink-0" />
+                            <span className="text-sm">{resolution}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -227,8 +279,8 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
 
   const renderHeatmap = () => {
     const allTopics = [
-      ...consensusAreas.map(area => ({ ...area, type: 'consensus' })),
-      ...conflictZones.map(zone => ({ ...zone, type: 'conflict' }))
+      ...consensusAreas.map((area: ConsensusArea) => ({ ...area, type: 'consensus' as const })),
+      ...conflictZones.map((zone: ConflictZone) => ({ ...zone, type: 'conflict' as const }))
     ];
 
     if (allTopics.length === 0) return null;
@@ -244,11 +296,11 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
         <CardContent>
           <div className="space-y-3">
             {allTopics.map((topic, index) => {
-              const intensity = topic.type === 'consensus' 
-                ? (topic as any).agreement_level 
-                : (topic as any).conflict_intensity;
+              const intensity = topic.type === 'consensus'
+                ? (topic as any).agreement_level
+                : getConflictSeverityValue((topic as any).conflict_severity) / 100;
               const isConsensus = topic.type === 'consensus';
-              
+
               return (
                 <div key={index} className="flex items-center space-x-4">
                   <div className="w-32 text-sm font-medium truncate" title={topic.topic}>
@@ -257,7 +309,7 @@ const ConsensusConflictVisualization: React.FC<ConsensusConflictVisualizationPro
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
                       <div className="flex-1 h-6 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={`h-full transition-all ${
                             isConsensus ? 'bg-green-500' : 'bg-red-500'
                           }`}

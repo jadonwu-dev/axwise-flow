@@ -1064,6 +1064,7 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
                         response.candidates
                         and response.candidates[0].content
                         and response.candidates[0].content.parts
+                        and response.candidates[0].content.parts[0].text
                     ):
                         text_response = response.candidates[0].content.parts[0].text
                         logger.info(
@@ -1086,12 +1087,18 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
                     }
 
             # Log the raw response for debugging
-            logger.info(
-                f"Raw response for task '{task}' (length: {len(text_response)}, first 500 chars): {text_response[:500]}"
-            )
+            if text_response is not None:
+                logger.info(
+                    f"Raw response for task '{task}' (length: {len(text_response)}, first 500 chars): {text_response[:500]}"
+                )
+            else:
+                logger.error(
+                    f"Raw response for task '{task}' is None - this should not happen!"
+                )
+                return {"error": f"Gemini response text is None for task {task}"}
 
             # For persona_formation, also log the end of the response to check for truncation
-            if task == "persona_formation":
+            if task == "persona_formation" and text_response is not None:
                 logger.info(
                     f"Raw response for task '{task}' (last 500 chars): {text_response[-500:]}"
                 )

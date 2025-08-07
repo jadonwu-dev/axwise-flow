@@ -43,14 +43,17 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
     const edges: NetworkEdge[] = [];
     if (stakeholderIntelligence.cross_stakeholder_patterns?.influence_networks) {
       stakeholderIntelligence.cross_stakeholder_patterns.influence_networks.forEach((network: any) => {
-        network.connections.forEach((connection: string) => {
-          edges.push({
-            from: network.stakeholder_id,
-            to: connection,
-            influence_type: network.influence_type,
-            strength: network.influence_score,
+        // Add null safety check for influenced array (backend schema uses 'influenced', not 'connections')
+        if (network.influenced && Array.isArray(network.influenced)) {
+          network.influenced.forEach((influencedStakeholder: string) => {
+            edges.push({
+              from: network.influencer,
+              to: influencedStakeholder,
+              influence_type: network.influence_type,
+              strength: network.strength,
+            });
           });
-        });
+        }
       });
     }
 
@@ -168,19 +171,19 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
       ctx.font = '12px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       // Wrap text if too long
       const maxWidth = node.radius! * 1.8;
       const words = node.label.split(' ');
       let line = '';
       let y = node.y!;
-      
+
       if (words.length > 2) {
         // Multi-line text
         words.forEach((word, index) => {
           const testLine = line + word + ' ';
           const metrics = ctx.measureText(testLine);
-          
+
           if (metrics.width > maxWidth && index > 0) {
             ctx.fillText(line.trim(), node.x!, y - 6);
             line = word + ' ';
@@ -246,7 +249,7 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
 
   const getSelectedStakeholderDetails = () => {
     if (!selectedNode) return null;
-    
+
     return stakeholderIntelligence.detected_stakeholders.find(
       (s: any) => s.stakeholder_id === selectedNode.id
     );
@@ -296,7 +299,7 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
                         {selectedDetails.stakeholder_type.replace('_', ' ')}
                       </Badge>
                     </div>
-                    
+
                     <div>
                       <h4 className="font-semibold text-sm mb-2">Influence Metrics</h4>
                       <div className="space-y-2">
@@ -304,7 +307,7 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
                           <span className="text-xs">Decision Power</span>
                           <div className="flex items-center space-x-2">
                             <div className="w-16 h-2 bg-gray-200 rounded">
-                              <div 
+                              <div
                                 className="h-2 bg-blue-500 rounded"
                                 style={{ width: `${(selectedDetails.influence_metrics?.decision_power || 0) * 100}%` }}
                               />
@@ -312,12 +315,12 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
                             <span className="text-xs">{Math.round((selectedDetails.influence_metrics?.decision_power || 0) * 100)}%</span>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-xs">Technical Influence</span>
                           <div className="flex items-center space-x-2">
                             <div className="w-16 h-2 bg-gray-200 rounded">
-                              <div 
+                              <div
                                 className="h-2 bg-green-500 rounded"
                                 style={{ width: `${(selectedDetails.influence_metrics?.technical_influence || 0) * 100}%` }}
                               />
@@ -325,12 +328,12 @@ const StakeholderNetworkVisualization: React.FC<StakeholderNetworkVisualizationP
                             <span className="text-xs">{Math.round((selectedDetails.influence_metrics?.technical_influence || 0) * 100)}%</span>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-xs">Budget Influence</span>
                           <div className="flex items-center space-x-2">
                             <div className="w-16 h-2 bg-gray-200 rounded">
-                              <div 
+                              <div
                                 className="h-2 bg-orange-500 rounded"
                                 style={{ width: `${(selectedDetails.influence_metrics?.budget_influence || 0) * 100}%` }}
                               />
