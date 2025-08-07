@@ -231,11 +231,11 @@ const StakeholderIntelligenceView: React.FC<StakeholderIntelligenceViewProps> = 
   };
 
   const renderConflictZones = () => {
-    if (!stakeholderIntelligence.cross_stakeholder_patterns?.conflict_areas) return null;
+    if (!stakeholderIntelligence.cross_stakeholder_patterns?.conflict_zones) return null;
 
     return (
       <div className="space-y-4">
-        {stakeholderIntelligence.cross_stakeholder_patterns.conflict_areas.map((conflict, index) => (
+        {stakeholderIntelligence.cross_stakeholder_patterns.conflict_zones.map((conflict: any, index) => (
           <Card key={index}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-3">
@@ -243,28 +243,47 @@ const StakeholderIntelligenceView: React.FC<StakeholderIntelligenceViewProps> = 
                 <div className="flex items-center space-x-2">
                   <AlertTriangle className="h-4 w-4 text-red-600" />
                   <span className="text-red-600 font-medium">
-                    {Math.round(conflict.disagreement_level * 100)}% disagreement
+                    {conflict.conflict_severity} severity
                   </span>
                 </div>
               </div>
 
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Stakeholder Positions:</p>
-                <div className="space-y-2">
-                  {conflict.stakeholder_positions && Object.entries(conflict.stakeholder_positions).map(([stakeholder, position], idx) => (
-                    <div key={idx} className="bg-red-50 p-3 rounded-md border-l-4 border-red-200">
-                      <div className="font-medium text-sm text-red-700 mb-1">
-                        {stakeholder.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </div>
-                      <div className="text-sm text-red-600">{position}</div>
-                    </div>
-                  ))}
-                  {!conflict.stakeholder_positions && (
-                    <div className="bg-red-50 p-3 rounded-md border-l-4 border-red-200">
-                      <div className="text-sm text-red-600">Conflict details not available</div>
-                    </div>
-                  )}
+              <div className="space-y-4">
+                {/* Conflicting Stakeholders */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Conflicting Stakeholders:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {conflict.conflicting_stakeholders && conflict.conflicting_stakeholders.map((stakeholder: string, idx: number) => (
+                      <Badge key={idx} variant="destructive" className="text-xs">
+                        {stakeholder.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Business Risk */}
+                {conflict.business_risk && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Business Risk:</p>
+                    <div className="bg-red-50 p-3 rounded-md border-l-4 border-red-200">
+                      <div className="text-sm text-red-600">{conflict.business_risk}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Potential Resolutions */}
+                {conflict.potential_resolutions && conflict.potential_resolutions.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Potential Resolutions:</p>
+                    <div className="space-y-2">
+                      {conflict.potential_resolutions.map((resolution: string, idx: number) => (
+                        <div key={idx} className="bg-blue-50 p-3 rounded-md border-l-4 border-blue-200">
+                          <div className="text-sm text-blue-600">{resolution}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -274,41 +293,59 @@ const StakeholderIntelligenceView: React.FC<StakeholderIntelligenceViewProps> = 
   };
 
   const renderInfluenceNetworks = () => {
-    if (!stakeholderIntelligence.cross_stakeholder_patterns?.influence_relationships) return null;
+    if (!stakeholderIntelligence.cross_stakeholder_patterns?.influence_networks) return null;
 
     return (
       <div className="space-y-4">
-        {stakeholderIntelligence.cross_stakeholder_patterns.influence_relationships.map((relationship, index) => (
+        {stakeholderIntelligence.cross_stakeholder_patterns.influence_networks.map((network: any, index) => (
           <Card key={index}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-lg">Influence Relationship</h4>
+                <h4 className="font-semibold text-lg">Influence Network</h4>
                 <div className="flex items-center space-x-2">
                   <Network className="h-4 w-4 text-blue-600" />
                   <span className="text-blue-600 font-medium">
-                    {Math.round(relationship.strength * 100)}% strength
+                    {Math.round(network.strength * 100)}% strength
                   </span>
                 </div>
               </div>
 
-              <div className="mb-3">
-                <p className="text-sm text-gray-600 mb-2">Relationship Type:</p>
-                <Badge variant="outline">{relationship.relationship_type.replace(/_/g, ' ')}</Badge>
-              </div>
+              <div className="space-y-4">
+                {/* Influence Type */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Influence Type:</p>
+                  <Badge variant="outline">{network.influence_type.replace(/_/g, ' ')}</Badge>
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Influencer:</p>
-                  <Badge variant="secondary">
-                    {relationship.influencer.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </Badge>
+                {/* Influencer and Influenced */}
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Influencer:</p>
+                    <Badge variant="secondary">
+                      {network.influencer.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Influenced Stakeholders:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {network.influenced && network.influenced.map((stakeholder: string, idx: number) => (
+                        <Badge key={idx} variant="outline">
+                          {stakeholder.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Influenced:</p>
-                  <Badge variant="outline">
-                    {relationship.influenced.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </Badge>
-                </div>
+
+                {/* Pathway */}
+                {network.pathway && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Influence Pathway:</p>
+                    <div className="bg-blue-50 p-3 rounded-md border-l-4 border-blue-200">
+                      <div className="text-sm text-blue-600">{network.pathway}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
