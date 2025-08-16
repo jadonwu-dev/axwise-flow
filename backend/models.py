@@ -17,6 +17,9 @@ from datetime import datetime
 # Import Base from database.py to ensure we use the same Base instance
 from backend.database import Base
 
+# Import timezone utilities for consistent datetime handling
+from backend.utils.timezone_utils import utc_now
+
 
 class User(Base):
     __tablename__ = "users"
@@ -48,7 +51,7 @@ class InterviewData(Base):
         return self.id
 
     user_id = Column(String, ForeignKey("users.user_id"))
-    upload_date = Column(DateTime, default=datetime.utcnow)
+    upload_date = Column(DateTime, default=utc_now)
     filename = Column(String, nullable=True)
     input_type = Column(String)  # "text", "csv", "json"
     original_data = Column(Text)
@@ -90,7 +93,7 @@ class AnalysisResult(Base):
     def interview_data_id(self, value):
         self.data_id = value
 
-    analysis_date = Column(DateTime, default=datetime.utcnow)
+    analysis_date = Column(DateTime, default=utc_now)
 
     @property
     def created_at(self):
@@ -197,8 +200,8 @@ class CachedPRD(Base):
         String(20), nullable=False
     )  # 'operational', 'technical', or 'both'
     prd_data = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationship to AnalysisResult
     analysis_result = relationship("AnalysisResult", viewonly=True)
@@ -222,7 +225,7 @@ class SimulationData(Base):
     simulation_id = Column(String, unique=True, nullable=False, index=True)
     user_id = Column(String, ForeignKey("users.user_id"))
     status = Column(String, default="pending")  # pending, completed, failed
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     completed_at = Column(DateTime, nullable=True)
 
     # Configuration and context

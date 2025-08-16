@@ -54,14 +54,12 @@ class PatternProcessor(IProcessor):
                 return
 
             # Set API key in environment for PydanticAI
-            import os
-
             if api_key:
                 os.environ["GEMINI_API_KEY"] = api_key
             self.model = GeminiModel("gemini-2.5-flash")
             self.pattern_agent = Agent(
                 model=self.model,
-                result_type=PatternResponse,
+                output_type=PatternResponse,
                 system_prompt=(
                     "You are an expert behavioral analyst specializing in identifying patterns "
                     "in user research data. Focus on extracting clear, specific patterns of behavior "
@@ -239,15 +237,15 @@ class PatternProcessor(IProcessor):
             response = await self.pattern_agent.run(prompt)
 
             # PydanticAI returns the result directly
-            if isinstance(response.data, PatternResponse):
-                return response.data
+            if isinstance(response.output, PatternResponse):
+                return response.output
             else:
                 # If for some reason we get a different format, try to convert
                 logger.warning(
-                    f"Unexpected response type from PydanticAI: {type(response.data)}"
+                    f"Unexpected response type from PydanticAI: {type(response.output)}"
                 )
-                if hasattr(response.data, "patterns"):
-                    return PatternResponse(patterns=response.data.patterns)
+                if hasattr(response.output, "patterns"):
+                    return PatternResponse(patterns=response.output.patterns)
                 else:
                     return PatternResponse(patterns=[])
 
@@ -267,8 +265,8 @@ class PatternProcessor(IProcessor):
 
                 response = await self.pattern_agent.run(simple_prompt)
 
-                if isinstance(response.data, PatternResponse):
-                    return response.data
+                if isinstance(response.output, PatternResponse):
+                    return response.output
                 else:
                     return PatternResponse(patterns=[])
 

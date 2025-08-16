@@ -15,8 +15,10 @@ from datetime import datetime, timezone
 from backend.domain.repositories.analysis_repository import IAnalysisRepository
 from backend.infrastructure.persistence.base_repository import BaseRepository
 from backend.models import AnalysisResult
+from backend.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
+
 
 class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
     """
@@ -35,9 +37,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         super().__init__(session, AnalysisResult)
 
-    async def create(self, user_id: str, data_id: int, llm_provider: str,
-                    llm_model: Optional[str] = None,
-                    industry: Optional[str] = None) -> int:
+    async def create(
+        self,
+        user_id: str,
+        data_id: int,
+        llm_provider: str,
+        llm_model: Optional[str] = None,
+        industry: Optional[str] = None,
+    ) -> int:
         """
         Create a new analysis record.
 
@@ -57,18 +64,18 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
                 "status": "processing",
                 "progress": 0.0,
                 "message": "Analysis started",
-                "industry": industry
+                "industry": industry,
             }
 
             # Create new AnalysisResult instance
             analysis_result = AnalysisResult(
                 data_id=data_id,
                 user_id=user_id,
-                analysis_date=datetime.now(timezone.utc),
+                analysis_date=utc_now(),
                 llm_provider=llm_provider,
                 llm_model=llm_model,
                 status="processing",
-                results=initial_results
+                results=initial_results,
             )
 
             # Add to session
@@ -93,10 +100,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for the analysis result with user_id filter
-            analysis_result = self.session.query(AnalysisResult).filter(
-                AnalysisResult.result_id == result_id,
-                AnalysisResult.user_id == user_id
-            ).first()
+            analysis_result = (
+                self.session.query(AnalysisResult)
+                .filter(
+                    AnalysisResult.result_id == result_id,
+                    AnalysisResult.user_id == user_id,
+                )
+                .first()
+            )
 
             if not analysis_result:
                 return None
@@ -105,19 +116,20 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
             result = self.to_dict(analysis_result)
 
             # Ensure results is a dictionary
-            if isinstance(result.get('results'), str):
+            if isinstance(result.get("results"), str):
                 try:
-                    result['results'] = json.loads(result['results'])
+                    result["results"] = json.loads(result["results"])
                 except json.JSONDecodeError:
-                    result['results'] = {"error": "Invalid JSON in results"}
+                    result["results"] = {"error": "Invalid JSON in results"}
 
             return result
         except SQLAlchemyError as e:
             logger.error(f"Error getting analysis result by ID: {str(e)}")
             raise
 
-    async def list_by_user(self, user_id: str, limit: int = 100,
-                          offset: int = 0) -> List[Dict[str, Any]]:
+    async def list_by_user(
+        self, user_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         """
         List analysis results for a user.
 
@@ -131,9 +143,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for analysis results with user_id filter
-            analysis_results = self.session.query(AnalysisResult).filter(
-                AnalysisResult.user_id == user_id
-            ).order_by(AnalysisResult.analysis_date.desc()).limit(limit).offset(offset).all()
+            analysis_results = (
+                self.session.query(AnalysisResult)
+                .filter(AnalysisResult.user_id == user_id)
+                .order_by(AnalysisResult.analysis_date.desc())
+                .limit(limit)
+                .offset(offset)
+                .all()
+            )
 
             # Convert to list of dictionaries
             result = []
@@ -141,11 +158,11 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
                 item = self.to_dict(analysis_result)
 
                 # Parse results if it's a string
-                if isinstance(item.get('results'), str):
+                if isinstance(item.get("results"), str):
                     try:
-                        item['results'] = json.loads(item['results'])
+                        item["results"] = json.loads(item["results"])
                     except json.JSONDecodeError:
-                        item['results'] = {"error": "Invalid JSON in results"}
+                        item["results"] = {"error": "Invalid JSON in results"}
 
                 # Include only summary information in the list
                 summary = {
@@ -157,7 +174,7 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
                     "llm_model": item.get("llm_model"),
                     "progress": item.get("results", {}).get("progress", 0.0),
                     "message": item.get("results", {}).get("message", ""),
-                    "industry": item.get("results", {}).get("industry")
+                    "industry": item.get("results", {}).get("industry"),
                 }
 
                 result.append(summary)
@@ -167,8 +184,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
             logger.error(f"Error listing analysis results for user: {str(e)}")
             raise
 
-    async def update_status(self, result_id: int, user_id: str, status: str,
-                           progress: float = 0.0, message: Optional[str] = None) -> bool:
+    async def update_status(
+        self,
+        result_id: int,
+        user_id: str,
+        status: str,
+        progress: float = 0.0,
+        message: Optional[str] = None,
+    ) -> bool:
         """
         Update status of an analysis.
 
@@ -184,10 +207,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for the analysis result with user_id filter
-            analysis_result = self.session.query(AnalysisResult).filter(
-                AnalysisResult.result_id == result_id,
-                AnalysisResult.user_id == user_id
-            ).first()
+            analysis_result = (
+                self.session.query(AnalysisResult)
+                .filter(
+                    AnalysisResult.result_id == result_id,
+                    AnalysisResult.user_id == user_id,
+                )
+                .first()
+            )
 
             if not analysis_result:
                 return False
@@ -197,10 +224,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
 
             # Update completed_at if status is completed or failed
             if status in ["completed", "failed"]:
-                analysis_result.completed_at = datetime.now(timezone.utc)
+                analysis_result.completed_at = utc_now()
 
             # Update results dictionary
-            results = analysis_result.results if isinstance(analysis_result.results, dict) else {}
+            results = (
+                analysis_result.results
+                if isinstance(analysis_result.results, dict)
+                else {}
+            )
             results["status"] = status
             results["progress"] = progress
 
@@ -218,8 +249,9 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
             self.session.rollback()
             raise
 
-    async def update_results(self, result_id: int, user_id: str,
-                            results: Dict[str, Any]) -> bool:
+    async def update_results(
+        self, result_id: int, user_id: str, results: Dict[str, Any]
+    ) -> bool:
         """
         Update results of an analysis.
 
@@ -233,10 +265,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for the analysis result with user_id filter
-            analysis_result = self.session.query(AnalysisResult).filter(
-                AnalysisResult.result_id == result_id,
-                AnalysisResult.user_id == user_id
-            ).first()
+            analysis_result = (
+                self.session.query(AnalysisResult)
+                .filter(
+                    AnalysisResult.result_id == result_id,
+                    AnalysisResult.user_id == user_id,
+                )
+                .first()
+            )
 
             if not analysis_result:
                 return False
@@ -250,7 +286,7 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
 
                 # Update completed_at if status is completed or failed
                 if results["status"] in ["completed", "failed"]:
-                    analysis_result.completed_at = datetime.now(timezone.utc)
+                    analysis_result.completed_at = utc_now()
 
             # Flush changes
             self.session.flush()
@@ -274,10 +310,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for the analysis result with user_id filter
-            analysis_result = self.session.query(AnalysisResult).filter(
-                AnalysisResult.result_id == result_id,
-                AnalysisResult.user_id == user_id
-            ).first()
+            analysis_result = (
+                self.session.query(AnalysisResult)
+                .filter(
+                    AnalysisResult.result_id == result_id,
+                    AnalysisResult.user_id == user_id,
+                )
+                .first()
+            )
 
             if not analysis_result:
                 return False
@@ -305,10 +345,14 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
         """
         try:
             # Query for analysis results with data_id and user_id filters
-            analysis_results = self.session.query(AnalysisResult).filter(
-                AnalysisResult.data_id == data_id,
-                AnalysisResult.user_id == user_id
-            ).order_by(AnalysisResult.analysis_date.desc()).all()
+            analysis_results = (
+                self.session.query(AnalysisResult)
+                .filter(
+                    AnalysisResult.data_id == data_id, AnalysisResult.user_id == user_id
+                )
+                .order_by(AnalysisResult.analysis_date.desc())
+                .all()
+            )
 
             # Convert to list of dictionaries
             result = []
@@ -316,11 +360,11 @@ class AnalysisRepository(BaseRepository[AnalysisResult], IAnalysisRepository):
                 item = self.to_dict(analysis_result)
 
                 # Parse results if it's a string
-                if isinstance(item.get('results'), str):
+                if isinstance(item.get("results"), str):
                     try:
-                        item['results'] = json.loads(item['results'])
+                        item["results"] = json.loads(item["results"])
                     except json.JSONDecodeError:
-                        item['results'] = {"error": "Invalid JSON in results"}
+                        item["results"] = {"error": "Invalid JSON in results"}
 
                 result.append(item)
 

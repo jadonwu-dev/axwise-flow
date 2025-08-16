@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional, Literal
 from sqlalchemy import desc, asc
 
 from backend.models import User, InterviewData, AnalysisResult, Persona
+from backend.utils.timezone_utils import format_iso_utc
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -185,7 +186,9 @@ class ResultsService:
                         analysis_result.result_id
                     ),  # Add id field for frontend compatibility
                     "analysis_date": analysis_result.analysis_date,
-                    "createdAt": analysis_result.analysis_date.isoformat(),  # Add createdAt field for frontend compatibility
+                    "createdAt": format_iso_utc(
+                        analysis_result.analysis_date
+                    ),  # Add createdAt field for frontend compatibility
                     "fileName": self._get_filename_for_result(analysis_result),
                     "fileSize": None,  # We don't store this currently
                     "llmProvider": analysis_result.llm_provider,
@@ -402,7 +405,7 @@ class ResultsService:
         formatted_result = {
             "id": str(result.result_id),
             "status": result.status,
-            "createdAt": result.analysis_date.isoformat(),
+            "createdAt": format_iso_utc(result.analysis_date),
             "fileName": self._get_filename_for_result(result),
             "fileSize": None,  # We don't store this currently
             "themes": [],

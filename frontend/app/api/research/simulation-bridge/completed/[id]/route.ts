@@ -30,10 +30,20 @@ export async function GET(
       }
     } catch (authError) {
       console.error('Authentication failed:', authError);
-      return NextResponse.json(
-        { error: 'Authentication required to access simulation data' },
-        { status: 401 }
-      );
+
+      // In development, use a development token when Clerk auth fails
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      const clerkValidationDisabled = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'false';
+
+      if (isDevelopment && clerkValidationDisabled) {
+        authToken = 'DEV_TOKEN_REDACTED';
+        console.log('Simulation Download API: Using development token due to disabled Clerk validation');
+      } else {
+        return NextResponse.json(
+          { error: 'Authentication required to access simulation data' },
+          { status: 401 }
+        );
+      }
     }
 
     const response = await fetch(`${API_BASE_URL}/api/research/simulation-bridge/completed/${simulationId}`, {

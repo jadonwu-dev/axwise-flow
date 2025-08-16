@@ -1071,6 +1071,7 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
             )
 
             # Try to extract text from the response
+            text_response = None  # Initialize to None
             try:
                 text_response = response.text
             except Exception as e_text:
@@ -1113,6 +1114,15 @@ IMPORTANT: Double-check your JSON for missing commas before responding.
                 logger.error(
                     f"Raw response for task '{task}' is None - this should not happen!"
                 )
+                # Check for safety filters or content blocking
+                if hasattr(response, "candidates") and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, "finish_reason"):
+                        logger.error(
+                            f"Candidate finish reason: {candidate.finish_reason}"
+                        )
+                    if hasattr(candidate, "safety_ratings"):
+                        logger.error(f"Safety ratings: {candidate.safety_ratings}")
                 return {"error": f"Gemini response text is None for task {task}"}
 
             # For persona_formation, also log the end of the response to check for truncation

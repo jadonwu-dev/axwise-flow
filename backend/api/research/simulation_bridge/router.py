@@ -383,6 +383,41 @@ async def list_completed_simulations() -> Dict[str, Any]:
         )
 
 
+@router.post("/clear-cache")
+async def clear_memory_cache() -> Dict[str, Any]:
+    """
+    Clear the orchestrator's memory cache of completed simulations.
+    Useful when database and memory are out of sync.
+    """
+    try:
+        cache_info_before = orchestrator.get_memory_cache_info()
+        orchestrator.clear_memory_cache()
+
+        return {
+            "success": True,
+            "message": "Memory cache cleared successfully",
+            "cache_info_before": cache_info_before,
+            "cache_info_after": orchestrator.get_memory_cache_info(),
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear memory cache: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+
+@router.get("/cache-info")
+async def get_cache_info() -> Dict[str, Any]:
+    """
+    Get information about the current memory cache state.
+    """
+    try:
+        return {"success": True, "cache_info": orchestrator.get_memory_cache_info()}
+    except Exception as e:
+        logger.error(f"Failed to get cache info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get cache info: {str(e)}"
+        )
+
+
 @router.get("/completed/{simulation_id}")
 async def get_completed_simulation(
     simulation_id: str, user: User = Depends(get_current_user)

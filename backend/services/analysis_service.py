@@ -13,6 +13,7 @@ from backend.services.nlp import get_nlp_processor
 from backend.core.processing_pipeline import process_data
 from infrastructure.config.settings import settings
 from backend.schemas import DetailedAnalysisResult, StakeholderIntelligence
+from backend.utils.timezone_utils import utc_now
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -375,6 +376,7 @@ class AnalysisService:
         try:
             analysis_result = AnalysisResult(
                 data_id=data_id,
+                analysis_date=utc_now(),
                 status="processing",
                 llm_provider=llm_provider,
                 llm_model=llm_model,

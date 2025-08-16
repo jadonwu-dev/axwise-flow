@@ -793,3 +793,15 @@ class SimulationOrchestrator:
             }
             for sim_id, response in self.completed_simulations.items()
         }
+
+    def clear_memory_cache(self) -> None:
+        """Clear the in-memory simulation cache."""
+        self.completed_simulations.clear()
+        logger.info("Cleared orchestrator memory cache")
+
+    def get_memory_cache_info(self) -> Dict[str, Any]:
+        """Get information about the current memory cache."""
+        return {
+            "cached_simulations": list(self.completed_simulations.keys()),
+            "cache_size": len(self.completed_simulations),
+        }

@@ -59,6 +59,9 @@ from backend.services.processing.persona_formation_service import (
 # Import SQLAlchemy models using centralized package to avoid registry conflicts
 from backend.models import User, InterviewData, AnalysisResult
 
+# Import timezone utilities
+from backend.utils.timezone_utils import format_iso_utc, ensure_utc
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -729,20 +732,11 @@ async def get_analysis_status(
         stage_states = {}
 
         # Initialize response with basic information
-        # Standardize datetime formatting to UTC
-        def format_datetime(dt):
-            if dt is None:
-                return None
-            if dt.tzinfo is None:
-                # Naive datetime - assume it's UTC and add timezone info
-                dt = dt.replace(tzinfo=timezone.utc)
-            # Convert to UTC and format consistently
-            return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
+        # Use centralized timezone utility for consistent formatting
         response_data = {
             "status": status,
-            "started_at": format_datetime(analysis_result.analysis_date),
-            "completed_at": format_datetime(analysis_result.completed_at),
+            "started_at": format_iso_utc(analysis_result.analysis_date),
+            "completed_at": format_iso_utc(analysis_result.completed_at),
         }
 
         # Parse results JSON for additional information
