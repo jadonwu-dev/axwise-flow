@@ -47,8 +47,8 @@ class SimulationOrchestrator:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
 
-        # Use gemini-2.5-flash as preferred by user
-        # PydanticAI will map this to the appropriate model version
+        # QUALITY OPTIMIZATION: Use full gemini-2.5-flash for high-quality simulation tasks
+        # Full Flash model provides better quality and detail for interview simulation
         self.model = GeminiModel("gemini-2.5-flash")
         self.persona_generator = PersonaGenerator(self.model)
         self.interview_simulator = InterviewSimulator(self.model)
@@ -129,7 +129,7 @@ class SimulationOrchestrator:
 
         logger.info("🤖 Using PydanticAI to parse questionnaire")
         result = await parser_agent.run(prompt)
-        parsed = result.data
+        parsed = result.output
 
         logger.info(f"📋 Parsed questionnaire - Business idea: {parsed.business_idea}")
         logger.info(

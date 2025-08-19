@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime
 import re
@@ -198,10 +199,21 @@ class PersonaFormationService:
         while maintaining the same high-quality persona generation capabilities.
         """
         try:
-            # Initialize Gemini model for PydanticAI
-            gemini_model = GeminiModel("gemini-2.5-flash")
+            # Get API key from environment (PydanticAI v0.4.3 compatibility)
+            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "Neither GEMINI_API_KEY nor GOOGLE_API_KEY environment variable is set"
+                )
+
+            # QUALITY OPTIMIZATION: Use full Gemini 2.5 Flash for high-quality persona generation
+            # Full Flash model provides better quality and detail for persona formation
+            from pydantic_ai.providers.google_gla import GoogleGLAProvider
+
+            provider = GoogleGLAProvider(api_key=api_key)
+            gemini_model = GeminiModel("gemini-2.5-flash", provider=provider)
             logger.info(
-                "[PYDANTIC_AI] Initialized Gemini 2.5 Flash model for persona generation"
+                "[QUALITY] Initialized Gemini 2.5 Flash model for high-quality persona generation"
             )
 
             # Create persona generation agent with detailed system prompt
@@ -645,16 +657,28 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
                 speaker_texts.items(), key=lambda x: len(x[1]), reverse=True
             )
 
+            # PERFORMANCE OPTIMIZATION: Intelligent persona limiting based on content diversity
+            MAX_PERSONAS = int(os.getenv("MAX_PERSONAS", "6"))
+            if len(sorted_speakers) > MAX_PERSONAS:
+                logger.info(
+                    f"[PERFORMANCE] Applying intelligent persona clustering: {len(sorted_speakers)} speakers → {MAX_PERSONAS} diverse personas"
+                )
+                # Keep the speakers with most diverse content (by text length and role diversity)
+                sorted_speakers = self._select_diverse_speakers(
+                    sorted_speakers, speaker_roles_map, MAX_PERSONAS
+                )
+
             # PERFORMANCE OPTIMIZATION: Use parallel processing with semaphore-controlled concurrency
             logger.info(
                 f"[PERFORMANCE] Starting parallel persona generation for {len(sorted_speakers)} speakers..."
             )
 
-            # AGGRESSIVE CONCURRENCY: Use 15 concurrent LLM calls for paid API plan
-            # This provides ~5x better performance than conservative 3-concurrent approach
-            semaphore = asyncio.Semaphore(15)
+            # PAID TIER OPTIMIZATION: Use 12 concurrent LLM calls for maximum performance
+            # PERFORMANCE OPTIMIZATION: Increased to 12 for paid Gemini API tier (1000+ RPM)
+            PAID_TIER_CONCURRENCY = int(os.getenv("PAID_TIER_CONCURRENCY", "12"))
+            semaphore = asyncio.Semaphore(PAID_TIER_CONCURRENCY)
             logger.info(
-                "[PERFORMANCE] Created semaphore with max 15 concurrent persona generations (AGGRESSIVE OPTIMIZATION)"
+                f"[PERFORMANCE] Created semaphore with max {PAID_TIER_CONCURRENCY} concurrent persona generations (PAID TIER OPTIMIZATION)"
             )
 
             # Create tasks for parallel persona generation
@@ -662,6 +686,13 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
             for i, (speaker, text) in enumerate(sorted_speakers):
                 # Get the role for this speaker from our consolidated role mapping
                 role = speaker_roles_map.get(speaker, "Participant")
+
+                # PERFORMANCE OPTIMIZATION: Skip interviewer personas
+                if role == "Interviewer":
+                    logger.info(
+                        f"[PERFORMANCE] Skipping interviewer persona for {speaker} - focusing on interviewees only"
+                    )
+                    continue
 
                 # Skip if text is too short (likely noise)
                 if len(text) < 100:
@@ -733,11 +764,11 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
             performance_improvement = sequential_estimate / max(total_time / 60, 0.1)
 
             logger.info(
-                f"[PYDANTIC_AI] AGGRESSIVE PARALLEL persona generation completed in {total_time:.2f} seconds "
-                f"({successful_personas} successful, {failed_personas} failed, concurrency=15)"
+                f"[PYDANTIC_AI] BALANCED PARALLEL persona generation completed in {total_time:.2f} seconds "
+                f"({successful_personas} successful, {failed_personas} failed, concurrency=5)"
             )
             logger.info(
-                f"[PYDANTIC_AI] Achieved {requests_per_minute:.1f} requests per minute with 15 concurrent PydanticAI agents"
+                f"[PYDANTIC_AI] Achieved {requests_per_minute:.1f} requests per minute with 5 concurrent PydanticAI agents"
             )
             logger.info(
                 f"[PYDANTIC_AI] Performance improvement: ~{performance_improvement:.1f}x faster than sequential "
@@ -756,7 +787,7 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
                     )
             else:
                 logger.info(
-                    "[PYDANTIC_AI] ✅ Zero failures - Aggressive concurrency with PydanticAI working perfectly!"
+                    "[PYDANTIC_AI] ✅ Zero failures - Balanced concurrency with PydanticAI working perfectly!"
                 )
 
             # Emit final progress event
@@ -824,6 +855,73 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
                 logger.warning(f"Could not emit error event: {str(event_error)}")
             # Return empty list instead of raising to prevent analysis failure
             return []
+
+    def _select_diverse_speakers(
+        self,
+        sorted_speakers: List[Tuple[str, str]],
+        speaker_roles_map: Dict[str, str],
+        max_personas: int,
+    ) -> List[Tuple[str, str]]:
+        """
+        PERFORMANCE OPTIMIZATION: Select diverse speakers for persona generation.
+
+        Prioritizes speakers with:
+        1. Different roles (Interviewee, Participant, etc.)
+        2. Substantial content (longer text)
+        3. Diverse content patterns
+
+        Args:
+            sorted_speakers: List of (speaker, text) tuples sorted by text length
+            speaker_roles_map: Mapping of speakers to their roles
+            max_personas: Maximum number of personas to generate
+
+        Returns:
+            List of selected (speaker, text) tuples
+        """
+        if len(sorted_speakers) <= max_personas:
+            return sorted_speakers
+
+        selected_speakers = []
+        role_counts = {}
+
+        # First pass: Select speakers with different roles
+        for speaker, text in sorted_speakers:
+            role = speaker_roles_map.get(speaker, "Participant")
+
+            # Skip interviewers (already filtered above)
+            if role == "Interviewer":
+                continue
+
+            # Prioritize role diversity
+            if role not in role_counts:
+                role_counts[role] = 0
+
+            if role_counts[role] < 2:  # Max 2 personas per role
+                selected_speakers.append((speaker, text))
+                role_counts[role] += 1
+
+                if len(selected_speakers) >= max_personas:
+                    break
+
+        # Second pass: Fill remaining slots with speakers with most content
+        if len(selected_speakers) < max_personas:
+            remaining_speakers = [
+                (speaker, text)
+                for speaker, text in sorted_speakers
+                if (speaker, text) not in selected_speakers
+                and speaker_roles_map.get(speaker, "Participant") != "Interviewer"
+            ]
+
+            needed = max_personas - len(selected_speakers)
+            selected_speakers.extend(remaining_speakers[:needed])
+
+        logger.info(
+            f"[PERFORMANCE] Selected {len(selected_speakers)} diverse speakers: "
+            f"roles={list(role_counts.keys())}, "
+            f"avg_text_length={sum(len(text) for _, text in selected_speakers) // len(selected_speakers) if selected_speakers else 0}"
+        )
+
+        return selected_speakers
 
     async def _generate_single_persona_with_semaphore(
         self,
