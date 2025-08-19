@@ -215,9 +215,9 @@ async def parse_questionnaire_endpoint(request: Dict[str, Any]) -> Dict[str, Any
         return {
             "success": True,
             "message": "Questionnaire parsed successfully",
-            "questions_data": parsed_request.questions_data.dict(),
-            "business_context": parsed_request.business_context.dict(),
-            "config": parsed_request.config.dict(),
+            "questions_data": parsed_request.questions_data.model_dump(),
+            "business_context": parsed_request.business_context.model_dump(),
+            "config": parsed_request.config.model_dump(),
         }
 
     except Exception as e:
@@ -688,7 +688,7 @@ async def test_persona_generation(
 
         return {
             "success": True,
-            "personas": [persona.dict() for persona in personas],
+            "personas": [persona.model_dump() for persona in personas],
             "count": len(personas),
         }
 
@@ -731,7 +731,7 @@ async def test_interview_simulation(
 
         return {
             "success": True,
-            "interview": interview.dict(),
+            "interview": interview.model_dump(),
             "response_count": len(interview.responses),
         }
 
@@ -751,7 +751,7 @@ async def get_default_config() -> Dict[str, Any]:
 
     default_config = SimulationConfig()
     return {
-        "default_config": default_config.dict(),
+        "default_config": default_config.model_dump(),
         "available_options": {
             "depth": ["quick", "detailed", "comprehensive"],
             "response_style": ["realistic", "optimistic", "critical", "mixed"],
@@ -842,7 +842,7 @@ async def analyze_simulation_conversational(
             "file_size_bytes": processing_result.file_size_bytes,
             "database_saved": processing_result.database_saved,
             "analysis_result": (
-                processing_result.analysis_result.dict()
+                processing_result.analysis_result.model_dump()
                 if processing_result.analysis_result
                 else None
             ),
@@ -919,7 +919,7 @@ async def analyze_file_conversational(
             "file_size_bytes": processing_result.file_size_bytes,
             "database_saved": processing_result.database_saved,
             "analysis_result": (
-                processing_result.analysis_result.dict()
+                processing_result.analysis_result.model_dump()
                 if processing_result.analysis_result
                 else None
             ),
@@ -997,7 +997,7 @@ async def get_analysis_result(
                 status_code=404, detail=f"Analysis {analysis_id} not found"
             )
 
-        return {"success": True, "analysis_result": analysis_result.dict()}
+        return {"success": True, "analysis_result": analysis_result.model_dump()}
 
     except HTTPException:
         raise
