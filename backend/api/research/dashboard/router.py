@@ -131,7 +131,7 @@ async def generate_dashboard_questions(
                 success=False,
                 message=f"Context incomplete: {', '.join(validation.missing_fields)}",
                 metadata={
-                    "validation": validation.dict(),
+                    "validation": validation.model_dump(),
                     "completeness_score": validation.completeness_score,
                 },
             )
@@ -267,7 +267,7 @@ async def test_dashboard_generation():
 
             return {
                 "test_status": "success",
-                "validation": validation.dict(),
+                "validation": validation.model_dump(),
                 "generation_result": {
                     "success": result.success,
                     "message": result.message,
@@ -276,7 +276,10 @@ async def test_dashboard_generation():
                 },
             }
         else:
-            return {"test_status": "validation_failed", "validation": validation.dict()}
+            return {
+                "test_status": "validation_failed",
+                "validation": validation.model_dump(),
+            }
 
     except Exception as e:
         logger.error(f"🔴 Dashboard test failed: {str(e)}")

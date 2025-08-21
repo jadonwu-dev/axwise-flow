@@ -17,6 +17,8 @@ const mapBackendStageToFrontend = (backendStage: string): ProcessingStage | null
     'PATTERN_DETECTION': 'PATTERN_DETECTION',
     'SENTIMENT_ANALYSIS': 'SENTIMENT_ANALYSIS',
     'PERSONA_FORMATION': 'PERSONA_FORMATION',
+    'PERSONA_ENHANCEMENT': 'PERSONA_FORMATION', // Map new unified system to existing UI
+    'STAKEHOLDER_ANALYSIS': 'PERSONA_FORMATION', // Map old stakeholder analysis to persona formation
     'INSIGHT_GENERATION': 'INSIGHT_GENERATION',
     'COMPLETION': 'COMPLETION'
   };
@@ -31,6 +33,7 @@ const mapBackendStatusToFrontend = (backendStatus: string): ProcessingStatus => 
   const statusMapping: Record<string, ProcessingStatus> = {
     'pending': 'pending',
     'in_progress': 'in_progress',
+    'processing': 'in_progress', // Map backend "processing" to frontend "in_progress"
     'completed': 'completed',
     'failed': 'failed',
     'waiting': 'waiting'

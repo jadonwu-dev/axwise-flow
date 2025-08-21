@@ -210,7 +210,43 @@ export type PersonaTrait = {
   value: string;
   confidence: number;
   evidence: string[];
+  stakeholder_context?: Record<string, any>; // Additional stakeholder context for enhanced personas
 };
+
+// Enhanced Persona Types for Unified System
+export interface InfluenceMetrics {
+  decision_power: number; // 0.0-1.0
+  technical_influence: number; // 0.0-1.0
+  budget_influence: number; // 0.0-1.0
+}
+
+export interface PersonaRelationship {
+  target_persona_id: string;
+  relationship_type: 'collaborates_with' | 'reports_to' | 'influences' | 'conflicts_with';
+  strength: number; // 0.0-1.0
+  description: string;
+}
+
+export interface ConflictIndicator {
+  topic: string;
+  severity: number; // 0.0-1.0
+  description: string;
+  evidence: string[];
+}
+
+export interface ConsensusLevel {
+  theme_or_pattern: string;
+  agreement_score: number; // 0.0-1.0
+  supporting_evidence: string[];
+}
+
+export interface StakeholderIntelligenceFeatures {
+  stakeholder_type: 'primary_customer' | 'secondary_user' | 'decision_maker' | 'influencer';
+  influence_metrics: InfluenceMetrics;
+  relationships: PersonaRelationship[];
+  conflict_indicators: ConflictIndicator[];
+  consensus_levels: ConsensusLevel[];
+}
 
 /**
  * Insight data structure
@@ -245,12 +281,12 @@ export type Persona = {
   key_quotes?: PersonaTrait;
 
   // Legacy fields
-  role_context: PersonaTrait;
-  key_responsibilities: PersonaTrait;
-  tools_used: PersonaTrait;
-  collaboration_style: PersonaTrait;
-  analysis_approach: PersonaTrait;
-  pain_points: PersonaTrait;
+  role_context?: PersonaTrait;
+  key_responsibilities?: PersonaTrait;
+  tools_used?: PersonaTrait;
+  collaboration_style?: PersonaTrait;
+  analysis_approach?: PersonaTrait;
+  pain_points?: PersonaTrait;
 
   // Overall persona information
   patterns: string[];
@@ -267,10 +303,19 @@ export type Persona = {
     };
   };
 
+  // NEW: Integrated Stakeholder Intelligence Features
+  stakeholder_intelligence?: StakeholderIntelligenceFeatures;
+
   // Aliases for backward compatibility
   overall_confidence?: number; // Alias for confidence
   supporting_evidence_summary?: string[]; // Alias for evidence
   persona_metadata?: any; // Alias for metadata
+
+  // Helper methods (available when using enhanced personas)
+  get_stakeholder_type?: () => string;
+  get_influence_score?: (metric_type?: string) => number;
+  has_conflicts?: () => boolean;
+  get_relationships?: (relationship_type?: string) => PersonaRelationship[];
 };
 
 /**

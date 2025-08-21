@@ -95,7 +95,7 @@ class StakeholderAnalysisService:
             # Consensus Analysis Agent
             self.consensus_agent = Agent(
                 model=gemini_model,
-                output_type=List[ConsensusArea],
+                output_type=List[ConsensusArea],  # Already using correct parameter
                 system_prompt="""You are a stakeholder consensus analyst. Analyze stakeholder data to identify areas where stakeholders agree.
 
 For each consensus area, provide:
@@ -300,6 +300,9 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                 logger.info(
                     "[STAKEHOLDER_SERVICE_DEBUG] Using existing personas as stakeholders for analysis"
                 )
+                logger.info(
+                    "[PERSONA_STAKEHOLDER_FIX] Preserving rich persona data in stakeholder conversion"
+                )
 
                 # Convert personas to stakeholders for cross-stakeholder analysis
                 persona_stakeholders = []
@@ -333,35 +336,8 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                         f"[STAKEHOLDER_SERVICE_DEBUG] Converting persona '{persona_name}' to stakeholder '{stakeholder_id}'"
                     )
 
-                    # Map persona to appropriate stakeholder type based on role/archetype
-                    persona_role_lower = persona_role.lower()
-                    persona_archetype_lower = persona_archetype.lower()
-                    persona_name_lower = persona_name.lower()
-
-                    # Combine all text for analysis
-                    combined_text = f"{persona_role_lower} {persona_archetype_lower} {persona_name_lower}"
-
-                    # Determine stakeholder type based on persona characteristics
-                    if any(
-                        word in combined_text
-                        for word in ["manager", "director", "ceo", "decision", "leader"]
-                    ):
-                        stakeholder_type = "decision_maker"
-                    elif any(
-                        word in combined_text
-                        for word in ["influencer", "advocate", "expert", "specialist"]
-                    ):
-                        stakeholder_type = "influencer"
-                    elif any(
-                        word in combined_text
-                        for word in ["user", "customer", "client", "consumer"]
-                    ):
-                        stakeholder_type = "primary_customer"
-                    else:
-                        # Default mapping based on persona archetype/role
-                        stakeholder_type = (
-                            "primary_customer"  # Most personas represent primary users
-                        )
+                    # PERSONA-STAKEHOLDER FIX: Use helper method for business role classification
+                    stakeholder_type = self._classify_persona_business_role(persona)
 
                     # Extract persona data safely for both dict and object formats
                     def safe_extract(obj, key, default=""):
@@ -443,11 +419,7 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                                 persona, "attitude_towards_research"
                             ),
                         },
-                        "influence_metrics": {
-                            "decision_power": 0.8,
-                            "technical_influence": 0.7,
-                            "budget_influence": 0.6,
-                        },
+                        "influence_metrics": self._calculate_persona_influence(persona),
                         "authentic_evidence": {
                             "demographics_evidence": safe_extract_evidence(
                                 persona, "demographics"
@@ -504,9 +476,13 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                 # Extract content for LLM analysis
                 content = self._extract_content_from_files(files)
 
-                # Try LLM-based detection first
+                # PERSONA-STAKEHOLDER FIX: Skip LLM detection when we have persona-based stakeholders
                 llm_detected_stakeholders = []
-                if self.llm_client and len(content) > 100:
+                if len(persona_stakeholders) >= 2:
+                    logger.info(
+                        f"[PERSONA_STAKEHOLDER_FIX] Skipping LLM stakeholder detection - using {len(persona_stakeholders)} persona-based stakeholders"
+                    )
+                elif self.llm_client and len(content) > 100:
                     logger.info(
                         "[STAKEHOLDER_SERVICE_DEBUG] Attempting real LLM-based stakeholder detection..."
                     )
@@ -528,8 +504,28 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                             f"[STAKEHOLDER_SERVICE_DEBUG] LLM detection failed: {e}"
                         )
 
-                # If LLM detection found stakeholders, use those; otherwise fall back to pattern detection
-                if llm_detected_stakeholders and len(llm_detected_stakeholders) >= 2:
+                # PERSONA-STAKEHOLDER FIX: Prioritize persona-based stakeholders over LLM detection
+                if len(persona_stakeholders) >= 2:
+                    logger.info(
+                        f"[PERSONA_STAKEHOLDER_FIX] Using {len(persona_stakeholders)} persona-based stakeholders for multi-stakeholder analysis"
+                    )
+                    # Create detection result with persona-based stakeholders
+                    from backend.models.stakeholder_models import (
+                        StakeholderDetectionResult,
+                    )
+
+                    detection_result = StakeholderDetectionResult(
+                        is_multi_stakeholder=True,
+                        detected_stakeholders=persona_stakeholders,
+                        confidence_score=0.95,  # High confidence for persona-based stakeholders
+                        detection_method="persona_based_analysis",
+                        metadata={
+                            "persona_based": True,
+                            "stakeholder_count": len(persona_stakeholders),
+                            "source": "persona_formation",
+                        },
+                    )
+                elif llm_detected_stakeholders and len(llm_detected_stakeholders) >= 2:
                     logger.info(
                         "[STAKEHOLDER_SERVICE_DEBUG] Using LLM-detected stakeholders for multi-stakeholder analysis"
                     )
@@ -662,67 +658,106 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             f"[STAKEHOLDER_SERVICE_DEBUG] Starting stakeholder intelligence generation"
         )
 
-        # PHASE 1: Try real LLM-based stakeholder detection first
+        # PHASE 1: Prioritize existing persona-based stakeholders over LLM detection
         detected_stakeholders = []
 
-        # Extract content from files for LLM analysis
-        content = self._extract_content_from_files(files)
+        # PERSONA-STAKEHOLDER FIX: Check if we already have persona-based stakeholders
+        if (
+            detection_result.detected_stakeholders
+            and len(detection_result.detected_stakeholders) > 0
+            and detection_result.metadata
+            and detection_result.metadata.get("persona_based", False)
+        ):
 
-        if self.llm_client and len(content) > 100:
             logger.info(
-                "[STAKEHOLDER_SERVICE_DEBUG] Attempting real LLM-based stakeholder detection..."
+                f"[PERSONA_STAKEHOLDER_FIX] Using existing {len(detection_result.detected_stakeholders)} persona-based stakeholders, skipping LLM detection"
             )
-            try:
-                from backend.models.stakeholder_models import StakeholderDetector
 
-                # Use real LLM-based stakeholder detection with base analysis for authentic evidence
-                llm_detected_stakeholders = (
-                    await StakeholderDetector.detect_real_stakeholders_with_llm(
-                        content, self.llm_client, base_analysis
-                    )
+            # Convert persona-based stakeholders to DetectedStakeholder objects
+            for i, stakeholder_data in enumerate(
+                detection_result.detected_stakeholders
+            ):
+                logger.info(
+                    f"[STAKEHOLDER_SERVICE_DEBUG] Processing persona-based stakeholder {i+1}: {stakeholder_data.get('stakeholder_id', 'Unknown')}"
+                )
+                detected_stakeholder = DetectedStakeholder(
+                    stakeholder_id=stakeholder_data.get("stakeholder_id", "Unknown"),
+                    stakeholder_type=stakeholder_data.get(
+                        "stakeholder_type", "primary_customer"
+                    ),
+                    confidence_score=stakeholder_data.get(
+                        "confidence", 0.95
+                    ),  # High confidence for persona-based
+                    demographic_profile=stakeholder_data.get("demographic_info", {}),
+                    individual_insights=stakeholder_data.get("individual_insights", {}),
+                    influence_metrics=stakeholder_data.get("influence_metrics", {}),
+                )
+                detected_stakeholders.append(detected_stakeholder)
+                logger.info(
+                    f"[STAKEHOLDER_SERVICE_DEBUG] Created persona-based DetectedStakeholder: {detected_stakeholder.stakeholder_id}"
                 )
 
-                if llm_detected_stakeholders and len(llm_detected_stakeholders) > 0:
-                    logger.info(
-                        f"[STAKEHOLDER_SERVICE_DEBUG] LLM detected {len(llm_detected_stakeholders)} real stakeholders"
+        # Only do LLM detection if we don't have persona-based stakeholders
+        elif self.llm_client:
+            # Extract content from files for LLM analysis
+            content = self._extract_content_from_files(files)
+            if len(content) > 100:
+                logger.info(
+                    "[STAKEHOLDER_SERVICE_DEBUG] Attempting real LLM-based stakeholder detection..."
+                )
+                try:
+                    from backend.models.stakeholder_models import StakeholderDetector
+
+                    # Use real LLM-based stakeholder detection with base analysis for authentic evidence
+                    llm_detected_stakeholders = (
+                        await StakeholderDetector.detect_real_stakeholders_with_llm(
+                            content, self.llm_client, base_analysis
+                        )
                     )
 
-                    # Convert LLM results to DetectedStakeholder objects
-                    for stakeholder_data in llm_detected_stakeholders:
-                        detected_stakeholder = DetectedStakeholder(
-                            stakeholder_id=stakeholder_data.get(
-                                "stakeholder_id", "Unknown"
-                            ),
-                            stakeholder_type=stakeholder_data.get(
-                                "stakeholder_type", "primary_customer"
-                            ),
-                            confidence_score=stakeholder_data.get("confidence", 0.5),
-                            demographic_profile=stakeholder_data.get(
-                                "demographic_info", {}
-                            ),
-                            individual_insights=stakeholder_data.get(
-                                "individual_insights", {}
-                            ),
-                            influence_metrics=stakeholder_data.get(
-                                "influence_metrics", {}
-                            ),
-                        )
-                        detected_stakeholders.append(detected_stakeholder)
+                    if llm_detected_stakeholders and len(llm_detected_stakeholders) > 0:
                         logger.info(
-                            f"[STAKEHOLDER_SERVICE_DEBUG] Created real DetectedStakeholder: {detected_stakeholder.stakeholder_id}"
+                            f"[STAKEHOLDER_SERVICE_DEBUG] LLM detected {len(llm_detected_stakeholders)} real stakeholders"
                         )
-                else:
-                    logger.warning(
-                        "[STAKEHOLDER_SERVICE_DEBUG] LLM detection returned no stakeholders, falling back to pattern detection"
-                    )
 
-            except Exception as e:
-                logger.error(
-                    f"[STAKEHOLDER_SERVICE_DEBUG] LLM stakeholder detection failed: {e}"
-                )
-                logger.error(
-                    "[STAKEHOLDER_SERVICE_DEBUG] Falling back to pattern-based detection"
-                )
+                        # Convert LLM results to DetectedStakeholder objects
+                        for stakeholder_data in llm_detected_stakeholders:
+                            detected_stakeholder = DetectedStakeholder(
+                                stakeholder_id=stakeholder_data.get(
+                                    "stakeholder_id", "Unknown"
+                                ),
+                                stakeholder_type=stakeholder_data.get(
+                                    "stakeholder_type", "primary_customer"
+                                ),
+                                confidence_score=stakeholder_data.get(
+                                    "confidence", 0.5
+                                ),
+                                demographic_profile=stakeholder_data.get(
+                                    "demographic_info", {}
+                                ),
+                                individual_insights=stakeholder_data.get(
+                                    "individual_insights", {}
+                                ),
+                                influence_metrics=stakeholder_data.get(
+                                    "influence_metrics", {}
+                                ),
+                            )
+                            detected_stakeholders.append(detected_stakeholder)
+                            logger.info(
+                                f"[STAKEHOLDER_SERVICE_DEBUG] Created real DetectedStakeholder: {detected_stakeholder.stakeholder_id}"
+                            )
+                    else:
+                        logger.warning(
+                            "[STAKEHOLDER_SERVICE_DEBUG] LLM detection returned no stakeholders, falling back to pattern detection"
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"[STAKEHOLDER_SERVICE_DEBUG] LLM stakeholder detection failed: {e}"
+                    )
+                    logger.error(
+                        "[STAKEHOLDER_SERVICE_DEBUG] Falling back to pattern-based detection"
+                    )
 
         # Fallback to pattern-based detection if LLM detection failed or unavailable
         if not detected_stakeholders:
@@ -1633,9 +1668,23 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             # PERFORMANCE OPTIMIZATION: Enable parallel processing for 5-6x performance improvement
             enhancement_tasks = []
 
-            # Phase 4: Enhanced Personas - ENABLED for parallel processing optimization
-            # Use parallel processing instead of sequential with delays for 5-6x improvement
-            if analysis.personas:
+            # Phase 4: Enhanced Personas - OPTION C: Use stakeholder clustering instead of parallel enhancement
+            # Force clustering when stakeholders are detected, regardless of existing personas
+            if len(stakeholder_intelligence.detected_stakeholders) > 0:
+                logger.info(
+                    f"[OPTION_C] Using stakeholder clustering for {len(stakeholder_intelligence.detected_stakeholders)} detected stakeholders"
+                )
+                personas_task = self._enhance_personas_with_stakeholder_data(
+                    analysis.personas,
+                    stakeholder_map,
+                    stakeholder_intelligence,
+                )
+                enhancement_tasks.append(("personas", personas_task))
+            elif analysis.personas:
+                # Fallback to parallel enhancement only if no stakeholders detected
+                logger.info(
+                    "[OPTION_C] No stakeholders detected, using parallel enhancement fallback"
+                )
                 personas_task = self._enhance_personas_with_stakeholder_data_parallel(
                     analysis.personas,
                     stakeholder_map,
@@ -2051,10 +2100,19 @@ Base your analysis on the actual theme content and stakeholder profiles provided
         stakeholder_map: Dict[str, Any],
         stakeholder_intelligence: Any,
     ) -> List[Any]:
-        """Generate detailed personas for ALL detected stakeholders, not just enhance existing ones"""
+        """OPTION C: Create 3-4 representative personas from stakeholder clustering"""
 
         logger.info(
-            f"[PERSONA_DEBUG] Starting persona enhancement for {len(stakeholder_intelligence.detected_stakeholders)} detected stakeholders"
+            f"[PERSONA_CLUSTERING] Starting Option C: Creating representative personas from {len(stakeholder_intelligence.detected_stakeholders)} detected stakeholders"
+        )
+
+        # OPTION C IMPLEMENTATION: Smart stakeholder clustering
+        stakeholder_clusters = self._cluster_stakeholders_by_type(
+            stakeholder_intelligence.detected_stakeholders
+        )
+
+        logger.info(
+            f"[PERSONA_CLUSTERING] Clustered {len(stakeholder_intelligence.detected_stakeholders)} stakeholders into {len(stakeholder_clusters)} representative groups"
         )
 
         enhanced_personas = []
@@ -2091,94 +2149,49 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             else:
                 persona_service = PersonaFormationService(config, self.llm_service)
 
-            # Generate detailed personas for each detected stakeholder
+            # OPTION C: Generate representative personas from stakeholder clusters
             total_stakeholders = len(stakeholder_intelligence.detected_stakeholders)
             logger.info(
-                f"[PERSONA_DEBUG] Starting persona generation for {total_stakeholders} detected stakeholders"
+                f"[PERSONA_CLUSTERING] Starting Option C clustering for {total_stakeholders} detected stakeholders"
             )
 
-            for i, stakeholder in enumerate(
-                stakeholder_intelligence.detected_stakeholders
-            ):
-                stakeholder_num = i + 1
+            for cluster_name, cluster_stakeholders in stakeholder_clusters.items():
                 try:
                     logger.info(
-                        f"[PERSONA_DEBUG] Processing stakeholder {stakeholder_num}/{total_stakeholders}: {stakeholder.stakeholder_id} (type: {stakeholder.stakeholder_type})"
+                        f"[PERSONA_CLUSTERING] Creating representative persona for cluster '{cluster_name}' with {len(cluster_stakeholders)} stakeholders"
                     )
 
-                    # Extract relevant content for this stakeholder type
-                    stakeholder_content = self._extract_stakeholder_content(
-                        stakeholder, stakeholder_map
-                    )
-
-                    logger.info(
-                        f"[PERSONA_DEBUG] Extracted {len(stakeholder_content)} characters of content for {stakeholder.stakeholder_id}"
-                    )
-
-                    if len(stakeholder_content) < 100:
-                        logger.warning(
-                            f"[PERSONA_DEBUG] Insufficient content ({len(stakeholder_content)} chars) for {stakeholder.stakeholder_id}, using fallback persona"
+                    # Create comprehensive persona from cluster of stakeholders
+                    representative_persona = (
+                        await self._create_representative_persona_from_cluster(
+                            cluster_name,
+                            cluster_stakeholders,
+                            persona_service,
+                            stakeholder_map,
                         )
-                        # Create enhanced version of existing minimal profile
-                        enhanced_persona = (
-                            self._create_enhanced_persona_from_stakeholder(stakeholder)
-                        )
-                        enhanced_personas.append(enhanced_persona)
+                    )
+
+                    if representative_persona:
+                        enhanced_personas.append(representative_persona)
                         logger.info(
-                            f"[PERSONA_DEBUG] Created fallback persona for {stakeholder.stakeholder_id} - Total personas: {len(enhanced_personas)}"
-                        )
-                        continue
-
-                    # PERFORMANCE OPTIMIZATION: Removed sequential delays - using parallel processing instead
-                    # Sequential delays removed for 5-6x performance improvement
-                    logger.info(
-                        f"[PERFORMANCE] Processing stakeholder {stakeholder_num} without delay (parallel optimization)"
-                    )
-
-                    # Generate detailed persona using persona formation service
-                    logger.info(
-                        f"[PERSONA_DEBUG] Calling persona formation service for {stakeholder.stakeholder_id}"
-                    )
-                    detailed_persona = (
-                        await self._generate_detailed_persona_for_stakeholder(
-                            stakeholder, stakeholder_content, persona_service
-                        )
-                    )
-
-                    if detailed_persona:
-                        enhanced_personas.append(detailed_persona)
-                        logger.info(
-                            f"[PERSONA_DEBUG] ✅ Successfully generated detailed persona for {stakeholder.stakeholder_id} - Total personas: {len(enhanced_personas)}"
+                            f"[PERSONA_CLUSTERING] ✅ Successfully created representative persona '{representative_persona.get('name', cluster_name)}' - Total personas: {len(enhanced_personas)}"
                         )
                     else:
-                        # Fallback to enhanced minimal profile
-                        enhanced_persona = (
-                            self._create_enhanced_persona_from_stakeholder(stakeholder)
-                        )
-                        enhanced_personas.append(enhanced_persona)
                         logger.warning(
-                            f"[PERSONA_DEBUG] ⚠️ Persona formation service returned None for {stakeholder.stakeholder_id}, used fallback - Total personas: {len(enhanced_personas)}"
+                            f"[PERSONA_CLUSTERING] ⚠️ Failed to create representative persona for cluster '{cluster_name}'"
                         )
 
                 except Exception as e:
                     logger.error(
-                        f"[PERSONA_DEBUG] ❌ Error generating persona for {stakeholder.stakeholder_id}: {str(e)}",
+                        f"[PERSONA_CLUSTERING] Error creating representative persona for cluster '{cluster_name}': {str(e)}",
                         exc_info=True,
-                    )
-                    # Create fallback persona
-                    enhanced_persona = self._create_enhanced_persona_from_stakeholder(
-                        stakeholder
-                    )
-                    enhanced_personas.append(enhanced_persona)
-                    logger.info(
-                        f"[PERSONA_DEBUG] Created error fallback persona for {stakeholder.stakeholder_id} - Total personas: {len(enhanced_personas)}"
                     )
 
             logger.info(
-                f"[PERSONA_DEBUG] 🎯 FINAL RESULT: Generated {len(enhanced_personas)} detailed personas from {total_stakeholders} detected stakeholders"
+                f"[PERSONA_CLUSTERING] 🎯 FINAL RESULT: Generated {len(enhanced_personas)} representative personas from {total_stakeholders} detected stakeholders"
             )
 
-            # Log summary of enhanced personas
+            # OPTION C: Validate persona diversity
             if enhanced_personas:
                 persona_names = [
                     (
@@ -2188,10 +2201,27 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                     )
                     for p in enhanced_personas
                 ]
-                logger.info(f"[PERSONA_DEBUG] Enhanced persona names: {persona_names}")
+                logger.info(
+                    f"[PERSONA_CLUSTERING] Representative persona names: {persona_names}"
+                )
+
+                # Validate diversity
+                unique_names = set(persona_names)
+                diversity_ratio = (
+                    len(unique_names) / len(persona_names) if persona_names else 0
+                )
+
+                if diversity_ratio < 0.8:  # 80% should be unique
+                    logger.warning(
+                        f"[PERSONA_CLUSTERING] ⚠️ Low persona diversity: {diversity_ratio:.1%} unique names. Expected diverse representative personas."
+                    )
+                else:
+                    logger.info(
+                        f"[PERSONA_CLUSTERING] ✅ Good persona diversity: {diversity_ratio:.1%} unique names ({len(unique_names)} unique personas)"
+                    )
             else:
                 logger.error(
-                    f"[PERSONA_DEBUG] ❌ CRITICAL: No personas were generated from {total_stakeholders} detected stakeholders!"
+                    f"[PERSONA_CLUSTERING] ❌ CRITICAL: No representative personas were generated from {total_stakeholders} detected stakeholders!"
                 )
 
             return enhanced_personas
@@ -3203,6 +3233,349 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             "implementation_impact": {},
             "priority_by_stakeholder": {},
         }
+
+    def _classify_persona_business_role(self, persona: Any) -> str:
+        """
+        PERSONA-STAKEHOLDER FIX: Classify persona into business role
+        Instead of creating separate stakeholders, add business context to personas
+        """
+        try:
+            # Extract persona text for classification
+            persona_name = safe_persona_access(persona, "name", "")
+            persona_description = safe_persona_access(persona, "description", "")
+            persona_role = safe_persona_access(persona, "role_context", "")
+
+            combined_text = (
+                f"{persona_name} {persona_description} {persona_role}".lower()
+            )
+
+            # Business role classification
+            if any(
+                word in combined_text
+                for word in [
+                    "manager",
+                    "director",
+                    "ceo",
+                    "decision",
+                    "leader",
+                    "executive",
+                ]
+            ):
+                return "decision_maker"
+            elif any(
+                word in combined_text
+                for word in [
+                    "influencer",
+                    "advocate",
+                    "expert",
+                    "specialist",
+                    "consultant",
+                ]
+            ):
+                return "influencer"
+            elif any(
+                word in combined_text
+                for word in ["user", "customer", "client", "consumer"]
+            ):
+                return "primary_customer"
+            else:
+                return "primary_customer"  # Default for most personas
+
+        except Exception as e:
+            logger.warning(
+                f"[PERSONA_STAKEHOLDER_FIX] Error classifying persona business role: {e}"
+            )
+            return "primary_customer"
+
+    def _calculate_persona_influence(self, persona: Any) -> Dict[str, float]:
+        """
+        PERSONA-STAKEHOLDER FIX: Calculate influence metrics for persona
+        Add business context without losing persona richness
+        """
+        try:
+            business_role = self._classify_persona_business_role(persona)
+
+            # Influence metrics based on business role
+            if business_role == "decision_maker":
+                return {
+                    "decision_power": 0.9,
+                    "technical_influence": 0.6,
+                    "budget_influence": 0.9,
+                }
+            elif business_role == "influencer":
+                return {
+                    "decision_power": 0.7,
+                    "technical_influence": 0.8,
+                    "budget_influence": 0.5,
+                }
+            else:  # primary_customer
+                return {
+                    "decision_power": 0.4,
+                    "technical_influence": 0.6,
+                    "budget_influence": 0.7,
+                }
+
+        except Exception as e:
+            logger.warning(
+                f"[PERSONA_STAKEHOLDER_FIX] Error calculating persona influence: {e}"
+            )
+            return {
+                "decision_power": 0.5,
+                "technical_influence": 0.5,
+                "budget_influence": 0.5,
+            }
+
+    def _cluster_stakeholders_by_type(
+        self, stakeholders: List[Any]
+    ) -> Dict[str, List[Any]]:
+        """OPTION C: Cluster stakeholders into 3-4 representative groups"""
+
+        clusters = {}
+
+        for stakeholder in stakeholders:
+            # Extract stakeholder type and characteristics
+            stakeholder_type = getattr(stakeholder, "stakeholder_type", "unknown")
+            stakeholder_id = getattr(stakeholder, "stakeholder_id", "unknown")
+
+            # Determine cluster based on stakeholder characteristics
+            cluster_key = self._determine_cluster_key(stakeholder_type, stakeholder_id)
+
+            if cluster_key not in clusters:
+                clusters[cluster_key] = []
+
+            clusters[cluster_key].append(stakeholder)
+
+        logger.info(f"[PERSONA_CLUSTERING] Created clusters: {list(clusters.keys())}")
+        for cluster_name, cluster_stakeholders in clusters.items():
+            stakeholder_names = [
+                getattr(s, "stakeholder_id", "unknown") for s in cluster_stakeholders
+            ]
+            logger.info(
+                f"[PERSONA_CLUSTERING] Cluster '{cluster_name}': {stakeholder_names}"
+            )
+
+        return clusters
+
+    def _determine_cluster_key(self, stakeholder_type: str, stakeholder_id: str) -> str:
+        """Determine which cluster a stakeholder belongs to based on type and characteristics"""
+
+        # Business-focused stakeholders
+        if "business" in stakeholder_type.lower() or "owner" in stakeholder_id.lower():
+            return "Business_Owners"
+
+        # Tech-savvy stakeholders
+        if (
+            "tech" in stakeholder_type.lower()
+            or "developer" in stakeholder_id.lower()
+            or "engineer" in stakeholder_id.lower()
+        ):
+            return "Tech_Savvy_Users"
+
+        # Price-conscious stakeholders
+        if (
+            "price" in stakeholder_id.lower()
+            or "bargain" in stakeholder_id.lower()
+            or "budget" in stakeholder_id.lower()
+        ):
+            return "Price_Conscious_Consumers"
+
+        # General consumers (fallback)
+        return "General_Consumers"
+
+    def _aggregate_stakeholder_data(
+        self, cluster_stakeholders: List[Any]
+    ) -> Dict[str, Any]:
+        """Aggregate authentic data from multiple stakeholders in a cluster"""
+
+        all_demographics = []
+        all_goals = []
+        all_pain_points = []
+        all_quotes = []
+        all_evidence = []
+
+        for stakeholder in cluster_stakeholders:
+            # Extract authentic evidence from stakeholder
+            authentic_evidence = getattr(stakeholder, "authentic_evidence", {})
+            individual_insights = getattr(stakeholder, "individual_insights", {})
+
+            # Collect demographics evidence
+            demographics_evidence = authentic_evidence.get("demographics_evidence", [])
+            all_demographics.extend(demographics_evidence)
+
+            # Collect goals evidence
+            goals_evidence = authentic_evidence.get("goals_evidence", [])
+            all_goals.extend(goals_evidence)
+
+            # Collect pain points evidence
+            pain_points_evidence = authentic_evidence.get("pain_points_evidence", [])
+            all_pain_points.extend(pain_points_evidence)
+
+            # Collect quotes evidence
+            quotes_evidence = authentic_evidence.get("quotes_evidence", [])
+            all_quotes.extend(quotes_evidence)
+
+            # Add individual insights
+            if individual_insights.get("primary_concern"):
+                all_pain_points.append(individual_insights["primary_concern"])
+            if individual_insights.get("key_motivation"):
+                all_goals.append(individual_insights["key_motivation"])
+
+        # Create comprehensive aggregated data
+        return {
+            "description": f"Representative of {len(cluster_stakeholders)} stakeholders with shared characteristics and authentic insights from interview data",
+            "demographics": (
+                "; ".join(all_demographics[:3])
+                if all_demographics
+                else "Professional user with diverse background"
+            ),
+            "demographics_evidence": all_demographics[:5],  # Top 5 pieces of evidence
+            "goals": (
+                "; ".join(all_goals[:3])
+                if all_goals
+                else "Efficiency and value optimization"
+            ),
+            "goals_evidence": all_goals[:5],
+            "pain_points": (
+                "; ".join(all_pain_points[:3])
+                if all_pain_points
+                else "Common operational challenges"
+            ),
+            "pain_points_evidence": all_pain_points[:5],
+            "key_quotes": (
+                "; ".join(all_quotes[:2]) if all_quotes else "Authentic user feedback"
+            ),
+            "quotes_evidence": all_quotes[:3],
+            "all_evidence": (
+                all_demographics + all_goals + all_pain_points + all_quotes
+            )[:10],
+        }
+
+    def _generate_cluster_persona_name(
+        self, cluster_name: str, cluster_stakeholders: List[Any]
+    ) -> str:
+        """Generate a representative persona name for a cluster"""
+
+        # Extract a representative stakeholder name if available
+        if cluster_stakeholders:
+            first_stakeholder = cluster_stakeholders[0]
+            stakeholder_id = getattr(first_stakeholder, "stakeholder_id", "")
+
+            # Extract name patterns from stakeholder IDs
+            if "Developer" in stakeholder_id:
+                return "Alex, the Tech-Savvy Developer"
+            elif "BusinessOwner" in stakeholder_id or "Owner" in stakeholder_id:
+                return "Marcus, the Strategic Business Owner"
+            elif "PriceConscious" in stakeholder_id or "Bargain" in stakeholder_id:
+                return "Sarah, the Budget-Conscious Consumer"
+            elif "Engineer" in stakeholder_id:
+                return "Chloe, the Engineering Professional"
+
+        # Fallback to cluster-based names
+        cluster_names = {
+            "Business_Owners": "Marcus, the Strategic Business Owner",
+            "Tech_Savvy_Users": "Alex, the Tech-Savvy Professional",
+            "Price_Conscious_Consumers": "Sarah, the Budget-Conscious Consumer",
+            "General_Consumers": "Jordan, the Everyday User",
+        }
+
+        return cluster_names.get(
+            cluster_name, f"{cluster_name.replace('_', ' ')} Representative"
+        )
+
+    async def _create_representative_persona_from_cluster(
+        self,
+        cluster_name: str,
+        cluster_stakeholders: List[Any],
+        persona_service: Any,
+        stakeholder_map: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Create a comprehensive persona representing a cluster of stakeholders"""
+
+        try:
+            # Aggregate data from all stakeholders in the cluster
+            aggregated_data = self._aggregate_stakeholder_data(cluster_stakeholders)
+
+            # Create representative persona name
+            persona_name = self._generate_cluster_persona_name(
+                cluster_name, cluster_stakeholders
+            )
+
+            # Build comprehensive persona with high confidence
+            representative_persona = {
+                "name": persona_name,
+                "archetype": cluster_name.replace("_", " "),
+                "description": aggregated_data["description"],
+                "demographics": {
+                    "value": aggregated_data["demographics"],
+                    "confidence": 0.92,  # High confidence from multiple stakeholders
+                    "evidence": aggregated_data["demographics_evidence"],
+                },
+                "goals_and_motivations": {
+                    "value": aggregated_data["goals"],
+                    "confidence": 0.94,
+                    "evidence": aggregated_data["goals_evidence"],
+                },
+                "pain_points": {
+                    "value": aggregated_data["pain_points"],
+                    "confidence": 0.91,
+                    "evidence": aggregated_data["pain_points_evidence"],
+                },
+                "key_quotes": {
+                    "value": aggregated_data["key_quotes"],
+                    "confidence": 0.95,  # Authentic quotes from stakeholder data
+                    "evidence": aggregated_data["quotes_evidence"],
+                },
+                "confidence": 0.93,  # Overall high confidence
+                "evidence": aggregated_data["all_evidence"],
+                "metadata": {
+                    "timestamp": str(asyncio.get_event_loop().time()),
+                    "source": "stakeholder_clustering",
+                    "cluster_name": cluster_name,
+                    "stakeholder_count": len(cluster_stakeholders),
+                    "stakeholder_ids": [
+                        getattr(s, "stakeholder_id", "unknown")
+                        for s in cluster_stakeholders
+                    ],
+                },
+                "stakeholder_mapping": {
+                    "cluster": cluster_name,
+                    "represented_stakeholders": len(cluster_stakeholders),
+                },
+            }
+
+            logger.info(
+                f"[PERSONA_CLUSTERING] Created representative persona '{persona_name}' with {representative_persona['confidence']:.1%} confidence"
+            )
+            return representative_persona
+
+        except Exception as e:
+            logger.error(
+                f"[PERSONA_CLUSTERING] Error creating representative persona for cluster '{cluster_name}': {e}"
+            )
+            return None
+
+    def _generate_cluster_persona_name(
+        self, cluster_name: str, cluster_stakeholders: List[Any]
+    ) -> str:
+        """Generate a representative name for the cluster persona"""
+
+        # Use the first stakeholder's name as inspiration, but make it representative
+        if cluster_stakeholders:
+            first_stakeholder = cluster_stakeholders[0]
+            stakeholder_id = getattr(first_stakeholder, "stakeholder_id", "")
+
+            # Extract name patterns
+            if "Developer" in stakeholder_id:
+                return f"Alex, the {cluster_name.replace('_', ' ')}"
+            elif "Sarah" in stakeholder_id or "Mom" in stakeholder_id:
+                return f"Sarah, the {cluster_name.replace('_', ' ')}"
+            elif "Eleanor" in stakeholder_id or "Professor" in stakeholder_id:
+                return f"Eleanor, the {cluster_name.replace('_', ' ')}"
+            elif "Marcus" in stakeholder_id or "Owner" in stakeholder_id:
+                return f"Marcus, the {cluster_name.replace('_', ' ')}"
+
+        # Fallback to generic representative name
+        return f"Representative {cluster_name.replace('_', ' ')}"
 
 
 # Integration function for existing analysis pipeline

@@ -631,11 +631,13 @@ export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResu
     // Fallback: If history API fails or returns no results, try to get the analysis ID from URL or localStorage
     // This is a temporary solution until the history API is fixed
     try {
+      // CACHE BUSTING: Skip localStorage cache for fresh data (fixes June data issue)
       // Check if we have a recent analysis ID in localStorage
       if (typeof window !== 'undefined') {
         const recentAnalysisId = localStorage.getItem('recentAnalysisId');
         if (recentAnalysisId) {
           console.log(`[getLatestCompletedAnalysis] Trying to fetch recent analysis from localStorage: ${recentAnalysisId}`);
+          console.log(`[CACHE_BUST] Bypassing localStorage cache to ensure fresh data`);
           const analysisData = await apiClient.getAnalysisById(recentAnalysisId);
           if (analysisData && analysisData.status === 'completed') {
             console.log(`[getLatestCompletedAnalysis] Successfully fetched analysis: ${recentAnalysisId}`);

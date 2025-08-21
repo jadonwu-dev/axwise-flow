@@ -15,6 +15,8 @@ import type {
   StakeholderIntelligence
 } from '@/types/api';
 import { PersonaList } from './PersonaList';
+import { PersonaRelationshipNetwork } from './PersonaRelationshipNetwork';
+import { PersonaConflictConsensusView } from './PersonaConflictConsensusView';
 import MultiStakeholderPersonasView from '../analysis/MultiStakeholderPersonasView';
 import StakeholderNetworkVisualization from '../analysis/StakeholderNetworkVisualization';
 import ConsensusConflictVisualization from '../analysis/ConsensusConflictVisualization';
@@ -31,15 +33,25 @@ export function PersonasTabContent({
   stakeholderIntelligence,
   isMultiStakeholder
 }: PersonasTabContentProps) {
-  // Single interview - use standard personas view
+  // Check if personas have stakeholder intelligence features
+  const hasStakeholderFeatures = personas?.some(persona => persona.stakeholder_intelligence);
+
+  // Single interview - use enhanced personas view if available
   if (!isMultiStakeholder) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Personas</h2>
-          <Badge variant="outline">
-            {personas?.length || 0} {personas?.length === 1 ? 'Persona' : 'Personas'}
-          </Badge>
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline">
+              {personas?.length || 0} {personas?.length === 1 ? 'Persona' : 'Personas'}
+            </Badge>
+            {hasStakeholderFeatures && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                Enhanced
+              </Badge>
+            )}
+          </div>
         </div>
         <PersonaList personas={personas} />
       </div>
@@ -67,7 +79,7 @@ export function PersonasTabContent({
 
       {/* Embedded sub-tabs for multi-stakeholder content */}
       <Tabs defaultValue="personas" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 mb-6">
+        <TabsList className={`grid w-full mb-6 ${hasStakeholderFeatures ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <TabsTrigger value="personas" className="flex items-center">
             <Users className="h-4 w-4 mr-2" />
             Personas
@@ -80,6 +92,12 @@ export function PersonasTabContent({
             <Activity className="h-4 w-4 mr-2" />
             Consensus
           </TabsTrigger>
+          {hasStakeholderFeatures && (
+            <TabsTrigger value="conflicts" className="flex items-center">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Conflicts
+            </TabsTrigger>
+          )}
           <TabsTrigger value="intelligence" className="flex items-center">
             <Eye className="h-4 w-4 mr-2" />
             Intelligence
@@ -89,11 +107,11 @@ export function PersonasTabContent({
         {/* Personas Sub-tab - Default view */}
         <TabsContent value="personas" className="space-y-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Stakeholder Personas</h3>
+            <h3 className="text-lg font-semibold text-gray-700">Enhanced Personas</h3>
             <div className="flex items-center space-x-2">
               <Badge variant="outline" className="text-xs">
                 <BarChart3 className="h-3 w-3 mr-1" />
-                Enhanced with stakeholder context
+                Enhanced with business context
               </Badge>
             </div>
           </div>
@@ -106,7 +124,7 @@ export function PersonasTabContent({
         {/* Network Sub-tab - Interactive stakeholder relationships */}
         <TabsContent value="network" className="space-y-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Stakeholder Network</h3>
+            <h3 className="text-lg font-semibold text-gray-700">Persona Relationships</h3>
             <Badge variant="outline" className="text-xs">
               Interactive visualization
             </Badge>
@@ -129,6 +147,19 @@ export function PersonasTabContent({
             stakeholderIntelligence={stakeholderIntelligence}
           />
         </TabsContent>
+
+        {/* Enhanced Conflicts Sub-tab - Persona-based conflict analysis */}
+        {hasStakeholderFeatures && (
+          <TabsContent value="conflicts" className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-700">Persona Conflicts & Consensus</h3>
+              <Badge variant="outline" className="text-xs">
+                Enhanced persona analysis
+              </Badge>
+            </div>
+            <PersonaConflictConsensusView personas={personas} />
+          </TabsContent>
+        )}
 
         {/* Intelligence Sub-tab - Comprehensive stakeholder intelligence */}
         <TabsContent value="intelligence" className="space-y-6">

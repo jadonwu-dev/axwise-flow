@@ -224,6 +224,10 @@ class Theme(BaseModel):
         default=None,
         description="Stakeholder attribution and distribution for this theme",
     )
+    stakeholder_attribution: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Direct stakeholder attribution data for this theme",
+    )
 
     # Legacy fields
     count: Optional[int] = Field(
@@ -286,6 +290,10 @@ class Pattern(BaseModel):
     stakeholder_context: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Stakeholder attribution and distribution for this pattern",
+    )
+    stakeholder_attribution: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Direct stakeholder attribution data for this pattern",
     )
 
     class Config:
@@ -736,7 +744,9 @@ class DetailedAnalysisResult(BaseModel):
     enhanced_patterns: Optional[List[Pattern]] = (
         None  # Enhanced patterns from stakeholder analysis
     )
-    sentimentOverview: SentimentOverview
+    sentimentOverview: Optional[SentimentOverview] = (
+        None  # Optional since sentiment analysis can be disabled
+    )
     sentiment: Optional[List[Dict[str, Any]]] = None
     personas: Optional[List[Persona]] = None
     enhanced_personas: Optional[List[Persona]] = (

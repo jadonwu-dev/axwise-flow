@@ -210,7 +210,20 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
           mappedEvidence = mapAuthenticQuotesToStakeholder(stakeholder, authenticQuotes);
         }
 
-        // Create rich persona from stakeholder intelligence data with authentic evidence
+        // PERSONA-STAKEHOLDER FIX: Use preserved persona data if available
+        if (stakeholder.full_persona_data) {
+          return {
+            ...stakeholder.full_persona_data,
+            // Add stakeholder business context to the original persona
+            business_role: stakeholder.stakeholder_type,
+            influence_metrics: stakeholder.influence_metrics,
+            is_enhanced_with_stakeholder_context: true,
+            stakeholder_type: stakeholder.stakeholder_type,
+            confidence_score: stakeholder.confidence_score || stakeholder.full_persona_data.overall_confidence || 0.85,
+          };
+        }
+
+        // Fallback: Create rich persona from stakeholder intelligence data with authentic evidence
         return {
           name: stakeholder.stakeholder_id?.replace(/_/g, ' ') || `Stakeholder ${index + 1}`,
           description: insights.primary_concern || insights.key_motivation ||

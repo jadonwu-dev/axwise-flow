@@ -583,11 +583,14 @@ class AnalysisService:
                 )
             else:
                 # Process data with progress updates (normal NLP + LLM pipeline)
+                # Add analysis_id to config for quality tracking
+                config_with_id = {**config, "analysis_id": result_id}
+
                 result = await process_data(
                     nlp_processor=nlp_processor,
                     llm_service=llm_service,
                     data=data,
-                    config=config,
+                    config=config_with_id,
                     progress_callback=update_progress,
                 )
 
@@ -646,9 +649,8 @@ class AnalysisService:
                 "THEME_EXTRACTION",
                 "PATTERN_DETECTION",
                 "SENTIMENT_ANALYSIS",
-                "PERSONA_FORMATION",
+                "PERSONA_FORMATION",  # Now includes unified persona enhancement with stakeholder intelligence
                 "INSIGHT_GENERATION",
-                "STAKEHOLDER_ANALYSIS",
                 "COMPLETION",
             ]
 

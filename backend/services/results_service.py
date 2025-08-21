@@ -209,8 +209,16 @@ class ResultsService:
                     ),
                     "insights": results_dict.get("insights", []),
                     "personas": persona_list,  # Use personas from the results JSON
-                    # Add stakeholder intelligence from database
-                    "stakeholder_intelligence": analysis_result.stakeholder_intelligence,
+                    # OPTION C: Provide stakeholder metadata for UI visualization while hiding sensitive details
+                    "stakeholder_intelligence": (
+                        self._create_ui_safe_stakeholder_intelligence(
+                            analysis_result.stakeholder_intelligence
+                        )
+                        if analysis_result.stakeholder_intelligence
+                        else {
+                            "debug": f"stakeholder_intelligence is falsy: {analysis_result.stakeholder_intelligence}"
+                        }
+                    ),
                 }
 
                 # Log whether sentimentStatements were found
@@ -475,6 +483,67 @@ class ResultsService:
 
         return formatted_result
 
+    def _convert_enhanced_persona_to_frontend_format(
+        self, persona_dict: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Convert EnhancedPersona format to frontend-compatible format.
+
+        This ensures that EnhancedPersonaTrait objects are properly serialized
+        as simple dictionaries that the frontend can understand.
+        """
+        # List of trait fields that need conversion
+        trait_fields = [
+            "demographics",
+            "goals_and_motivations",
+            "challenges_and_frustrations",
+            "skills_and_expertise",
+            "workflow_and_environment",
+            "pain_points",
+            "technology_and_tools",
+            "collaboration_style",
+            "needs_and_desires",
+            "attitude_towards_research",
+            "attitude_towards_ai",
+            "role_context",
+            "key_responsibilities",
+            "tools_used",
+            "analysis_approach",
+        ]
+
+        # Convert trait fields from EnhancedPersonaTrait to simple dict
+        for field in trait_fields:
+            if field in persona_dict and persona_dict[field] is not None:
+                trait = persona_dict[field]
+                if isinstance(trait, dict):
+                    # Ensure the trait has the expected structure
+                    persona_dict[field] = {
+                        "value": trait.get("value", ""),
+                        "confidence": trait.get("confidence", 0.7),
+                        "evidence": trait.get("evidence", []),
+                    }
+
+        # Ensure stakeholder_intelligence is properly formatted
+        if (
+            "stakeholder_intelligence" in persona_dict
+            and persona_dict["stakeholder_intelligence"]
+        ):
+            si = persona_dict["stakeholder_intelligence"]
+            if isinstance(si, dict):
+                # Ensure influence_metrics is properly formatted
+                if "influence_metrics" in si and si["influence_metrics"]:
+                    im = si["influence_metrics"]
+                    if isinstance(im, dict):
+                        persona_dict["stakeholder_intelligence"][
+                            "influence_metrics"
+                        ] = {
+                            "decision_power": im.get("decision_power", 0.5),
+                            "technical_influence": im.get("technical_influence", 0.5),
+                            "budget_influence": im.get("budget_influence", 0.5),
+                        }
+
+        return persona_dict
+
     def _map_json_to_persona_schema(self, p_data: Dict[str, Any]):
         """
         Map JSON persona data to a proper PersonaSchema object with enhanced field mapping.
@@ -488,6 +557,9 @@ class ResultsService:
             PersonaSchema object with all fields populated
         """
         from backend.schemas import PersonaTrait, Persona as PersonaSchema
+
+        # Convert EnhancedPersona format to frontend-compatible format
+        p_data = self._convert_enhanced_persona_to_frontend_format(p_data)
 
         # Helper function to safely create a PersonaTrait with proper defaults
         def create_trait(
@@ -1031,3 +1103,115 @@ class ResultsService:
         )
 
         return sentiment_statements
+
+    def _create_ui_safe_stakeholder_intelligence(self, stakeholder_intelligence):
+        """Create UI-safe version of stakeholder intelligence for visualization while hiding sensitive details"""
+        if not stakeholder_intelligence:
+            return None
+
+        try:
+            # Extract detected stakeholders from the stakeholder intelligence data
+            detected_stakeholders = []
+
+            # Handle different possible structures of stakeholder_intelligence
+            if isinstance(stakeholder_intelligence, dict):
+                # Check for direct detected_stakeholders array
+                if "detected_stakeholders" in stakeholder_intelligence:
+                    detected_stakeholders = stakeholder_intelligence[
+                        "detected_stakeholders"
+                    ]
+                # Check for stakeholders in other possible locations
+                elif "stakeholders" in stakeholder_intelligence:
+                    stakeholders_data = stakeholder_intelligence["stakeholders"]
+                    if isinstance(stakeholders_data, list):
+                        detected_stakeholders = stakeholders_data
+                    elif isinstance(stakeholders_data, dict):
+                        # Convert dict of stakeholders to list format
+                        for (
+                            stakeholder_id,
+                            stakeholder_data,
+                        ) in stakeholders_data.items():
+                            if isinstance(stakeholder_data, dict):
+                                stakeholder_entry = {
+                                    "stakeholder_id": stakeholder_id,
+                                    "stakeholder_type": stakeholder_data.get(
+                                        "stakeholder_type", "primary_customer"
+                                    ),
+                                    "confidence_score": stakeholder_data.get(
+                                        "confidence_score", 0.85
+                                    ),
+                                    "individual_insights": stakeholder_data.get(
+                                        "individual_insights", {}
+                                    ),
+                                    "influence_metrics": stakeholder_data.get(
+                                        "influence_metrics", {}
+                                    ),
+                                    # Preserve full persona data if available (Option C)
+                                    "full_persona_data": stakeholder_data.get(
+                                        "full_persona_data"
+                                    ),
+                                }
+                                detected_stakeholders.append(stakeholder_entry)
+
+                # Create UI-safe structure
+                ui_safe_intelligence = {
+                    "detected_stakeholders": detected_stakeholders,
+                    "total_stakeholders": len(detected_stakeholders),
+                    "processing_metadata": {
+                        "analysis_type": "multi_stakeholder",
+                        "confidence_threshold": 0.7,
+                        "ui_safe": True,
+                    },
+                }
+
+                # Add cross-stakeholder patterns if available
+                if "cross_stakeholder_patterns" in stakeholder_intelligence:
+                    patterns = stakeholder_intelligence["cross_stakeholder_patterns"]
+                    if isinstance(patterns, dict):
+                        ui_safe_intelligence["cross_stakeholder_patterns"] = {
+                            "consensus_areas": patterns.get("consensus_areas", []),
+                            "conflict_zones": patterns.get("conflict_zones", []),
+                            "influence_networks": patterns.get(
+                                "influence_networks", []
+                            ),
+                        }
+
+                # Add summary if available
+                if "multi_stakeholder_summary" in stakeholder_intelligence:
+                    summary = stakeholder_intelligence["multi_stakeholder_summary"]
+                    if isinstance(summary, dict):
+                        ui_safe_intelligence["multi_stakeholder_summary"] = {
+                            "key_insights": summary.get("key_insights", []),
+                            "business_implications": summary.get(
+                                "business_implications", []
+                            ),
+                            "recommended_actions": summary.get(
+                                "recommended_actions", []
+                            ),
+                        }
+
+                return ui_safe_intelligence
+
+            else:
+                # Fallback for non-dict stakeholder_intelligence
+                return {
+                    "detected_stakeholders": [],
+                    "total_stakeholders": 0,
+                    "processing_metadata": {
+                        "analysis_type": "single_stakeholder",
+                        "ui_safe": True,
+                        "fallback_reason": f"Unexpected stakeholder_intelligence type: {type(stakeholder_intelligence)}",
+                    },
+                }
+
+        except Exception as e:
+            logger.error(f"Error creating UI-safe stakeholder intelligence: {e}")
+            return {
+                "detected_stakeholders": [],
+                "total_stakeholders": 0,
+                "processing_metadata": {
+                    "analysis_type": "error",
+                    "ui_safe": True,
+                    "error": str(e),
+                },
+            }

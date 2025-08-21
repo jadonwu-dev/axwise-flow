@@ -19,6 +19,22 @@ import traceback
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
+def _get_package_version(package_name: str) -> str:
+    """Get version of an installed package."""
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version(package_name)
+    except Exception:
+        try:
+            import pkg_resources
+
+            return pkg_resources.get_distribution(package_name).version
+        except Exception:
+            return "not_installed"
+
+
 # Create router
 router = APIRouter(
     tags=["debug"],
@@ -68,6 +84,11 @@ async def get_system_info():
                     if os.getenv("DATABASE_URL")
                     else "not_set"
                 ),
+            },
+            "packages": {
+                "pydantic_version": _get_package_version("pydantic"),
+                "pydantic_ai_version": _get_package_version("pydantic-ai"),
+                "google_genai_version": _get_package_version("google-genai"),
             },
             "server_id": "DesignAId-API-v2-debug",
         }

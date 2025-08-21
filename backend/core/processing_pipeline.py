@@ -10,6 +10,66 @@ from typing import Dict, Any, List
 logger = logging.getLogger(__name__)
 
 
+def _convert_enhanced_persona_to_frontend_format(
+    persona_dict: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Convert EnhancedPersona format to frontend-compatible format.
+
+    This ensures that EnhancedPersonaTrait objects are properly serialized
+    as simple dictionaries that the frontend can understand.
+    """
+    # List of trait fields that need conversion
+    trait_fields = [
+        "demographics",
+        "goals_and_motivations",
+        "challenges_and_frustrations",
+        "skills_and_expertise",
+        "workflow_and_environment",
+        "pain_points",
+        "technology_and_tools",
+        "collaboration_style",
+        "needs_and_desires",
+        "attitude_towards_research",
+        "attitude_towards_ai",
+        "role_context",
+        "key_responsibilities",
+        "tools_used",
+        "analysis_approach",
+    ]
+
+    # Convert trait fields from EnhancedPersonaTrait to simple dict
+    for field in trait_fields:
+        if field in persona_dict and persona_dict[field] is not None:
+            trait = persona_dict[field]
+            if isinstance(trait, dict):
+                # Ensure the trait has the expected structure
+                persona_dict[field] = {
+                    "value": trait.get("value", ""),
+                    "confidence": trait.get("confidence", 0.7),
+                    "evidence": trait.get("evidence", []),
+                }
+
+    # Ensure stakeholder_intelligence is properly formatted
+    if (
+        "stakeholder_intelligence" in persona_dict
+        and persona_dict["stakeholder_intelligence"]
+    ):
+        si = persona_dict["stakeholder_intelligence"]
+        if isinstance(si, dict):
+            # Ensure influence_metrics is properly formatted
+            if "influence_metrics" in si and si["influence_metrics"]:
+                im = si["influence_metrics"]
+                if isinstance(im, dict):
+                    persona_dict["stakeholder_intelligence"]["influence_metrics"] = {
+                        "decision_power": im.get("decision_power", 0.5),
+                        "technical_influence": im.get("technical_influence", 0.5),
+                        "budget_influence": im.get("budget_influence", 0.5),
+                    }
+
+    return persona_dict
+
+
 async def process_data(
     nlp_processor,
     llm_service,
@@ -49,8 +109,11 @@ async def process_data(
         # The NLP processor now handles different data formats internally
         logger.info("Calling nlp_processor.process_interview_data...")
 
+        # Extract analysis_id from config if available for quality tracking
+        analysis_id = config.get("analysis_id") if config else None
+
         results = await nlp_processor.process_interview_data(
-            data, llm_service, config, progress_callback
+            data, llm_service, config, progress_callback, analysis_id
         )
 
         # Progress updates are now handled inside the NLP processor
@@ -83,100 +146,91 @@ async def process_data(
 
         # Progress updates are now handled inside the NLP processor
 
-        # CORE STAKEHOLDER DETECTION - Always run as part of standard pipeline
-        logger.info("Starting stakeholder intelligence analysis...")
+        # UNIFIED PERSONA ENHANCEMENT - Enhance personas with stakeholder intelligence
+        logger.info("Starting persona enhancement with stakeholder intelligence...")
         if progress_callback:
             await progress_callback(
-                "STAKEHOLDER_ANALYSIS", 0.6, "Analyzing stakeholder intelligence"
+                "PERSONA_FORMATION",
+                0.6,
+                "Enhancing personas with stakeholder intelligence",
             )
 
         try:
-            # Import stakeholder analysis service
-            from backend.services.stakeholder_analysis_service import (
-                StakeholderAnalysisService,
+            # Import services
+            from backend.services.persona_enhancement_service import (
+                PersonaEnhancementService,
             )
+
             from backend.utils.persona_utils import normalize_persona_list
 
-            # Initialize stakeholder analysis service
-            stakeholder_service = StakeholderAnalysisService(llm_service)
-
-            # Prepare data for stakeholder analysis
-            # Convert data to the format expected by stakeholder service
-            if isinstance(data, list):
-                files_data = data
-            elif isinstance(data, dict):
-                files_data = [data]
-            else:
-                files_data = [{"content": str(data), "filename": "interview.txt"}]
+            # Initialize services
+            persona_enhancement_service = PersonaEnhancementService(llm_service)
 
             # Normalize personas to handle type compatibility
             if "personas" in results and results["personas"]:
                 results["personas"] = normalize_persona_list(results["personas"])
 
-            # Convert results dictionary to DetailedAnalysisResult object for stakeholder analysis
-            from backend.schemas import DetailedAnalysisResult
-            from datetime import datetime, timezone
-
-            # Create a proper DetailedAnalysisResult object from the results dictionary
-            base_analysis = DetailedAnalysisResult(
-                id="temp_id",  # Temporary ID for processing
-                status="pending",  # Use valid status value for schema validation
-                createdAt=datetime.now(timezone.utc).isoformat(),
-                fileName="processing",
-                themes=results.get("themes", []),
-                patterns=results.get("patterns", []),
-                sentimentOverview=results.get(
-                    "sentimentOverview",
-                    {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
-                ),
-                sentiment=results.get("sentiment", []),
-                personas=results.get("personas", []),
-                insights=results.get("insights", []),
-            )
-
-            # Run stakeholder analysis with the proper base analysis object
-            enhanced_results = await stakeholder_service.enhance_analysis_with_stakeholder_intelligence(
-                files_data, base_analysis
-            )
-
-            # Update results with stakeholder intelligence from the enhanced analysis object
-            if (
-                hasattr(enhanced_results, "stakeholder_intelligence")
-                and enhanced_results.stakeholder_intelligence
-            ):
-                # Convert Pydantic model to dictionary for JSON serialization
-                if hasattr(enhanced_results.stakeholder_intelligence, "model_dump"):
-                    results["stakeholder_intelligence"] = (
-                        enhanced_results.stakeholder_intelligence.model_dump()
-                    )
-                else:
-                    results["stakeholder_intelligence"] = (
-                        enhanced_results.stakeholder_intelligence
-                    )
+                # Skip old stakeholder analysis - use unified persona enhancement instead
+                stakeholder_intelligence = None
                 logger.info(
-                    f"✅ Successfully extracted stakeholder intelligence with {len(results['stakeholder_intelligence'].get('detected_stakeholders', []))} stakeholders"
+                    "[PERSONA_FORMATION] Skipping separate stakeholder analysis - using unified persona enhancement"
                 )
+
+                # Enhance personas with stakeholder intelligence features
+                enhancement_result = await persona_enhancement_service.enhance_personas_with_stakeholder_intelligence(
+                    personas=results["personas"],
+                    stakeholder_intelligence=stakeholder_intelligence,
+                    analysis_context={
+                        "themes": results.get("themes", []),
+                        "patterns": results.get("patterns", []),
+                        "insights": results.get("insights", []),
+                    },
+                )
+
+                # Update results with enhanced personas
+                if enhancement_result.enhanced_personas:
+                    # Convert enhanced personas to frontend-compatible format
+                    enhanced_personas_dict = []
+                    for persona in enhancement_result.enhanced_personas:
+                        if hasattr(persona, "model_dump"):
+                            persona_dict = persona.model_dump()
+                            # Convert EnhancedPersonaTrait objects to simple dict format
+                            persona_dict = _convert_enhanced_persona_to_frontend_format(
+                                persona_dict
+                            )
+                            enhanced_personas_dict.append(persona_dict)
+                        else:
+                            enhanced_personas_dict.append(persona)
+
+                    results["personas"] = enhanced_personas_dict
+                    logger.info(
+                        f"✅ Updated results with {len(results['personas'])} enhanced personas with stakeholder intelligence"
+                    )
+
+                    # Log enhancement statistics
+                    logger.info(
+                        f"[PERSONA_FORMATION] Enhancement complete: "
+                        f"{enhancement_result.relationships_created} relationships, "
+                        f"{enhancement_result.conflicts_identified} conflicts identified"
+                    )
+
+                # Remove separate stakeholder_intelligence field (now integrated into personas)
+                # This eliminates duplication between personas and stakeholder entities
+                logger.info(
+                    "✅ Stakeholder intelligence integrated into personas - no separate stakeholder entities"
+                )
+
             else:
-                # Ensure stakeholder_intelligence always exists, even if empty
-                results["stakeholder_intelligence"] = {
-                    "detected_stakeholders": [],
-                    "processing_metadata": {"status": "no_stakeholders_detected"},
-                }
-                logger.info(
-                    "⚠️ No stakeholder intelligence generated, using empty structure"
-                )
+                logger.info("⚠️ No personas found for enhancement")
 
             logger.info(
-                f"Stakeholder analysis completed. Detected stakeholders: {len(results.get('stakeholder_intelligence', {}).get('detected_stakeholders', []))}"
+                f"Persona enhancement completed. Enhanced personas: {len(results.get('personas', []))}"
             )
 
         except Exception as e:
-            logger.error(f"Error in stakeholder analysis: {str(e)}")
-            # Always ensure stakeholder_intelligence exists, even on error
-            results["stakeholder_intelligence"] = {
-                "detected_stakeholders": [],
-                "processing_metadata": {"status": "error", "error": str(e)},
-            }
+            logger.error(f"Error in persona enhancement: {str(e)}")
+            # Continue with original personas if enhancement fails
+            logger.info("⚠️ Continuing with original personas due to enhancement error")
 
         # Extract additional insights
         logger.info("Calling nlp_processor.extract_insights...")

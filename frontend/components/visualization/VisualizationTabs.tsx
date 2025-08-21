@@ -170,6 +170,10 @@ export default function VisualizationTabsRefactored({
     setActiveTab(tab);
   }, []);
 
+  // Get stakeholder intelligence from either storage location
+  // Support both storage locations: dedicated column and nested in results
+  const stakeholderIntelligence = analysis?.stakeholder_intelligence || analysis?.results?.stakeholder_intelligence;
+
   // Prepare data for rendering
   const analyzedThemes = useMemo(() => {
     // Debug logging for theme data
@@ -177,7 +181,7 @@ export default function VisualizationTabsRefactored({
       console.log('Processing themes...');
       console.log('Regular themes:', analysis?.themes?.length || 0);
       console.log('Enhanced themes:', analysis?.enhanced_themes?.length || 0);
-      console.log('Stakeholder intelligence themes:', analysis?.stakeholder_intelligence ? 'Available' : 'Not available');
+      console.log('Stakeholder intelligence themes:', stakeholderIntelligence ? 'Available' : 'Not available');
     }
 
     // Use enhanced themes if available, otherwise fall back to regular themes
@@ -230,7 +234,7 @@ export default function VisualizationTabsRefactored({
     });
 
     return processedThemes;
-  }, [analysis?.themes, analysis?.enhanced_themes, analysis?.stakeholder_intelligence]);
+  }, [analysis?.themes, analysis?.enhanced_themes, stakeholderIntelligence]);
 
   // Handle tab change
   const handleTabChange = (newTab: string) => {
@@ -261,13 +265,13 @@ export default function VisualizationTabsRefactored({
   };
 
   // Check if this is multi-stakeholder analysis
-  const isMultiStakeholder = !!(analysis?.stakeholder_intelligence?.detected_stakeholders?.length);
-  const stakeholderCount = analysis?.stakeholder_intelligence?.detected_stakeholders?.length || 0;
+  const isMultiStakeholder = !!(stakeholderIntelligence?.detected_stakeholders?.length);
+  const stakeholderCount = stakeholderIntelligence?.detected_stakeholders?.length || 0;
 
   // Debug logging for stakeholder intelligence (temporarily enabled for production debugging)
   console.log('Analysis data keys:', analysis ? Object.keys(analysis) : 'No analysis');
-  console.log('Has stakeholder_intelligence:', !!analysis?.stakeholder_intelligence);
-  console.log('Stakeholder intelligence data:', analysis?.stakeholder_intelligence);
+  console.log('Has stakeholder_intelligence:', !!stakeholderIntelligence);
+  console.log('Stakeholder intelligence data:', stakeholderIntelligence);
   console.log('Is multi-stakeholder:', isMultiStakeholder);
   console.log('Environment variables:', {
     NEXT_PUBLIC_...=***REMOVED***
@@ -347,10 +351,10 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="themes" className="mt-6">
-                {analyzedThemes.length || analysis?.stakeholder_intelligence?.cross_stakeholder_patterns?.consensus_areas?.length ? (
+                {analyzedThemes.length || stakeholderIntelligence?.cross_stakeholder_patterns?.consensus_areas?.length ? (
                   <ThemeChart
                     themes={analyzedThemes}
-                    stakeholderIntelligence={analysis?.stakeholder_intelligence}
+                    stakeholderIntelligence={stakeholderIntelligence}
                   />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
@@ -369,10 +373,10 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="patterns" className="mt-6">
-                {analysis?.patterns?.length || analysis?.stakeholder_intelligence?.cross_stakeholder_patterns?.conflict_zones?.length || analysis?.stakeholder_intelligence?.cross_stakeholder_patterns?.influence_networks?.length ? (
+                {analysis?.patterns?.length || stakeholderIntelligence?.cross_stakeholder_patterns?.conflict_zones?.length || stakeholderIntelligence?.cross_stakeholder_patterns?.influence_networks?.length ? (
                   <PatternList
                     patterns={analysis.patterns || []}
-                    stakeholderIntelligence={analysis?.stakeholder_intelligence}
+                    stakeholderIntelligence={stakeholderIntelligence}
                   />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
@@ -393,10 +397,10 @@ export default function VisualizationTabsRefactored({
               }
             >
               <TabsContent value="personas" className="mt-6">
-                {analysis?.personas?.length || (isMultiStakeholder && analysis?.stakeholder_intelligence?.detected_stakeholders?.length) ? (
+                {analysis?.personas?.length || (isMultiStakeholder && stakeholderIntelligence?.detected_stakeholders?.length) ? (
                   <PersonasTabContent
                     personas={analysis.personas || []}
-                    stakeholderIntelligence={analysis?.stakeholder_intelligence}
+                    stakeholderIntelligence={stakeholderIntelligence}
                     isMultiStakeholder={isMultiStakeholder}
                   />
                 ) : (
@@ -479,9 +483,9 @@ export default function VisualizationTabsRefactored({
                 }
               >
                 <TabsContent value="stakeholder-dynamics" className="mt-6">
-                  {analysis?.stakeholder_intelligence ? (
+                  {stakeholderIntelligence ? (
                     <StakeholderDynamicsDisplay
-                      stakeholderIntelligence={analysis.stakeholder_intelligence}
+                      stakeholderIntelligence={stakeholderIntelligence}
                       analysisData={analysis}
                     />
                   ) : (
@@ -502,15 +506,16 @@ export default function VisualizationTabsRefactored({
             <h3 className="font-medium mb-2">Stakeholder Intelligence Debug</h3>
             <div className="space-y-2">
               <p><strong>Analysis Keys:</strong> {analysis ? Object.keys(analysis).join(', ') : 'No analysis'}</p>
-              <p><strong>Has stakeholder_intelligence:</strong> {!!analysis?.stakeholder_intelligence ? 'Yes' : 'No'}</p>
+              <p><strong>Has stakeholder_intelligence:</strong> {!!stakeholderIntelligence ? 'Yes' : 'No'}</p>
               <p><strong>Is Multi-Stakeholder:</strong> {isMultiStakeholder ? 'Yes' : 'No'}</p>
               <p><strong>Stakeholder Count:</strong> {stakeholderCount}</p>
+              <p><strong>Data Source:</strong> {analysis?.stakeholder_intelligence ? 'Dedicated Column' : analysis?.results?.stakeholder_intelligence ? 'Nested in Results' : 'None'}</p>
 
-              {analysis?.stakeholder_intelligence && (
+              {stakeholderIntelligence && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-sm font-medium">Stakeholder Intelligence Data</summary>
                   <pre className="text-xs p-2 bg-white rounded mt-2 overflow-auto max-h-64">
-                    {JSON.stringify(analysis.stakeholder_intelligence, null, 2)}
+                    {JSON.stringify(stakeholderIntelligence, null, 2)}
                   </pre>
                 </details>
               )}

@@ -1,14 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Grid, List, Network } from 'lucide-react';
 import { type Persona } from '@/types/api';
+import { EnhancedPersonaCard } from './EnhancedPersonaCard';
+import { PersonaRelationshipNetwork } from './PersonaRelationshipNetwork';
 
 type PersonaListProps = {
   personas: Persona[];
@@ -16,7 +20,7 @@ type PersonaListProps = {
 };
 
 export function PersonaList({ personas, className }: PersonaListProps) {
-  // No need to track active persona index as the Tabs component handles the active state
+  const [viewMode, setViewMode] = useState<'tabs' | 'cards' | 'network'>('cards');
 
   // Ensure we have valid personas data
   if (!personas || personas.length === 0) {
@@ -26,6 +30,9 @@ export function PersonaList({ personas, className }: PersonaListProps) {
       </div>
     );
   }
+
+  // Check if any personas have stakeholder intelligence features
+  const hasStakeholderFeatures = personas.some(persona => persona.stakeholder_intelligence);
 
   // We're using activePersonaIndex directly to access the active persona
   // No need to store it in a separate variable
@@ -316,29 +323,93 @@ export function PersonaList({ personas, className }: PersonaListProps) {
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader>
-        <CardTitle>User Personas</CardTitle>
-        <CardDescription>
-          {personas.length} persona{personas.length !== 1 ? 's' : ''} identified from the analysis
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>User Personas</CardTitle>
+            <CardDescription>
+              {hasStakeholderFeatures
+                ? `${personas.length} enhanced persona${personas.length !== 1 ? 's' : ''} with stakeholder intelligence`
+                : `${personas.length} persona${personas.length !== 1 ? 's' : ''} identified from the analysis`
+              }
+            </CardDescription>
+          </div>
+
+          {/* View Mode Controls */}
+          <div className="flex items-center space-x-2">
+            <div className="flex rounded-md border">
+              <Button
+                variant={viewMode === 'cards' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+                className="rounded-r-none"
+              >
+                <Grid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'tabs' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('tabs')}
+                className="rounded-none border-x"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              {hasStakeholderFeatures && (
+                <Button
+                  variant={viewMode === 'network' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('network')}
+                  className="rounded-l-none"
+                >
+                  <Network className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {hasStakeholderFeatures && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                Enhanced
+              </Badge>
+            )}
+          </div>
+        </div>
       </CardHeader>
 
       <CardContent>
-        <Tabs defaultValue={personas[0]?.name} className="w-full">
-          <TabsList className="mb-4 w-full flex overflow-x-auto">
+        {/* Network View - Show relationship network for enhanced personas */}
+        {viewMode === 'network' && hasStakeholderFeatures && (
+          <PersonaRelationshipNetwork personas={personas} />
+        )}
+
+        {/* Cards View - Show enhanced persona cards */}
+        {viewMode === 'cards' && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2">
             {personas.map((persona, index) => (
-              <TabsTrigger
-                key={`persona-tab-${index}`}
-                value={persona.name}
-                // TabsTrigger handles selection state automatically
-                className="flex items-center"
-              >
-                <Avatar className="h-6 w-6 mr-2">
-                  <AvatarFallback>{getInitials(persona.name)}</AvatarFallback>
-                </Avatar>
-                <span>{persona.name}</span>
-              </TabsTrigger>
+              <EnhancedPersonaCard
+                key={`persona-card-${index}`}
+                persona={persona}
+                showStakeholderFeatures={hasStakeholderFeatures}
+              />
             ))}
-          </TabsList>
+          </div>
+        )}
+
+        {/* Tabs View - Traditional tabbed interface */}
+        {viewMode === 'tabs' && (
+          <Tabs defaultValue={personas[0]?.name} className="w-full">
+            <TabsList className="mb-4 w-full flex overflow-x-auto">
+              {personas.map((persona, index) => (
+                <TabsTrigger
+                  key={`persona-tab-${index}`}
+                  value={persona.name}
+                  className="flex items-center"
+                >
+                  <Avatar className="h-6 w-6 mr-2">
+                    <AvatarFallback>{getInitials(persona.name)}</AvatarFallback>
+                  </Avatar>
+                  <span>{persona.name}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
           {personas.map((persona, index) => (
             <TabsContent key={`persona-content-${index}`} value={persona.name} className="space-y-4">
@@ -462,7 +533,8 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               )}
             </TabsContent>
           ))}
-        </Tabs>
+          </Tabs>
+        )}
       </CardContent>
     </Card>
   );

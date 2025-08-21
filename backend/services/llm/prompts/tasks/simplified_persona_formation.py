@@ -67,218 +67,150 @@ class SimplifiedPersonaFormationPrompts:
         Returns:
             System message string with industry-specific guidance
         """
-        return f"""
-CRITICAL INSTRUCTION: Your ENTIRE response MUST be a single, valid JSON object. DO NOT include ANY text, comments, or markdown formatting (like ```json) before or after the JSON.
+        return f"""You are an expert persona analyst specializing in creating detailed, authentic personas from interview content in the {industry.upper()} industry.
 
-You are an expert user researcher specializing in creating detailed personas from interview transcripts in the {industry.upper()} industry. Your task is to analyze the provided text from a {role.upper()} and create a comprehensive persona.
+TASK: Analyze the provided interview content and create a comprehensive SimplifiedPersona for the {role} with industry-specific insights.
 
 INDUSTRY CONTEXT: {industry.upper()}
-
 {industry_guidance}
 
-INTERVIEW TEXT (excerpt from {role.upper()}):
+INTERVIEW CONTENT:
 {text_sample}
 
-Extract the following details to build a rich, detailed persona specific to the {industry.upper()} industry:
+ANALYSIS APPROACH:
+1. Extract specific demographic details, professional background, and experience level
+2. Identify core goals, motivations, and what drives this person professionally
+3. Understand their main challenges, frustrations, and pain points
+4. Document their skills, expertise, and professional capabilities
+5. Note their technology usage patterns, tools, and preferences
+6. Capture their workflow style, work environment, and collaboration patterns
+7. Understand their needs, expectations, and what they value
+8. Extract 3-5 authentic quotes that represent their voice and concerns
+9. Apply {industry.upper()} industry-specific context and insights
 
-INSTRUCTIONS:
-1. Focus ONLY on the {role.upper()} in this transcript.
-2. Be specific and concrete - avoid generic descriptions.
-3. Include direct quotes and specific examples from the text.
-4. Be concise but comprehensive.
-5. Ensure all attributes reflect the specific context of the {industry.upper()} industry.
+QUALITY REQUIREMENTS:
+- Use specific, detailed information from the interview content
+- Avoid generic placeholders - extract real insights
+- Set confidence scores based on evidence strength (aim for 80-95% for clear evidence)
+- Ensure the persona feels like a real, authentic person
+- Include actual quotes, not paraphrases
+- Focus on the {role} specifically mentioned in the content
+- Apply {industry.upper()} industry context and terminology
 
-FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
+SIMPLIFIED PERSONA FORMAT:
+Generate a JSON object with these simple string fields (NOT nested objects):
 
 {{
-  "name": "A descriptive name for this {role}",
-  "description": "A brief overview of the persona",
-  "archetype": "A general category this persona falls into",
 
-  // TRAIT FIELDS: Most fields should be NESTED OBJECTS with "value", "confidence", and "evidence" fields
-  // The "value" field should contain the trait description (string)
-  // The "confidence" field should be a number between 0.0 and 1.0
-  // The "evidence" field should be a list of direct quotes (strings) from the transcript
-  // EXCEPTION: "key_quotes" and "patterns" have different structures (see below)
+  "name": "Descriptive persona name (e.g., 'Sarah, The Strategic {industry} Balancer')",
+  "description": "Brief persona overview summarizing key characteristics in {industry} context",
+  "archetype": "Persona category relevant to {industry} (e.g., '{industry}-Focused Strategist')",
 
-  "demographics": {
-    "value": "Age, experience level, etc. (if mentioned)",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "goals_and_motivations": {
-    "value": "Primary objectives and driving factors",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "skills_and_expertise": {
-    "value": "Technical and soft skills",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "workflow_and_environment": {
-    "value": "Work processes and context",
-    "confidence": 0.75,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "challenges_and_frustrations": {
-    "value": "Obstacles and sources of frustration",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "technology_and_tools": {
-    "value": "Software and hardware used",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
+  "demographics": "Age, background, experience level, location, {industry} industry details",
+  "goals_motivations": "What drives this person, their primary objectives and aspirations in {industry}",
+  "challenges_frustrations": "Specific challenges, obstacles, and sources of frustration in {industry}",
+  "skills_expertise": "Professional skills, competencies, areas of knowledge and {industry} expertise",
+  "technology_tools": "Technology usage patterns, specific tools used, tech relationship in {industry}",
+  "pain_points": "Specific problems and issues they experience regularly in {industry}",
+  "workflow_environment": "Work environment, workflow preferences, collaboration style in {industry}",
+  "needs_expectations": "What they need from solutions, products, or services and their expectations in {industry}",
 
-  "role_context": {
-    "value": "How this person functions in their {role} capacity",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "key_responsibilities": {
-    "value": "Main duties and responsibilities",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "tools_used": {
-    "value": "Specific tools or methods used",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "collaboration_style": {
-    "value": "How they work with others",
-    "confidence": 0.75,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "analysis_approach": {
-    "value": "How they approach problems/analysis",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
-  "pain_points": {
-    "value": "Specific challenges mentioned",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  },
+  "key_quotes": ["Quote 1 from interview", "Quote 2 from interview", "Quote 3 from interview"],
 
-  "key_quotes": {
-    "value": "Representative quotes that capture the persona's authentic voice",
-    "confidence": 0.95,
-    "evidence": ["Actual quote 1 from transcript", "Actual quote 2 from transcript", "Actual quote 3 from transcript", "Actual quote 4 from transcript", "Actual quote 5 from transcript"]
-  },
-
-  // "patterns" should be a DIRECT LIST of strings.
-  "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-
-  "overall_confidence_score": 0.85
+  "overall_confidence": 0.90,
+  "demographics_confidence": 0.85,
+  "goals_confidence": 0.90,
+  "challenges_confidence": 0.88,
+  "skills_confidence": 0.92,
+  "technology_confidence": 0.94,
+  "pain_points_confidence": 0.87
 }}
 
-IMPORTANT:
-- Include ONLY information that can be reasonably inferred from the text.
-- For any field where you don't have enough information, provide your best estimate and note the uncertainty.
-- The "key_quotes" field should contain a "value" that describes the quotes and an "evidence" array with actual direct quotes from the text that best represent the persona's perspective.
-- The "overall_confidence_score" should be a number between 0.0 and 1.0 reflecting your confidence in the accuracy of this persona.
-"""
+CRITICAL RULES:
+1. Use specific details from the interview content, never generic placeholders
+2. Extract real quotes for key_quotes field (3-5 actual quotes from the text)
+3. Set confidence scores based on evidence strength (0.8-0.95 for clear evidence)
+4. Make personas feel like real, specific people with authentic details
+5. Focus on creating rich, detailed content for each field
+6. All fields should be simple strings or arrays, NOT nested objects
+7. Apply {industry.upper()} industry-specific context throughout
+
+OUTPUT: Complete SimplifiedPersona JSON object with all fields populated using actual evidence from the interview content and {industry} industry context."""
 
     @staticmethod
     def standard_prompt(text_sample: str, role: str) -> str:
         """
         Get standard simplified persona formation prompt.
 
+        UPDATED: Now uses correct SimplifiedPersona format with simple string fields
+        instead of complex nested objects to match the SimplifiedPersona schema.
+
         Args:
             text_sample: Interview text sample
             role: Role of the person (Interviewer, Interviewee, Participant)
 
         Returns:
-            System message string
+            System message string optimized for SimplifiedPersona schema
         """
-        return f"""
-CRITICAL INSTRUCTION: Your ENTIRE response MUST be a single, valid JSON object. DO NOT include ANY text, comments, or markdown formatting (like ```json) before or after the JSON.
+        return f"""You are an expert persona analyst specializing in creating detailed, authentic personas from interview content.
 
-You are an expert user researcher specializing in creating detailed personas from interview transcripts. Your task is to analyze the provided text from a {role.upper()} and create a comprehensive persona.
+TASK: Analyze the provided interview content and create a comprehensive SimplifiedPersona for the {role}.
 
-INTERVIEW TEXT (excerpt from {role.upper()}):
+INTERVIEW CONTENT:
 {text_sample}
 
-Extract the following details to build a rich, detailed persona:
+ANALYSIS APPROACH:
+1. Extract specific demographic details, professional background, and experience level
+2. Identify core goals, motivations, and what drives this person professionally
+3. Understand their main challenges, frustrations, and pain points
+4. Document their skills, expertise, and professional capabilities
+5. Note their technology usage patterns, tools, and preferences
+6. Capture their workflow style, work environment, and collaboration patterns
+7. Understand their needs, expectations, and what they value
+8. Extract 3-5 authentic quotes that represent their voice and concerns
 
-INSTRUCTIONS:
-1. Focus ONLY on the {role.upper()} in this transcript.
-2. Be specific and concrete - avoid generic descriptions.
-3. Include direct quotes and specific examples from the text.
-4. Be concise but comprehensive.
+QUALITY REQUIREMENTS:
+- Use specific, detailed information from the interview content
+- Avoid generic placeholders - extract real insights
+- Set confidence scores based on evidence strength (aim for 80-95% for clear evidence)
+- Ensure the persona feels like a real, authentic person
+- Include actual quotes, not paraphrases
+- Focus on the {role} specifically mentioned in the content
 
-FORMAT YOUR RESPONSE AS A SINGLE JSON OBJECT with the following structure:
+SIMPLIFIED PERSONA FORMAT:
+Generate a JSON object with these simple string fields (NOT nested objects):
 
-{{{{
-  "name": "A descriptive name for this {role}",
-  "description": "A brief overview of the persona",
-  "archetype": "A general category this persona falls into",
+{{
+  "name": "Descriptive persona name (e.g., 'Sarah, The Strategic Balancer')",
+  "description": "Brief persona overview summarizing key characteristics",
+  "archetype": "Persona category (e.g., 'Product-Driven Strategist')",
 
-  // TRAIT FIELDS: Most fields should be NESTED OBJECTS with "value", "confidence", and "evidence" fields
-  // The "value" field should contain the trait description (string)
-  // The "confidence" field should be a number between 0.0 and 1.0
-  // The "evidence" field should be a list of direct quotes (strings) from the transcript
-  // EXCEPTION: "key_quotes" and "patterns" have different structures (see below)
+  "demographics": "Age, background, experience level, location, industry details",
+  "goals_motivations": "What drives this person, their primary objectives and aspirations",
+  "challenges_frustrations": "Specific challenges, obstacles, and sources of frustration",
+  "skills_expertise": "Professional skills, competencies, areas of knowledge and expertise",
+  "technology_tools": "Technology usage patterns, specific tools used, tech relationship",
+  "pain_points": "Specific problems and issues they experience regularly",
+  "workflow_environment": "Work environment, workflow preferences, collaboration style",
+  "needs_expectations": "What they need from solutions, products, or services and their expectations",
 
-  "demographics": {{
-    "value": "Age, experience level, role, responsibilities, and background (if mentioned)",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "goals_and_motivations": {{
-    "value": "Primary objectives, driving factors, needs, and desires",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "skills_and_expertise": {{
-    "value": "Technical and soft skills",
-    "confidence": 0.8,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "workflow_and_environment": {{
-    "value": "Work processes and context",
-    "confidence": 0.75,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "challenges_and_frustrations": {{
-    "value": "Systemic obstacles and ongoing sources of frustration",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "technology_and_tools": {{
-    "value": "Software, hardware, tools, and technology used including any mentioned AI/automation tools and attitudes towards technology",
-    "confidence": 0.85,
-    "evidence": ["Quote 1", "Quote 2", "Quote 3"]
-  }},
-  "collaboration_style": {{
-    "value": "How they work with others, approach problems, and handle analysis",
-    "confidence": 0.75,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
-  "pain_points": {{
-    "value": "Specific challenges mentioned",
-    "confidence": 0.9,
-    "evidence": ["Quote 1", "Quote 2"]
-  }},
+  "key_quotes": ["Quote 1 from interview", "Quote 2 from interview", "Quote 3 from interview"],
 
-  "key_quotes": {{
-    "value": "Representative quotes that capture the persona's authentic voice",
-    "confidence": 0.95,
-    "evidence": ["Actual quote 1 from transcript", "Actual quote 2 from transcript", "Actual quote 3 from transcript", "Actual quote 4 from transcript", "Actual quote 5 from transcript"]
-  }},
+  "overall_confidence": 0.90,
+  "demographics_confidence": 0.85,
+  "goals_confidence": 0.90,
+  "challenges_confidence": 0.88,
+  "skills_confidence": 0.92,
+  "technology_confidence": 0.94,
+  "pain_points_confidence": 0.87
+}}
 
-  // "patterns" should be a DIRECT LIST of strings.
-  "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
+CRITICAL RULES:
+1. Use specific details from the interview content, never generic placeholders
+2. Extract real quotes for key_quotes field (3-5 actual quotes from the text)
+3. Set confidence scores based on evidence strength (0.8-0.95 for clear evidence)
+4. Make personas feel like real, specific people with authentic details
+5. Focus on creating rich, detailed content for each field
+6. All fields should be simple strings or arrays, NOT nested objects
 
-  "overall_confidence_score": 0.85
-}}}}
-
-IMPORTANT:
-- Include ONLY information that can be reasonably inferred from the text.
-- For any field where you don't have enough information, provide your best estimate and note the uncertainty.
-- The "key_quotes" field should contain a "value" that describes the quotes and an "evidence" array with actual direct quotes from the text that best represent the persona's perspective.
-- The "overall_confidence_score" should be a number between 0.0 and 1.0 reflecting your confidence in the accuracy of this persona.
-"""
+OUTPUT: Complete SimplifiedPersona JSON object with all fields populated using actual evidence from the interview content."""

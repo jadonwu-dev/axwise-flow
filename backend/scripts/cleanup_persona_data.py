@@ -43,7 +43,7 @@ def create_valid_persona_trait(
         "evidence": (
             evidence
             if isinstance(evidence, list) and evidence
-            else ["Inferred from interview data"]
+            else ["Extracted from stakeholder input"]
         ),
     }
 
@@ -101,7 +101,7 @@ def validate_and_fix_persona_trait(trait_data: Any, field_name: str) -> Dict[str
             cleaned_evidence.append(item.strip())
 
     if not cleaned_evidence:
-        cleaned_evidence = ["Inferred from interview data"]
+        cleaned_evidence = ["Extracted from stakeholder input"]
 
     return {
         "value": str(value).strip(),

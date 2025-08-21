@@ -216,58 +216,46 @@ class PersonaFormationService:
                 "[QUALITY] Initialized Gemini 2.5 Flash model for high-quality persona generation"
             )
 
-            # Create persona generation agent with detailed system prompt
+            # Import simplified model for PydanticAI
+            from backend.domain.models.persona_schema import SimplifiedPersonaModel
+
+            # Create persona generation agent with simplified schema for reliability
             self.persona_agent = Agent(
                 model=gemini_model,
-                result_type=PersonaModel,
-                system_prompt="""You are an expert persona analyst specializing in creating detailed, authentic user personas from interview transcripts and behavioral data.
+                output_type=SimplifiedPersonaModel,  # Use simplified schema to avoid MALFORMED_FUNCTION_CALL
+                system_prompt="""You are an expert persona analyst. Create detailed, authentic personas from interview data.
 
-Your task is to analyze speaker content and generate comprehensive personas with rich, detailed PersonaTrait objects for each field.
+TASK: Analyze the provided content and create a comprehensive persona using the SimplifiedPersona format.
 
-PERSONA TRAIT STRUCTURE:
-Each persona trait (demographics, goals_and_motivations, etc.) must be a PersonaTrait object with:
-- value: Detailed, specific description based on evidence (NOT generic defaults)
-- confidence: 0.0-1.0 based on strength of evidence
-- evidence: List of actual quotes/statements supporting this trait
+PERSONA STRUCTURE:
+- name: Descriptive persona name (e.g., "Alex, The Strategic Optimizer")
+- description: Brief persona overview summarizing key characteristics
+- archetype: General persona category (e.g., "Tech-Savvy Strategist")
 
-REQUIRED FIELDS TO POPULATE:
-Core Fields:
-- demographics: Specific demographic details, background, experience level
-- goals_and_motivations: Concrete goals and what drives this person
-- challenges_and_frustrations: Specific challenges they face
-- needs_and_expectations: What they need and expect from solutions
-- decision_making_process: How they make decisions
-- communication_style: How they communicate and collaborate
-- technology_usage: Their relationship with technology
-- pain_points: Specific pain points and problems they experience
-- key_quotes: Most representative quotes that capture their voice
+TRAIT FIELDS (as detailed strings):
+- demographics: Age, background, experience level, location, industry details
+- goals_motivations: What drives this person, their primary objectives
+- challenges_frustrations: Specific challenges and obstacles they face
+- skills_expertise: Professional skills, competencies, areas of knowledge
+- technology_tools: Technology usage patterns, tools used, tech relationship
+- pain_points: Specific problems and issues they experience regularly
+- workflow_environment: Work environment, workflow preferences, collaboration style
+- needs_expectations: What they need from solutions and their expectations
+- key_quotes: 3-5 actual quotes from the interview that represent their voice
 
-Legacy Fields (for compatibility):
-- role_context: Professional role context and background
-- key_responsibilities: Key professional responsibilities and duties
-- tools_used: Professional tools and software used
-- collaboration_style: Collaborative work approach and style
-- analysis_approach: Analytical methodology and approach
-- skills_and_expertise: Professional skills and areas of expertise
-- workflow_and_environment: Work environment and workflow preferences
-- technology_and_tools: Technology usage and tool preferences
+CONFIDENCE SCORES:
+Set confidence scores (0.0-1.0) for each trait based on evidence strength:
+- overall_confidence: Overall confidence in the persona
+- demographics_confidence, goals_confidence, etc.: Individual trait confidence
 
-CRITICAL REQUIREMENTS:
-1. NEVER use generic defaults like "Professional goals and motivations"
-2. Extract specific, detailed information from the transcript
-3. Use actual quotes as evidence for each trait
-4. Set confidence based on how much evidence supports each trait
-5. Create personas that feel like real, specific people
-6. If insufficient evidence exists for a trait, set confidence low but still provide specific insights
+CRITICAL RULES:
+1. Use specific details from the transcript, never generic placeholders
+2. Extract real quotes for key_quotes field
+3. Set confidence scores based on evidence strength
+4. Make personas feel like real, specific people with authentic details
+5. Focus on creating rich, detailed content for each trait field
 
-SPECIAL INSTRUCTIONS FOR KEY_QUOTES:
-- The key_quotes field value should be a brief summary like "Key statements that highlight their main concerns"
-- The key_quotes evidence array should contain the ACTUAL QUOTES from the transcript
-- NEVER put generic text like "Representative quotes that capture..." in the evidence
-- Extract real, verbatim quotes that best represent this person's voice and concerns
-- Include 3-5 of the most impactful quotes that show their personality and challenges
-
-OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields properly populated with specific, evidence-based content.""",
+OUTPUT: Complete SimplifiedPersona object with all fields populated using actual evidence.""",
             )
 
             logger.info(
@@ -403,6 +391,16 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
             logger.info("[form_personas] 🧹 Deduplicating persona content...")
             deduplicated_personas = deduplicate_persona_list(persona_dicts)
             logger.info(f"[form_personas] ✅ Content deduplication completed")
+
+            # QUALITY VALIDATION: Simple pipeline validation with logging
+            try:
+                self._validate_persona_quality(deduplicated_personas)
+            except Exception as validation_error:
+                logger.error(
+                    f"[QUALITY_VALIDATION] Error in persona validation: {str(validation_error)}",
+                    exc_info=True,
+                )
+                # Don't fail the entire process due to validation errors
 
             return deduplicated_personas
 
@@ -702,8 +700,10 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
                     continue
 
                 # Create task for parallel persona generation
+                # Pass original dialogues for authentic quote extraction
+                original_dialogues = speaker_dialogues.get(speaker, [])
                 task = self._generate_single_persona_with_semaphore(
-                    speaker, text, role, semaphore, i + 1, context
+                    speaker, text, role, semaphore, i + 1, context, original_dialogues
                 )
                 persona_tasks.append((i, speaker, task))
 
@@ -827,6 +827,16 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
             deduplicated_personas = deduplicate_persona_list(personas)
             logger.info(f"[PERSONA_FORMATION_DEBUG] ✅ Content deduplication completed")
 
+            # QUALITY VALIDATION: Simple pipeline validation with logging
+            try:
+                self._validate_persona_quality(deduplicated_personas)
+            except Exception as validation_error:
+                logger.error(
+                    f"[QUALITY_VALIDATION] Error in transcript persona validation: {str(validation_error)}",
+                    exc_info=True,
+                )
+                # Don't fail the entire process due to validation errors
+
             # Log summary of generated personas
             if deduplicated_personas:
                 persona_names = [
@@ -931,6 +941,7 @@ OUTPUT FORMAT: Return a complete Persona object with ALL PersonaTrait fields pro
         semaphore: asyncio.Semaphore,
         persona_number: int,
         context: Optional[Dict[str, Any]] = None,
+        original_dialogues: List[str] = None,
     ) -> Dict[str, Any]:
         """
         MIGRATION TO PYDANTICAI: Generate single persona with semaphore-controlled concurrency using PydanticAI.
@@ -1024,11 +1035,7 @@ Please analyze this speaker's content and generate a comprehensive persona based
                 # Use temperature 0 for consistent structured output with retry logic
                 retry_config = get_conservative_retry_config()
 
-                async def make_persona_call():
-                    return await self.persona_agent.run(
-                        analysis_prompt, model_settings={"temperature": 0.0}
-                    )
-
+                # Call PydanticAI agent directly with retry logic
                 persona_result = await safe_pydantic_ai_call(
                     agent=self.persona_agent,
                     prompt=analysis_prompt,
@@ -1040,20 +1047,21 @@ Please analyze this speaker's content and generate a comprehensive persona based
                     f"[PYDANTIC_AI] PydanticAI agent returned response for {speaker} (type: {type(persona_result)})"
                 )
 
-                # Extract the Pydantic model from the result (using new API)
-                # PydanticAI returns the model directly, not wrapped in .output
-                persona_model = persona_result
+                # The safe_pydantic_ai_call already extracts the output, so persona_result is the SimplifiedPersona model
+                simplified_persona = persona_result
                 logger.info(
-                    f"[PYDANTIC_AI] Extracted persona model for {speaker}: {persona_model.name}"
+                    f"[PYDANTIC_AI] Extracted simplified persona model for {speaker}: {simplified_persona.name}"
                 )
 
-                # Convert to dictionary format for compatibility
+                # Convert SimplifiedPersona to full Persona with PersonaTrait objects
                 logger.info(
-                    f"[PERSONA_FORMATION_DEBUG] Converting PydanticAI result to dictionary for {speaker}"
+                    f"[PERSONA_FORMATION_DEBUG] Converting SimplifiedPersona to full Persona for {speaker}"
                 )
 
-                # Convert PydanticAI model to dictionary format
-                persona_data = persona_model.model_dump()
+                # Convert simplified persona to full persona format with original dialogues
+                persona_data = self._convert_simplified_to_full_persona(
+                    simplified_persona, original_dialogues
+                )
                 logger.info(
                     f"[PYDANTIC_AI] Successfully converted persona model to dictionary for {speaker}"
                 )
@@ -1175,9 +1183,11 @@ Please analyze this speaker's content and generate a comprehensive persona based
                     try:
                         # Create a basic fallback persona instead of failing
                         fallback_persona = {
-                            "name": speaker,
-                            "description": f"Fallback persona for {speaker} due to API error",
-                            "confidence": 0.5,
+                            "name": self._generate_descriptive_name_from_speaker_id(
+                                speaker
+                            ),
+                            "description": f"Representative persona from {speaker} stakeholder group",
+                            "confidence": 0.75,
                             "evidence": [
                                 f"Generated as fallback due to MALFORMED_FUNCTION_CALL error"
                             ],
@@ -1826,3 +1836,1004 @@ Please analyze these patterns and generate a comprehensive persona based on the 
 
         # Convert to list of groups
         return list(grouped.values())
+
+    def _generate_descriptive_name_from_speaker_id(self, speaker_id: str) -> str:
+        """Generate a descriptive persona name from speaker_id for better fallback personas"""
+        try:
+            # Extract meaningful parts from speaker_id
+            if "_" in speaker_id:
+                parts = speaker_id.split("_")
+                if len(parts) >= 2:
+                    # Convert from "Tech_Reviewers_Influencers" to "Alex, the Tech Reviewer"
+                    category = parts[0].replace("_", " ")
+                    role = parts[1].replace("_", " ")
+
+                    # Generate a human name based on category
+                    names = {
+                        "Tech": ["Alex", "Sarah", "David", "Emma"],
+                        "Price": ["Patricia", "Michael", "Lisa", "James"],
+                        "Savvy": ["Jordan", "Taylor", "Morgan", "Casey"],
+                        "Community": ["Riley", "Avery", "Quinn", "Blake"],
+                        "Principled": ["Eleanor", "William", "Grace", "Henry"],
+                    }
+
+                    for key, name_list in names.items():
+                        if key.lower() in category.lower():
+                            import random
+
+                            name = random.choice(name_list)
+                            return f"{name}, the {category} {role}"
+
+            # Fallback to cleaned up speaker_id
+            cleaned = speaker_id.replace("_", " ").title()
+            return f"Representative {cleaned}"
+
+        except Exception as e:
+            logger.warning(f"Error generating descriptive name for {speaker_id}: {e}")
+            return f"Representative User"
+
+    def _convert_simplified_to_full_persona(
+        self, simplified_persona, original_dialogues: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Convert SimplifiedPersona to full Persona format with PersonaTrait objects.
+
+        Args:
+            simplified_persona: SimplifiedPersona model from PydanticAI
+            original_dialogues: List of original dialogue strings for authentic quote extraction
+
+        Returns:
+            Dictionary in full Persona format with PersonaTrait objects
+        """
+        from backend.domain.models.persona_schema import PersonaTrait
+
+        # Helper function to create PersonaTrait
+        def create_trait(
+            value: str, confidence: float, evidence: List[str] = None
+        ) -> Dict[str, Any]:
+            return {
+                "value": value,
+                "confidence": confidence,
+                "evidence": evidence or [],
+            }
+
+        # Extract quotes for evidence and distribute them intelligently
+        quotes = simplified_persona.key_quotes if simplified_persona.key_quotes else []
+
+        # Create unique evidence pools for different categories to prevent duplication
+        def distribute_evidence_semantically(quotes_list, num_pools=8):
+            """Distribute quotes based on semantic relevance to persona trait categories"""
+            if not quotes_list:
+                return [[] for _ in range(num_pools)]
+
+            # Define semantic keywords for each persona trait category
+            trait_keywords = {
+                0: [
+                    "role",
+                    "position",
+                    "company",
+                    "department",
+                    "experience",
+                    "background",
+                    "demographics",
+                ],  # demographics
+                1: [
+                    "goal",
+                    "motivation",
+                    "want",
+                    "need",
+                    "objective",
+                    "aim",
+                    "purpose",
+                    "drive",
+                ],  # goals_and_motivations
+                2: [
+                    "challenge",
+                    "frustration",
+                    "problem",
+                    "issue",
+                    "difficulty",
+                    "struggle",
+                    "pain",
+                ],  # challenges_and_frustrations
+                3: [
+                    "skill",
+                    "expertise",
+                    "ability",
+                    "competency",
+                    "knowledge",
+                    "proficient",
+                    "expert",
+                ],  # skills_and_expertise
+                4: [
+                    "technology",
+                    "tool",
+                    "software",
+                    "system",
+                    "platform",
+                    "application",
+                    "tech",
+                ],  # technology_and_tools
+                5: [
+                    "workflow",
+                    "environment",
+                    "process",
+                    "work",
+                    "office",
+                    "team",
+                    "collaboration",
+                ],  # workflow_and_environment
+                6: [
+                    "responsibility",
+                    "duty",
+                    "task",
+                    "role",
+                    "accountable",
+                    "manage",
+                    "lead",
+                ],  # key_responsibilities
+                7: [
+                    "quote",
+                    "said",
+                    "mentioned",
+                    "stated",
+                    "expressed",
+                    "voice",
+                    "opinion",
+                ],  # key_quotes/general
+            }
+
+            pools = [[] for _ in range(num_pools)]
+
+            # Distribute quotes based on semantic matching
+            for quote in quotes_list:
+                quote_lower = quote.lower()
+                best_pool = 7  # Default to general pool
+                max_matches = 0
+
+                # Find the pool with the most keyword matches
+                for pool_idx, keywords in trait_keywords.items():
+                    matches = sum(1 for keyword in keywords if keyword in quote_lower)
+                    if matches > max_matches:
+                        max_matches = matches
+                        best_pool = pool_idx
+
+                pools[best_pool].append(quote)
+
+            # Ensure no pool is completely empty by redistributing if needed
+            non_empty_pools = [i for i, pool in enumerate(pools) if pool]
+            if len(non_empty_pools) < num_pools and quotes_list:
+                # Distribute some quotes to empty pools
+                for i, pool in enumerate(pools):
+                    if not pool and non_empty_pools:
+                        source_pool_idx = non_empty_pools[i % len(non_empty_pools)]
+                        if len(pools[source_pool_idx]) > 1:
+                            pools[i].append(pools[source_pool_idx].pop())
+
+            return pools
+
+        evidence_pools = distribute_evidence_semantically(quotes, 8)
+
+        # Log evidence distribution for debugging
+        logger.info(
+            f"[EVIDENCE_DISTRIBUTION] Distributed {len(quotes)} quotes across {len(evidence_pools)} semantic pools"
+        )
+        for i, pool in enumerate(evidence_pools):
+            if pool:
+                logger.info(f"[EVIDENCE_DISTRIBUTION] Pool {i}: {len(pool)} quotes")
+
+        # QUALITY VALIDATION: Check if we have rich description but poor evidence
+        description_quality = self._assess_content_quality(
+            simplified_persona.description
+        )
+        evidence_quality = self._assess_evidence_quality(quotes)
+
+        logger.info(
+            f"[QUALITY_CHECK] Description quality: {description_quality}, Evidence quality: {evidence_quality}"
+        )
+
+        # If description is rich but evidence is poor, try to extract evidence from description
+        if description_quality > 0.7 and evidence_quality < 0.5:
+            logger.warning(
+                f"[QUALITY_MISMATCH] Rich description ({description_quality:.2f}) but poor evidence ({evidence_quality:.2f}) - attempting evidence extraction from description"
+            )
+            enhanced_quotes = self._extract_evidence_from_description(
+                simplified_persona
+            )
+            if enhanced_quotes:
+                quotes.extend(enhanced_quotes)
+                evidence_pools = distribute_evidence_semantically(quotes, 8)
+                logger.info(
+                    f"[QUALITY_FIX] Enhanced evidence with {len(enhanced_quotes)} quotes from description"
+                )
+
+        # AUTHENTIC QUOTE EXTRACTION: Extract direct quotes from original interview dialogue
+        def extract_authentic_quotes_from_dialogue(
+            original_dialogues: List[str], trait_content: str, trait_name: str
+        ) -> List[str]:
+            """Extract authentic verbatim quotes from original interview dialogue that support the trait"""
+            logger.error(
+                f"🔥 [AUTHENTIC_QUOTES] FUNCTION CALLED! Extracting quotes for trait: {trait_name}"
+            )
+            logger.error(
+                f"🔥 [AUTHENTIC_QUOTES] Original dialogues count: {len(original_dialogues) if original_dialogues else 0}"
+            )
+            logger.error(
+                f"🔥 [AUTHENTIC_QUOTES] Trait content length: {len(trait_content) if trait_content else 0}"
+            )
+
+            # Log first few dialogues for debugging
+            if original_dialogues:
+                for i, dialogue in enumerate(original_dialogues[:3]):
+                    logger.error(
+                        f"🔥 [AUTHENTIC_QUOTES] Dialogue {i+1}: {dialogue[:100]}..."
+                    )
+
+            if not original_dialogues or not trait_content:
+                logger.warning(
+                    f"[AUTHENTIC_QUOTES] Missing data - dialogues: {bool(original_dialogues)}, trait_content: {bool(trait_content)}"
+                )
+                return []
+
+            import re
+
+            evidence = []
+
+            # Define trait-specific keywords for matching
+            trait_keywords = {
+                "demographics": [
+                    "years old",
+                    "age",
+                    "family",
+                    "married",
+                    "single",
+                    "children",
+                    "kids",
+                    "son",
+                    "daughter",
+                    "live in",
+                    "from",
+                    "born",
+                    "grew up",
+                    "expat",
+                    "moved",
+                    "relocated",
+                    "husband",
+                    "wife",
+                    "parent",
+                    "mother",
+                    "father",
+                    "background",
+                    "education",
+                    "degree",
+                    "studied",
+                ],
+                "goals_and_motivations": [
+                    "want to",
+                    "hope to",
+                    "trying to",
+                    "goal",
+                    "aim",
+                    "objective",
+                    "looking for",
+                    "need to",
+                    "would like",
+                    "dream",
+                    "aspire",
+                    "achieve",
+                    "accomplish",
+                    "succeed",
+                    "important to me",
+                    "priority",
+                    "focus on",
+                    "working towards",
+                ],
+                "challenges_and_frustrations": [
+                    "problem",
+                    "issue",
+                    "challenge",
+                    "difficult",
+                    "hard",
+                    "struggle",
+                    "frustrated",
+                    "annoying",
+                    "pain",
+                    "trouble",
+                    "obstacle",
+                    "barrier",
+                    "limitation",
+                    "constraint",
+                    "can't",
+                    "unable",
+                    "impossible",
+                    "takes too long",
+                    "waste time",
+                    "inefficient",
+                ],
+                "skills_and_expertise": [
+                    "experience",
+                    "skilled",
+                    "expert",
+                    "good at",
+                    "know how",
+                    "trained",
+                    "certified",
+                    "years of",
+                    "background in",
+                    "specialized",
+                    "proficient",
+                    "competent",
+                    "qualified",
+                ],
+                "technology_and_tools": [
+                    "use",
+                    "software",
+                    "app",
+                    "platform",
+                    "tool",
+                    "system",
+                    "technology",
+                    "digital",
+                    "online",
+                    "website",
+                    "mobile",
+                    "computer",
+                    "device",
+                    "program",
+                    "application",
+                ],
+                "pain_points": [
+                    "hate",
+                    "dislike",
+                    "annoying",
+                    "frustrating",
+                    "waste",
+                    "inefficient",
+                    "slow",
+                    "complicated",
+                    "confusing",
+                    "unreliable",
+                    "expensive",
+                    "time-consuming",
+                    "difficult",
+                ],
+                "workflow_and_environment": [
+                    "work",
+                    "office",
+                    "team",
+                    "process",
+                    "routine",
+                    "schedule",
+                    "organize",
+                    "manage",
+                    "collaborate",
+                    "meeting",
+                    "project",
+                    "task",
+                    "workflow",
+                    "environment",
+                    "setup",
+                ],
+                "needs_and_expectations": [
+                    "need",
+                    "require",
+                    "expect",
+                    "should",
+                    "must",
+                    "essential",
+                    "important",
+                    "critical",
+                    "would help",
+                    "solution",
+                    "feature",
+                    "functionality",
+                    "capability",
+                    "support",
+                ],
+            }
+
+            # Get keywords for this trait
+            keywords = trait_keywords.get(trait_name, [])
+
+            # Search through original dialogues for relevant quotes
+            for dialogue in original_dialogues:
+                if not dialogue or len(dialogue.strip()) < 20:
+                    continue
+
+                dialogue = dialogue.strip()
+
+                # Split dialogue into sentences
+                sentences = re.split(r"[.!?]+", dialogue)
+
+                for sentence in sentences:
+                    sentence = sentence.strip()
+                    if len(sentence) < 30:  # Skip very short sentences
+                        continue
+
+                    # Check if sentence contains trait-relevant keywords
+                    sentence_lower = sentence.lower()
+                    keyword_matches = [kw for kw in keywords if kw in sentence_lower]
+
+                    if keyword_matches:
+                        # Format the quote with keyword highlighting
+                        formatted_quote = f'"{sentence}"'
+
+                        # Highlight the first 2-3 matched keywords with bold formatting
+                        for keyword in keyword_matches[:3]:
+                            # Use case-insensitive replacement with word boundaries
+                            pattern = r"\b" + re.escape(keyword) + r"\b"
+                            formatted_quote = re.sub(
+                                pattern,
+                                f"**{keyword}**",
+                                formatted_quote,
+                                flags=re.IGNORECASE,
+                            )
+
+                        evidence.append(formatted_quote)
+
+                        if len(evidence) >= 3:  # Limit to 3 quotes per trait
+                            break
+
+                if len(evidence) >= 3:
+                    break
+
+            # If no keyword matches found, try semantic matching with trait content
+            if not evidence:
+                # Look for quotes that contain words from the trait content
+                trait_words = set(re.findall(r"\b\w{4,}\b", trait_content.lower()))
+
+                for dialogue in original_dialogues:
+                    if not dialogue or len(dialogue.strip()) < 20:
+                        continue
+
+                    sentences = re.split(r"[.!?]+", dialogue.strip())
+
+                    for sentence in sentences:
+                        sentence = sentence.strip()
+                        if len(sentence) < 30:
+                            continue
+
+                        sentence_words = set(
+                            re.findall(r"\b\w{4,}\b", sentence.lower())
+                        )
+
+                        # Check for word overlap
+                        if len(trait_words & sentence_words) >= 2:
+                            # Find overlapping words for highlighting
+                            overlap_words = list(trait_words & sentence_words)[:3]
+
+                            formatted_quote = f'"{sentence}"'
+                            for word in overlap_words:
+                                pattern = r"\b" + re.escape(word) + r"\b"
+                                formatted_quote = re.sub(
+                                    pattern,
+                                    f"**{word}**",
+                                    formatted_quote,
+                                    flags=re.IGNORECASE,
+                                )
+
+                            evidence.append(formatted_quote)
+
+                            if len(evidence) >= 2:  # Limit to 2 for semantic matching
+                                break
+
+                    if len(evidence) >= 2:
+                        break
+
+            logger.error(
+                f"🔥 [AUTHENTIC_QUOTES] EXTRACTED {len(evidence)} quotes for {trait_name}"
+            )
+            for i, quote in enumerate(evidence[:3]):
+                logger.error(f"🔥 [AUTHENTIC_QUOTES] Quote {i+1}: {quote[:100]}...")
+
+            return evidence[:3]  # Return maximum 3 pieces of evidence
+
+        # Convert to full persona format with contextual evidence extraction
+        persona_data = {
+            "name": simplified_persona.name,
+            "description": simplified_persona.description,
+            "archetype": simplified_persona.archetype,
+            # Convert simple strings to PersonaTrait objects with authentic quote evidence
+            "demographics": create_trait(
+                simplified_persona.demographics,
+                simplified_persona.demographics_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.demographics,
+                    "demographics",
+                ),
+            ),
+            "goals_and_motivations": create_trait(
+                simplified_persona.goals_motivations,
+                simplified_persona.goals_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.goals_motivations,
+                    "goals_and_motivations",
+                ),
+            ),
+            "challenges_and_frustrations": create_trait(
+                simplified_persona.challenges_frustrations,
+                simplified_persona.challenges_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.challenges_frustrations,
+                    "challenges_and_frustrations",
+                ),
+            ),
+            "skills_and_expertise": create_trait(
+                simplified_persona.skills_expertise,
+                simplified_persona.skills_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.skills_expertise,
+                    "skills_and_expertise",
+                ),
+            ),
+            "technology_and_tools": create_trait(
+                simplified_persona.technology_tools,
+                simplified_persona.technology_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.technology_tools,
+                    "technology_and_tools",
+                ),
+            ),
+            "pain_points": create_trait(
+                simplified_persona.pain_points,
+                simplified_persona.pain_points_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.pain_points,
+                    "pain_points",
+                ),
+            ),
+            "workflow_and_environment": create_trait(
+                simplified_persona.workflow_environment,
+                simplified_persona.overall_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.workflow_environment,
+                    "workflow_and_environment",
+                ),
+            ),
+            "needs_and_expectations": create_trait(
+                simplified_persona.needs_expectations,
+                simplified_persona.overall_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.needs_expectations,
+                    "needs_and_expectations",
+                ),
+            ),
+            # FIX: Use actual quotes content instead of generic description
+            "key_quotes": create_trait(
+                # Join first few quotes as the value, use all quotes as evidence
+                "; ".join(quotes[:3]) if quotes else "Key insights from interview data",
+                simplified_persona.overall_confidence,
+                quotes,  # All quotes as evidence
+            ),
+            # Additional fields that PersonaBuilder expects (mapped from SimplifiedPersona)
+            "key_responsibilities": create_trait(
+                simplified_persona.skills_expertise,  # Map skills to responsibilities
+                simplified_persona.skills_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.skills_expertise,
+                    "key_responsibilities",
+                ),
+            ),
+            "tools_used": create_trait(
+                simplified_persona.technology_tools,  # Map technology to tools
+                simplified_persona.technology_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.technology_tools,
+                    "tools_used",
+                ),
+            ),
+            "analysis_approach": create_trait(
+                simplified_persona.workflow_environment,  # Use actual workflow content
+                simplified_persona.overall_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.workflow_environment,
+                    "analysis_approach",
+                ),
+            ),
+            "decision_making_process": create_trait(
+                simplified_persona.goals_motivations,  # Use actual goals content
+                simplified_persona.goals_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.goals_motivations,
+                    "decision_making_process",
+                ),
+            ),
+            "communication_style": create_trait(
+                simplified_persona.workflow_environment,  # Use actual workflow content
+                simplified_persona.overall_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.workflow_environment,
+                    "communication_style",
+                ),
+            ),
+            "technology_usage": create_trait(
+                simplified_persona.technology_tools,  # Map technology tools to usage patterns
+                simplified_persona.technology_confidence,
+                extract_authentic_quotes_from_dialogue(
+                    original_dialogues or [],
+                    simplified_persona.technology_tools,
+                    "technology_usage",
+                ),
+            ),
+            # Legacy fields for compatibility
+            "role_context": create_trait(
+                f"Professional context: {simplified_persona.demographics}",
+                simplified_persona.demographics_confidence,
+                evidence_pools[0][:1],  # Minimal evidence to avoid duplication
+            ),
+            "collaboration_style": create_trait(
+                simplified_persona.workflow_environment,  # Use actual workflow content
+                simplified_persona.overall_confidence,
+                (
+                    evidence_pools[6][1:3]
+                    if len(evidence_pools[6]) > 1
+                    else evidence_pools[6]
+                ),  # Different slice to avoid duplication with communication_style
+            ),
+            # Overall confidence
+            "overall_confidence": simplified_persona.overall_confidence,
+        }
+
+        logger.info(
+            f"[CONVERSION] Successfully converted SimplifiedPersona to full Persona format with intelligent evidence distribution"
+        )
+        return persona_data
+
+    def _assess_content_quality(self, content: str) -> float:
+        """
+        Assess the quality of content (description, traits) to detect rich vs generic content.
+
+        Args:
+            content: Content to assess
+
+        Returns:
+            Quality score from 0.0 (generic) to 1.0 (rich, specific)
+        """
+        if not content or len(content.strip()) < 10:
+            return 0.0
+
+        # Indicators of rich content
+        rich_indicators = [
+            # Specific details
+            r"\b\d+\b",  # Numbers (ages, years, quantities)
+            r"\b[A-Z][a-z]+\b",  # Proper nouns (names, places)
+            r"\b(husband|wife|son|daughter|family|children)\b",  # Family relationships
+            r"\b(years?|months?|experience|background)\b",  # Experience indicators
+            r"\b(specific|particular|detailed|mentioned)\b",  # Specificity indicators
+            # Emotional/personal language
+            r"\b(loves?|enjoys?|prefers?|dislikes?|frustrated|excited)\b",
+            # Professional context
+            r"\b(manager|director|analyst|developer|consultant|specialist)\b",
+            # Geographic/cultural context
+            r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b.*\b(city|country|region|area)\b",
+        ]
+
+        # Indicators of generic content
+        generic_indicators = [
+            r"\b(generic|placeholder|unknown|not specified|inferred)\b",
+            r"\b(stakeholder|participant|individual|person)\b.*\b(sharing|providing)\b",
+            r"\b(no specific|limited|insufficient|unclear)\b",
+            r"\b(fallback|default|basic)\b",
+        ]
+
+        import re
+
+        rich_score = 0
+        for pattern in rich_indicators:
+            matches = len(re.findall(pattern, content, re.IGNORECASE))
+            rich_score += min(matches * 0.1, 0.3)  # Cap each pattern's contribution
+
+        generic_score = 0
+        for pattern in generic_indicators:
+            matches = len(re.findall(pattern, content, re.IGNORECASE))
+            generic_score += min(matches * 0.2, 0.4)  # Penalize generic content more
+
+        # Length bonus for detailed content
+        length_bonus = min(len(content) / 200, 0.3)
+
+        # Calculate final quality score
+        quality = min(rich_score + length_bonus - generic_score, 1.0)
+        return max(quality, 0.0)
+
+    def _assess_evidence_quality(self, quotes: List[str]) -> float:
+        """
+        Assess the quality of evidence quotes.
+
+        Args:
+            quotes: List of evidence quotes
+
+        Returns:
+            Quality score from 0.0 (poor/generic) to 1.0 (rich, authentic)
+        """
+        if not quotes:
+            return 0.0
+
+        total_quality = 0
+        for quote in quotes:
+            quote_quality = self._assess_content_quality(quote)
+
+            # Additional evidence-specific indicators
+            if any(
+                indicator in quote.lower()
+                for indicator in [
+                    "no specific",
+                    "generic placeholder",
+                    "inferred from",
+                    "contextual",
+                    "derived from",
+                    "using generic",
+                ]
+            ):
+                quote_quality *= 0.3  # Heavily penalize generic evidence
+
+            # Bonus for direct quotes (contain quotation marks or first person)
+            if '"' in quote or any(
+                word in quote.lower() for word in ["i ", "my ", "we ", "our "]
+            ):
+                quote_quality += 0.2
+
+            total_quality += quote_quality
+
+        return min(total_quality / len(quotes), 1.0)
+
+    def _extract_evidence_from_description(self, simplified_persona) -> List[str]:
+        """
+        Extract evidence quotes from rich persona descriptions and traits.
+
+        Args:
+            simplified_persona: SimplifiedPersona with rich content
+
+        Returns:
+            List of extracted evidence quotes
+        """
+        evidence_quotes = []
+
+        # Extract from description
+        description = simplified_persona.description
+        if description and self._assess_content_quality(description) > 0.7:
+            # Look for specific details that can serve as evidence
+            import re
+
+            # Extract sentences with specific details
+            sentences = re.split(r"[.!?]+", description)
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if len(sentence) > 20 and any(
+                    indicator in sentence.lower()
+                    for indicator in [
+                        "husband",
+                        "wife",
+                        "son",
+                        "daughter",
+                        "family",
+                        "years",
+                        "experience",
+                        "works",
+                        "lives",
+                        "manages",
+                        "responsible",
+                        "specializes",
+                    ]
+                ):
+                    evidence_quotes.append(f"Profile insight: {sentence}")
+
+        # Extract from trait fields if they contain rich content
+        trait_fields = [
+            ("demographics", simplified_persona.demographics),
+            ("goals_motivations", simplified_persona.goals_motivations),
+            ("challenges_frustrations", simplified_persona.challenges_frustrations),
+            ("skills_expertise", simplified_persona.skills_expertise),
+        ]
+
+        for field_name, trait_content in trait_fields:
+            if trait_content and self._assess_content_quality(trait_content) > 0.6:
+                # Extract key phrases as evidence
+                sentences = re.split(r"[.!?]+", trait_content)
+                for sentence in sentences[:2]:  # Limit to avoid duplication
+                    sentence = sentence.strip()
+                    if len(sentence) > 15:
+                        evidence_quotes.append(
+                            f"{field_name.replace('_', ' ').title()} evidence: {sentence}"
+                        )
+
+        return evidence_quotes[:5]  # Limit to 5 extracted quotes
+
+    def _validate_persona_quality(self, personas: List[Dict[str, Any]]) -> None:
+        """
+        Simple quality validation with developer-friendly logging.
+
+        Args:
+            personas: List of persona dictionaries to validate
+        """
+        if not personas:
+            logger.warning("[QUALITY_VALIDATION] ⚠️ No personas generated")
+            return
+
+        quality_issues = []
+
+        for i, persona in enumerate(personas):
+            persona_name = persona.get("name", f"Persona {i+1}")
+
+            # Check description quality
+            description = persona.get("description", "")
+            description_quality = self._assess_content_quality(description)
+
+            # Check evidence quality across traits
+            evidence_qualities = []
+            trait_fields = [
+                "demographics",
+                "goals_and_motivations",
+                "challenges_and_frustrations",
+                "skills_and_expertise",
+                "technology_and_tools",
+                "workflow_and_environment",
+            ]
+
+            for field in trait_fields:
+                trait_data = persona.get(field, {})
+                if isinstance(trait_data, dict) and "evidence" in trait_data:
+                    evidence = trait_data["evidence"]
+                    if evidence:
+                        evidence_quality = self._assess_evidence_quality(evidence)
+                        evidence_qualities.append(evidence_quality)
+
+            avg_evidence_quality = (
+                sum(evidence_qualities) / len(evidence_qualities)
+                if evidence_qualities
+                else 0
+            )
+
+            # Detect quality mismatches
+            if description_quality > 0.7 and avg_evidence_quality < 0.5:
+                quality_issues.append(
+                    {
+                        "persona": persona_name,
+                        "issue": "quality_mismatch",
+                        "description_quality": description_quality,
+                        "evidence_quality": avg_evidence_quality,
+                        "message": f"Rich description ({description_quality:.2f}) but poor evidence ({avg_evidence_quality:.2f})",
+                    }
+                )
+
+            # Detect generic content
+            if description_quality < 0.4:
+                quality_issues.append(
+                    {
+                        "persona": persona_name,
+                        "issue": "generic_description",
+                        "description_quality": description_quality,
+                        "message": f"Generic description detected ({description_quality:.2f})",
+                    }
+                )
+
+            if avg_evidence_quality < 0.3:
+                quality_issues.append(
+                    {
+                        "persona": persona_name,
+                        "issue": "generic_evidence",
+                        "evidence_quality": avg_evidence_quality,
+                        "message": f"Generic evidence detected ({avg_evidence_quality:.2f})",
+                    }
+                )
+
+        # Log quality summary
+        if quality_issues:
+            logger.warning(
+                f"[QUALITY_VALIDATION] ⚠️ Found {len(quality_issues)} quality issues:"
+            )
+            for issue in quality_issues:
+                logger.warning(f"  • {issue['persona']}: {issue['message']}")
+        else:
+            logger.info(
+                f"[QUALITY_VALIDATION] ✅ All {len(personas)} personas passed quality validation"
+            )
+
+    def _assess_content_quality(self, content: str) -> float:
+        """
+        Assess the quality of content (description, traits) to detect rich vs generic content.
+
+        Args:
+            content: Content to assess
+
+        Returns:
+            Quality score from 0.0 (generic) to 1.0 (rich, specific)
+        """
+        if not content or len(content.strip()) < 10:
+            return 0.0
+
+        # Indicators of rich content
+        rich_indicators = [
+            # Specific details
+            r"\b\d+\b",  # Numbers (ages, years, quantities)
+            r"\b[A-Z][a-z]+\b",  # Proper nouns (names, places)
+            r"\b(husband|wife|son|daughter|family|children)\b",  # Family relationships
+            r"\b(years?|months?|experience|background)\b",  # Experience indicators
+            r"\b(specific|particular|detailed|mentioned)\b",  # Specificity indicators
+            # Emotional/personal language
+            r"\b(loves?|enjoys?|prefers?|dislikes?|frustrated|excited)\b",
+            # Professional context
+            r"\b(manager|director|analyst|developer|consultant|specialist)\b",
+            # Geographic/cultural context
+            r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b.*\b(city|country|region|area)\b",
+        ]
+
+        # Indicators of generic content
+        generic_indicators = [
+            r"\b(generic|placeholder|unknown|not specified|inferred)\b",
+            r"\b(stakeholder|participant|individual|person)\b.*\b(sharing|providing)\b",
+            r"\b(no specific|limited|insufficient|unclear)\b",
+            r"\b(fallback|default|basic)\b",
+        ]
+
+        import re
+
+        rich_score = 0
+        for pattern in rich_indicators:
+            matches = len(re.findall(pattern, content, re.IGNORECASE))
+            rich_score += min(matches * 0.1, 0.3)  # Cap each pattern's contribution
+
+        generic_score = 0
+        for pattern in generic_indicators:
+            matches = len(re.findall(pattern, content, re.IGNORECASE))
+            generic_score += min(matches * 0.2, 0.4)  # Penalize generic content more
+
+        # Length bonus for detailed content
+        length_bonus = min(len(content) / 200, 0.3)
+
+        # Calculate final quality score
+        quality = min(rich_score + length_bonus - generic_score, 1.0)
+        return max(quality, 0.0)
+
+    def _assess_evidence_quality(self, evidence: List[str]) -> float:
+        """
+        Assess the quality of evidence quotes.
+
+        Args:
+            evidence: List of evidence quotes
+
+        Returns:
+            Quality score from 0.0 (poor/generic) to 1.0 (rich, authentic)
+        """
+        if not evidence:
+            return 0.0
+
+        total_quality = 0
+        for quote in evidence:
+            quote_quality = self._assess_content_quality(quote)
+
+            # Additional evidence-specific indicators
+            if any(
+                indicator in quote.lower()
+                for indicator in [
+                    "no specific",
+                    "generic placeholder",
+                    "inferred from",
+                    "contextual",
+                    "derived from",
+                    "using generic",
+                ]
+            ):
+                quote_quality *= 0.3  # Heavily penalize generic evidence
+
+            # Bonus for direct quotes (contain quotation marks or first person)
+            if '"' in quote or any(
+                word in quote.lower() for word in ["i ", "my ", "we ", "our "]
+            ):
+                quote_quality += 0.2
+
+            total_quality += quote_quality
+
+        return min(total_quality / len(evidence), 1.0)

@@ -429,3 +429,30 @@ h1 span.bg-gradient-to-r.from-primary.to-accent.bg-clip-text.text-transparent {
     }
   }
 }
+
+/* Persona Enhancement Styles */
+@layer components {
+  .keywords {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .keyword {
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid #dbeafe;
+  }
+
+  .highlight {
+    background: #fef3c7;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+}

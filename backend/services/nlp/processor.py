@@ -204,11 +204,19 @@ class NLPProcessor:
         ]
 
     async def process_interview_data(
-        self, data: Dict[str, Any], llm_service, config=None, progress_callback=None
+        self,
+        data: Dict[str, Any],
+        llm_service,
+        config=None,
+        progress_callback=None,
+        analysis_id=None,
     ) -> Dict[str, Any]:
         """Process interview data to extract insights"""
         if config is None:
             config = {}
+
+        # Store analysis_id for quality tracking
+        self.current_analysis_id = analysis_id
 
         # Solution 1: Enable enhanced theme analysis by default
         use_enhanced_theme_analysis = config.get(
@@ -798,46 +806,19 @@ class NLPProcessor:
                 logger.info("Falling back to legacy LLM service for pattern extraction")
                 patterns_task = llm_service.analyze(pattern_payload)
 
-            # Update progress: Starting sentiment analysis
+            # PERFORMANCE OPTIMIZATION: Sentiment analysis disabled
+            # Sentiment analysis was never displayed to users (no sentiment tab in UI)
+            # Disabling to improve performance and reduce processing time
             await update_progress(
-                "SENTIMENT_ANALYSIS", 0.5, "Starting sentiment analysis"
+                "SENTIMENT_ANALYSIS",
+                0.5,
+                "Skipping sentiment analysis (disabled for performance)",
             )
 
-            # Create sentiment analysis payload with filename if available
-            sentiment_payload = {
-                "task": "sentiment_analysis",
-                "text": self._preprocess_transcript_for_sentiment(combined_text),
-                "themes": themes_result.get("themes", []),
-                "industry": industry,
-            }
-
-            # Add filename to payload if available
-            if filename:
-                sentiment_payload["filename"] = filename
-                logger.info(
-                    f"Adding filename to sentiment analysis payload: {filename}"
-                )
-
-            # Pass themes to sentiment analysis to leverage their statements if needed
-            # Add timeout protection for large sentiment analysis requests
-            try:
-                sentiment_task = asyncio.wait_for(
-                    llm_service.analyze(sentiment_payload),
-                    timeout=300,  # 5 minutes timeout
-                )
-            except asyncio.TimeoutError:
-                logger.error(
-                    "Sentiment analysis timed out after 5 minutes, using fallback"
-                )
-                # Create a fallback sentiment result
-                sentiment_task = asyncio.create_task(
-                    self._create_fallback_sentiment_result(combined_text)
-                )
-            except Exception as e:
-                logger.error(f"Sentiment analysis failed: {str(e)}, using fallback")
-                sentiment_task = asyncio.create_task(
-                    self._create_fallback_sentiment_result(combined_text)
-                )
+            # Create minimal sentiment result for schema compatibility
+            sentiment_task = asyncio.create_task(
+                self._create_minimal_sentiment_result()
+            )
 
             # Wait for remaining tasks to complete
             patterns_result, sentiment_result = await asyncio.gather(
@@ -862,14 +843,34 @@ class NLPProcessor:
             # Process and validate sentiment results before including them in the response
             # This ensures we only return high-quality sentiment data
             try:
-                processed_sentiment = self._process_sentiment_results(sentiment_result)
-                logger.info(
-                    f"Processed sentiment results: positive={len(processed_sentiment.get('positive', []))}, neutral={len(processed_sentiment.get('neutral', []))}, negative={len(processed_sentiment.get('negative', []))}"
-                )
+                # Check if sentiment analysis was disabled
+                if sentiment_result.get("disabled", False):
+                    logger.info(
+                        "Sentiment analysis was disabled, using minimal sentiment data"
+                    )
+                    processed_sentiment = []
+                    # Store the minimal sentiment overview for schema compatibility
+                    sentiment_overview = sentiment_result.get(
+                        "sentiment_overview",
+                        {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
+                    )
+                else:
+                    processed_sentiment = self._process_sentiment_results(
+                        sentiment_result
+                    )
+                    logger.info(
+                        f"Processed sentiment results: positive={len(processed_sentiment.get('positive', []))}, neutral={len(processed_sentiment.get('neutral', []))}, negative={len(processed_sentiment.get('negative', []))}"
+                    )
+                    sentiment_overview = None
             except Exception as e:
                 logger.error(f"Error processing sentiment results: {str(e)}")
                 # SCHEMA FIX: Use empty list instead of dictionary for schema compliance
                 processed_sentiment = []
+                sentiment_overview = {
+                    "positive": 0.33,
+                    "neutral": 0.34,
+                    "negative": 0.33,
+                }
                 logger.warning("Using empty sentiment list due to processing error")
 
             # Be more resilient to partial failures - continue if at least some core results are present
@@ -1064,6 +1065,10 @@ class NLPProcessor:
                 "original_text": combined_text,  # Store original text for later use
                 "industry": industry,  # Add detected industry to the result
             }
+
+            # Add sentiment overview if available (for disabled sentiment analysis)
+            if sentiment_overview:
+                results["sentimentOverview"] = sentiment_overview
 
             logger.info(
                 f"Final results contain {len(results['themes'])} themes and {len(results['patterns'])} patterns"
@@ -1323,130 +1328,171 @@ class NLPProcessor:
                 "PERSONA_FORMATION", 0.9, "Starting persona formation"
             )
 
-            # Generate personas from the text
-            logger.info("Generating personas from interview text")
-
-            try:
-                # Generate personas using PydanticAI (migrated from Instructor)
-                logger.info("Generating personas using PydanticAI")
-
-                # Get the raw text from the original source if available
-                raw_text = results.get("original_text", combined_text)
-
-                # Call PydanticAI for persona formation (migrated from Instructor)
-                logger.info(
-                    f"Calling PydanticAI for persona formation with {len(raw_text[:100])}... chars"
+            # UNIFIED PERSONA FIX: Check if enhanced personas already exist
+            existing_personas = results.get("personas", [])
+            if existing_personas and len(existing_personas) > 0:
+                # Check if personas have stakeholder intelligence features (enhanced personas)
+                has_stakeholder_features = any(
+                    p.get("stakeholder_intelligence") is not None
+                    for p in existing_personas
                 )
 
-                # Import the persona formation service that uses PydanticAI
-                from backend.services.processing.persona_formation_service import (
-                    PersonaFormationService,
-                )
-
-                # Create a minimal config for the persona service
-                class MinimalConfig:
-                    def __init__(self):
-                        self.validation = type(
-                            "obj", (object,), {"min_confidence": 0.4}
-                        )
-                        self.llm = type("obj", (object,), {"api_key": None})
-
-                # Create persona service with proper constructor
-                config = MinimalConfig()
-                persona_service = PersonaFormationService(config, llm_service)
-
-                # Use the PydanticAI approach for persona formation (migrated from Instructor)
-                personas_list = await persona_service.generate_persona_from_text(
-                    text=raw_text,
-                    context={"industry": results.get("industry", "general")},
-                )
-
-                # FIX 4: Use ALL personas from the list, not just the first one
-                # PersonaFormationService.generate_persona_from_text returns a list of persona dicts
-                if personas_list and isinstance(personas_list, list):
-                    personas = personas_list  # Use the entire list of personas
+                if has_stakeholder_features:
                     logger.info(
-                        f"Successfully generated {len(personas)} personas using PydanticAI: {[p.get('name', 'Unnamed') for p in personas]}"
+                        f"[UNIFIED_PERSONA_FIX] Skipping duplicate persona generation - {len(existing_personas)} enhanced personas already exist"
+                    )
+                    logger.info(
+                        f"[UNIFIED_PERSONA_FIX] Enhanced persona names: {[p.get('name', 'Unnamed') for p in existing_personas]}"
                     )
                 else:
-                    logger.warning(
-                        f"Unexpected personas_list result: {type(personas_list)} with value {personas_list}"
+                    logger.info(
+                        f"[UNIFIED_PERSONA_FIX] Skipping duplicate persona generation - {len(existing_personas)} personas already exist"
                     )
-                    personas = []
+                    logger.info(
+                        f"[UNIFIED_PERSONA_FIX] Existing persona names: {[p.get('name', 'Unnamed') for p in existing_personas]}"
+                    )
 
-                # Validate personas
-                if personas and isinstance(personas, list) and len(personas) > 0:
-                    # Log success and add personas to results
-                    logger.info(f"Successfully generated {len(personas)} personas")
-
-                    # Check structure of first persona
-                    first_persona = personas[0]
-                    if isinstance(first_persona, dict):
-                        logger.info(f"First persona keys: {list(first_persona.keys())}")
-
-                        # Make sure it has the required fields
-                        required_fields = [
-                            "name",
-                            "description",
-                            "role_context",
-                            "key_responsibilities",
-                            "tools_used",
-                            "collaboration_style",
-                            "analysis_approach",
-                            "pain_points",
-                        ]
-                        missing_fields = [
-                            field
-                            for field in required_fields
-                            if field not in first_persona
-                        ]
-                        if missing_fields:
-                            logger.warning(
-                                f"Persona missing required fields: {missing_fields}"
-                            )
-                            # Fill in missing fields
-                            for field in missing_fields:
-                                first_persona[field] = {
-                                    "value": f"Unknown {field.replace('_', ' ')}",
-                                    "confidence": 0.5,
-                                    "evidence": [
-                                        "Generated as fallback due to missing field"
-                                    ],
-                                }
-                    else:
-                        logger.warning(
-                            f"First persona is not a dictionary: {type(first_persona)}"
-                        )
-                else:
-                    logger.warning("Generated personas list is empty or invalid")
-                    personas = []
-
-                # Add personas to results
-                results["personas"] = personas
-                logger.info(f"Added {len(personas)} personas to analysis results")
-
-                # Update progress after persona processing
-                await update_progress(
-                    "PERSONA_FORMATION", 0.95, f"Generated {len(personas)} personas"
-                )
-            except Exception as persona_err:
-                # Log the error but continue processing
-                logger.error(f"Error generating personas: {str(persona_err)}")
-
-                # Add empty personas list to results
-                results["personas"] = []
-
-                # Log a message about trying again with a different approach
-                logger.info(
-                    "Consider trying persona generation with a different prompt or more context"
-                )
-
-                # Update progress with error information
+                # Update progress and skip persona generation
                 await update_progress(
                     "PERSONA_FORMATION",
                     0.95,
-                    "Error generating personas, continuing with empty personas",
+                    f"Using existing {len(existing_personas)} personas with stakeholder intelligence",
                 )
+            else:
+                # Generate personas from the text
+                logger.info("Generating personas from interview text")
+
+                try:
+                    # Generate personas using PydanticAI (migrated from Instructor)
+                    logger.info("Generating personas using PydanticAI")
+
+                    # Get the raw text from the original source if available
+                    raw_text = results.get("original_text", combined_text)
+
+                    # Call PydanticAI for persona formation (migrated from Instructor)
+                    logger.info(
+                        f"Calling PydanticAI for persona formation with {len(raw_text[:100])}... chars"
+                    )
+
+                    # Import the enhanced persona formation service
+                    from backend.services.processing.persona_formation_service import (
+                        PersonaFormationService,
+                    )
+
+                    # Create a minimal config for the persona service
+                    class MinimalConfig:
+                        def __init__(self):
+                            self.validation = type(
+                                "obj", (object,), {"min_confidence": 0.4}
+                            )
+                            self.llm = type("obj", (object,), {"api_key": None})
+
+                    # Create persona service with proper constructor
+                    config = MinimalConfig()
+                    persona_service = PersonaFormationService(config, llm_service)
+
+                    # ENHANCED PERSONA FORMATION: Use improved pipeline with built-in quality validation
+                    logger.info(
+                        "[PERSONA_PIPELINE] Using enhanced persona formation with quality validation"
+                    )
+
+                    # Use the enhanced persona service with built-in quality validation
+                    personas_list = await persona_service.generate_persona_from_text(
+                        text=raw_text,
+                        context={
+                            "industry": results.get("industry", "general"),
+                            "original_text": raw_text,
+                        },
+                    )
+
+                    # FIX 4: Use ALL personas from the list, not just the first one
+                    # PersonaFormationService.generate_persona_from_text returns a list of persona dicts
+                    if personas_list and isinstance(personas_list, list):
+                        personas = personas_list  # Use the entire list of personas
+                        logger.info(
+                            f"Successfully generated {len(personas)} personas using PydanticAI: {[p.get('name', 'Unnamed') for p in personas]}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Unexpected personas_list result: {type(personas_list)} with value {personas_list}"
+                        )
+                        personas = []
+
+                    # Validate personas
+                    if personas and isinstance(personas, list) and len(personas) > 0:
+                        # Log success and add personas to results
+                        logger.info(f"Successfully generated {len(personas)} personas")
+
+                        # Check structure of first persona
+                        first_persona = personas[0]
+                        if isinstance(first_persona, dict):
+                            logger.info(
+                                f"First persona keys: {list(first_persona.keys())}"
+                            )
+
+                            # Make sure it has the required fields
+                            required_fields = [
+                                "name",
+                                "description",
+                                "role_context",
+                                "key_responsibilities",
+                                "tools_used",
+                                "collaboration_style",
+                                "analysis_approach",
+                                "pain_points",
+                            ]
+                            missing_fields = [
+                                field
+                                for field in required_fields
+                                if field not in first_persona
+                            ]
+                            if missing_fields:
+                                logger.warning(
+                                    f"Persona missing required fields: {missing_fields}"
+                                )
+                                # Fill in missing fields
+                                for field in missing_fields:
+                                    first_persona[field] = {
+                                        "value": f"Unknown {field.replace('_', ' ')}",
+                                        "confidence": 0.5,
+                                        "evidence": [
+                                            "Generated as fallback due to missing field"
+                                        ],
+                                    }
+                        else:
+                            logger.warning(
+                                f"First persona is not a dictionary: {type(first_persona)}"
+                            )
+                    else:
+                        logger.warning("Generated personas list is empty or invalid")
+                        personas = []
+
+                    # Add personas to results
+                    results["personas"] = personas
+                    logger.info(f"Added {len(personas)} personas to analysis results")
+
+                    # Update progress after persona processing
+                    await update_progress(
+                        "PERSONA_FORMATION", 0.95, f"Generated {len(personas)} personas"
+                    )
+                except Exception as persona_err:
+                    # Log the error but continue processing
+                    logger.error(f"Error generating personas: {str(persona_err)}")
+
+                    # Add empty personas list to results
+                    results["personas"] = []
+
+                    # Log a message about trying again with a different approach
+                    logger.info(
+                        "Consider trying persona generation with a different prompt or more context"
+                    )
+
+                    # Update progress with error information
+                    await update_progress(
+                        "PERSONA_FORMATION",
+                        0.95,
+                        "Error generating personas, continuing with empty personas",
+                    )
 
             # Final progress update
             await update_progress("COMPLETION", 1.0, "Analysis completed successfully")
@@ -2394,6 +2440,24 @@ class NLPProcessor:
                 )
 
         return sentiment_distribution
+
+    async def _create_minimal_sentiment_result(self) -> Dict[str, Any]:
+        """
+        Create a minimal sentiment result for schema compatibility when sentiment analysis is disabled.
+
+        Returns:
+            Dictionary containing minimal sentiment analysis results for schema compliance
+        """
+        logger.info("Creating minimal sentiment result (sentiment analysis disabled)")
+
+        # Return minimal sentiment data that satisfies the schema requirements
+        return {
+            "sentiment_overview": {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
+            "sentiment_details": [],
+            "sentiment_statements": {"positive": [], "neutral": [], "negative": []},
+            "disabled": True,
+            "analysis_method": "disabled_for_performance",
+        }
 
     async def _create_fallback_sentiment_result(self, text: str) -> Dict[str, Any]:
         """
