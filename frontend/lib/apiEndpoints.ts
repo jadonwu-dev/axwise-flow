@@ -13,7 +13,6 @@ export const API_ENDPOINTS = {
   LIST_ANALYSES: '/api/analyses',
 
   // Export
-  EXPORT_PDF: (resultId: number) => `/api/export/${resultId}/pdf`,
   EXPORT_MARKDOWN: (resultId: number) => `/api/export/${resultId}/markdown`,
 
   // PRD

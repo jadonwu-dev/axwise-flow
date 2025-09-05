@@ -27,9 +27,7 @@ import {
   getPriorityInsights,
   generateMockAnalyses,
   generateMockPersonas,
-  exportAnalysisPdf,
   exportAnalysisMarkdown,
-  getPdfExportUrl,
   getMarkdownExportUrl
 } from './api';
 
@@ -180,24 +178,10 @@ class ApiClient {
   }
 
   /**
-   * Export analysis results as PDF
-   */
-  async exportAnalysisPdf(analysisId: string) {
-    return exportAnalysisPdf(analysisId);
-  }
-
-  /**
    * Export analysis results as Markdown
    */
   async exportAnalysisMarkdown(analysisId: string) {
     return exportAnalysisMarkdown(analysisId);
-  }
-
-  /**
-   * Get the URL for exporting analysis results as PDF
-   */
-  getPdfExportUrl(analysisId: string) {
-    return getPdfExportUrl(analysisId);
   }
 
   /**
