@@ -34,7 +34,16 @@ DATABASE_URL=***REDACTED***
 
 # If DATABASE_URL is explicitly set to PostgreSQL, use it
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
-    logger.info(f"Using explicitly configured PostgreSQL database: {DATABASE_URL}")
+    try:
+        # Mask password if present
+        masked = DATABASE_URL
+        if "@" in DATABASE_URL and ":" in DATABASE_URL.split("@", 1)[0]:
+            creds, rest = DATABASE_URL.split("@", 1)
+            user = creds.split("//", 1)[-1].split(":", 1)[0]
+            masked = f"postgresql://{user}:***@{rest}"
+        logger.info(f"Using explicitly configured PostgreSQL database: {masked}")
+    except Exception:
+        logger.info("Using explicitly configured PostgreSQL database")
 # Otherwise, determine based on platform and credentials
 else:
     # On any platform, try to use PostgreSQL if credentials are provided

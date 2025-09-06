@@ -17,11 +17,10 @@ import {
   CheckCircle,
   ArrowRight,
   Network,
-  Target,
   Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Persona, InfluenceMetrics, PersonaRelationship, ConflictIndicator, ConsensusLevel } from '@/types/api';
+import type { Persona } from '@/types/api';
 import { extractKeywords, renderHighlightedText, renderMarkdownWithHighlighting, getKeywordsForRendering } from '@/utils/personaEnhancements';
 import { parseDemographics } from '@/utils/demographicsParser';
 
@@ -92,19 +91,21 @@ export function EnhancedPersonaCard({
     }
   };
 
-  // Get confidence color
-  const getConfidenceColor = (confidence: number) => {
+  // Normalize and color helpers
+  const clamp01 = (n: any): number => {
+    const x = typeof n === 'number' ? n : parseFloat(n);
+    if (Number.isFinite(x)) return Math.min(1, Math.max(0, x));
+    return 0; // safe default
+  };
+  const getConfidenceColor = (confidenceRaw: any) => {
+    const confidence = clamp01(confidenceRaw);
     if (confidence >= 0.8) return 'text-green-600 bg-green-50';
     if (confidence >= 0.6) return 'text-yellow-600 bg-yellow-50';
     return 'text-red-600 bg-red-50';
   };
+  const toPercent = (n: any): number => Math.round(clamp01(n) * 100);
 
-  // Get influence metric color
-  const getInfluenceColor = (score: number) => {
-    if (score >= 0.7) return 'bg-green-500';
-    if (score >= 0.4) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
+
 
   // Get relationship type info
   const getRelationshipTypeInfo = (type: string) => {
@@ -150,8 +151,8 @@ export function EnhancedPersonaCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge className={getConfidenceColor(persona.confidence)}>
-                    {Math.round(persona.confidence * 100)}%
+                  <Badge className={getConfidenceColor(persona.confidence ?? (persona as any).overall_confidence)}>
+                    {toPercent(persona.confidence ?? (persona as any).overall_confidence)}%
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -213,11 +214,11 @@ export function EnhancedPersonaCard({
                   </div>
                   <div className="flex items-center space-x-2">
                     <Progress
-                      value={stakeholderIntelligence.influence_metrics.decision_power * 100}
+                      value={toPercent(stakeholderIntelligence?.influence_metrics?.decision_power)}
                       className="w-16 h-2"
                     />
                     <span className="text-xs font-medium">
-                      {Math.round(stakeholderIntelligence.influence_metrics.decision_power * 100)}%
+                      {toPercent(stakeholderIntelligence?.influence_metrics?.decision_power)}%
                     </span>
                   </div>
                 </div>
@@ -229,11 +230,11 @@ export function EnhancedPersonaCard({
                   </div>
                   <div className="flex items-center space-x-2">
                     <Progress
-                      value={stakeholderIntelligence.influence_metrics.technical_influence * 100}
+                      value={toPercent(stakeholderIntelligence?.influence_metrics?.technical_influence)}
                       className="w-16 h-2"
                     />
                     <span className="text-xs font-medium">
-                      {Math.round(stakeholderIntelligence.influence_metrics.technical_influence * 100)}%
+                      {toPercent(stakeholderIntelligence?.influence_metrics?.technical_influence)}%
                     </span>
                   </div>
                 </div>
@@ -245,11 +246,11 @@ export function EnhancedPersonaCard({
                   </div>
                   <div className="flex items-center space-x-2">
                     <Progress
-                      value={stakeholderIntelligence.influence_metrics.budget_influence * 100}
+                      value={toPercent(stakeholderIntelligence?.influence_metrics?.budget_influence)}
                       className="w-16 h-2"
                     />
                     <span className="text-xs font-medium">
-                      {Math.round(stakeholderIntelligence.influence_metrics.budget_influence * 100)}%
+                      {toPercent(stakeholderIntelligence?.influence_metrics?.budget_influence)}%
                     </span>
                   </div>
                 </div>
@@ -397,10 +398,10 @@ export function EnhancedPersonaCard({
                   {renderKeywords(getTraitKeywords(persona.demographics, 'demographics'))}
                   <div className="flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">
-                      {Math.round(persona.demographics.confidence * 100)}% confidence
+                      {toPercent(persona?.demographics?.confidence)}% confidence
                     </Badge>
                     <span className="text-xs text-gray-500">
-                      {persona.demographics.evidence?.length || 0} evidence points
+                      {persona?.demographics?.evidence?.length || 0} evidence points
                     </span>
                   </div>
                   {persona.demographics.evidence && persona.demographics.evidence.length > 0 && (

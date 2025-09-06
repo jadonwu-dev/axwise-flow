@@ -34,7 +34,14 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
   // Always render ClerkProvider if we have a valid publishable key
   if (isClerkConfigured) {
     return (
-      <ClerkProvider {...clerkConfig}>
+      <ClerkProvider
+        publishableKey={clerkConfig.publishableKey}
+        domain={clerkConfig.domain}
+        signInUrl={clerkConfig.signInUrl}
+        signUpUrl={clerkConfig.signUpUrl}
+        fallbackRedirectUrl={clerkConfig.fallbackRedirectUrl}
+        appearance={clerkConfig.appearance}
+      >
         <AuthProvider>
           <ThemeProvider
             attribute="class"

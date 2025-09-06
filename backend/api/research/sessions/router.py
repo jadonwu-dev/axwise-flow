@@ -4,6 +4,9 @@ Provides CRUD endpoints for research sessions and questionnaire storage.
 """
 
 import logging
+import time
+import json
+from backend.utils.structured_logger import request_start, request_end, request_error
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
@@ -41,11 +44,12 @@ async def get_research_sessions(
     Returns a list of research sessions filtered by the authenticated user's ID.
     SECURITY: Only returns sessions belonging to the authenticated user.
     """
+    endpoint = "/api/research/sessions"
+    start = request_start(
+        endpoint, user_id=getattr(user, "user_id", None), session_id=None, limit=limit
+    )
+    http_status = 200
     try:
-        logger.info(
-            f"📋 Getting research sessions for user: {user.user_id} (limit: {limit})"
-        )
-
         service = ResearchSessionService(db)
 
         # SECURITY: Always filter by authenticated user - never return all sessions
@@ -54,7 +58,6 @@ async def get_research_sessions(
         # Convert to summary format
         session_summaries = []
         for session in sessions:
-            # Calculate derived fields
             message_count = len(session.messages) if session.messages else 0
 
             # Extract question and stakeholder counts from research_questions
@@ -64,7 +67,6 @@ async def get_research_sessions(
                 try:
                     questions_data = session.research_questions
                     if isinstance(questions_data, dict):
-                        # Count questions from different stakeholder types
                         for stakeholder_type in [
                             "primaryStakeholders",
                             "secondaryStakeholders",
@@ -107,21 +109,17 @@ async def get_research_sessions(
                         f"Error parsing research_questions for session {session.session_id}: {e}"
                     )
 
-            # Calculate last message timestamp
             last_message_at = None
             if session.messages and len(session.messages) > 0:
                 try:
-                    # Assume messages have timestamp field
                     last_message = session.messages[-1]
                     if isinstance(last_message, dict) and "timestamp" in last_message:
                         last_message_at = last_message["timestamp"]
                     else:
-                        # Fallback to updated_at
                         last_message_at = session.updated_at
                 except Exception:
                     last_message_at = session.updated_at
 
-            # Check if questionnaire has been exported
             questionnaire_exported = False
             try:
                 service = ResearchSessionService(db)
@@ -130,7 +128,6 @@ async def get_research_sessions(
             except Exception:
                 questionnaire_exported = False
 
-            # Create title from business idea
             title = (
                 session.business_idea[:50] + "..."
                 if session.business_idea and len(session.business_idea) > 50
@@ -138,7 +135,7 @@ async def get_research_sessions(
             )
 
             summary = ResearchSessionSummary(
-                id=session.session_id,  # Use session_id as id for frontend compatibility
+                id=session.session_id,
                 session_id=session.session_id,
                 title=title,
                 business_idea=session.business_idea,
@@ -157,17 +154,41 @@ async def get_research_sessions(
                 question_count=question_count,
                 stakeholder_count=stakeholder_count,
                 last_message_at=last_message_at,
-                messages=session.messages
-                or [],  # Include messages for frontend compatibility
-                research_questions=session.research_questions,  # Include research questions for frontend compatibility
+                messages=session.messages or [],
+                research_questions=session.research_questions,
             )
             session_summaries.append(summary)
 
-        logger.info(f"✅ Retrieved {len(session_summaries)} research sessions")
+        request_end(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=None,
+            http_status=http_status,
+            count=len(session_summaries),
+        )
         return session_summaries
 
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=None,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
+        raise
     except Exception as e:
-        logger.error(f"❌ Error getting research sessions: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=None,
+            http_status=http_status,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve research sessions: {str(e)}"
         )
@@ -179,18 +200,19 @@ async def get_research_session(
     db: Session = Depends(get_db),
 ) -> ResearchSessionResponse:
     """Get a specific research session by ID."""
+    endpoint = "/api/research/sessions/{session_id}"
+    start = request_start(endpoint, user_id=None, session_id=session_id)
+    http_status = 200
     try:
-        logger.info(f"📋 Getting research session: {session_id}")
-
         service = ResearchSessionService(db)
         session = service.get_session(session_id)
 
         if not session:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
-        # Convert to response format
         response = ResearchSessionResponse(
             id=session.id,
             session_id=session.session_id,
@@ -210,13 +232,35 @@ async def get_research_session(
             completed_at=session.completed_at,
         )
 
-        logger.info(f"✅ Retrieved research session: {session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=session.user_id,
+            session_id=session_id,
+            http_status=http_status,
+        )
         return response
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"❌ Error getting research session {session_id}: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve research session: {str(e)}"
         )
@@ -228,11 +272,10 @@ async def create_research_session(
     db: Session = Depends(get_db),
 ) -> ResearchSessionResponse:
     """Create a new research session with collision handling."""
+    endpoint = "/api/research/sessions (create)"
+    start = request_start(endpoint, user_id=None, session_id=session_data.session_id)
+    http_status = 200
     try:
-        logger.info(
-            f"📝 Creating new research session with ID: {session_data.session_id}"
-        )
-
         service = ResearchSessionService(db)
         session = service.create_session(session_data, session_data.session_id)
 
@@ -256,12 +299,17 @@ async def create_research_session(
             completed_at=session.completed_at,
         )
 
-        logger.info(f"✅ Created research session: {session.session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=session.user_id,
+            session_id=session.session_id,
+            http_status=http_status,
+        )
         return response
 
     except Exception as e:
-        logger.error(f"❌ Error creating research session: {str(e)}")
-
+        http_status = 500
         # Provide more specific error messages for common issues
         error_message = str(e)
         if "duplicate key value violates unique constraint" in error_message:
@@ -269,6 +317,14 @@ async def create_research_session(
         elif "Failed to create session after" in error_message:
             error_message = "Unable to generate unique session ID. Please try again."
 
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_data.session_id,
+            http_status=http_status,
+            error=error_message,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create research session: {error_message}",
@@ -282,18 +338,19 @@ async def update_research_session(
     db: Session = Depends(get_db),
 ) -> ResearchSessionResponse:
     """Update a research session."""
+    endpoint = "/api/research/sessions/{session_id} (update)"
+    start = request_start(endpoint, user_id=None, session_id=session_id)
+    http_status = 200
     try:
-        logger.info(f"📝 Updating research session: {session_id}")
-
         service = ResearchSessionService(db)
         session = service.update_session(session_id, update_data)
 
         if not session:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
-        # Convert to response format
         response = ResearchSessionResponse(
             id=session.id,
             session_id=session.session_id,
@@ -313,13 +370,35 @@ async def update_research_session(
             completed_at=session.completed_at,
         )
 
-        logger.info(f"✅ Updated research session: {session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=session.user_id,
+            session_id=session_id,
+            http_status=http_status,
+        )
         return response
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"❌ Error updating research session {session_id}: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to update research session: {str(e)}"
         )
@@ -331,27 +410,51 @@ async def delete_research_session(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Delete a research session."""
+    endpoint = "/api/research/sessions/{session_id} (delete)"
+    start = request_start(endpoint, user_id=None, session_id=session_id)
+    http_status = 200
     try:
-        logger.info(f"🗑️ Deleting research session: {session_id}")
-
         service = ResearchSessionService(db)
         success = service.delete_session(session_id)
 
         if not success:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
-        logger.info(f"✅ Deleted research session: {session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+        )
         return {
             "success": True,
             "message": f"Research session {session_id} deleted successfully",
         }
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"❌ Error deleting research session {session_id}: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to delete research session: {str(e)}"
         )
@@ -364,16 +467,22 @@ async def save_questionnaire(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Save generated questionnaire to a research session."""
+    endpoint = "/api/research/sessions/{session_id}/questionnaire (save)"
+    start = request_start(endpoint, user_id=None, session_id=session_id)
+    http_status = 200
     try:
-        logger.info(f"💾 Saving questionnaire for session: {session_id}")
-
         service = ResearchSessionService(db)
 
         # Check if session already has questionnaire to avoid unnecessary updates
         existing_session = service.get_session(session_id)
         if existing_session and existing_session.questions_generated:
-            logger.info(
-                f"⏭️ Session {session_id} already has questionnaire, skipping save"
+            request_end(
+                endpoint,
+                start,
+                user_id=existing_session.user_id,
+                session_id=session_id,
+                http_status=http_status,
+                skipped=True,
             )
             return {
                 "success": True,
@@ -385,11 +494,18 @@ async def save_questionnaire(
         session = service.complete_session(session_id, questionnaire_data)
 
         if not session:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
-        logger.info(f"✅ Questionnaire saved for session: {session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=session.user_id,
+            session_id=session_id,
+            http_status=http_status,
+        )
         return {
             "success": True,
             "message": "Questionnaire saved successfully",
@@ -397,11 +513,25 @@ async def save_questionnaire(
             "questions_generated": session.questions_generated,
         }
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(
-            f"❌ Error saving questionnaire for session {session_id}: {str(e)}"
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to save questionnaire: {str(e)}"
@@ -415,32 +545,37 @@ async def get_questionnaire(
     user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get the questionnaire for a research session."""
+    endpoint = "/api/research/sessions/{session_id}/questionnaire"
+    start = request_start(
+        endpoint, user_id=getattr(user, "user_id", None), session_id=session_id
+    )
+    http_status = 200
     try:
-        logger.info(f"📋 Getting questionnaire for session: {session_id}")
-
         service = ResearchSessionService(db)
         session = service.get_session(session_id)
 
         if not session:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
         # SECURITY: Verify user owns this session
         if session.user_id != user.user_id:
+            http_status = 403
             raise HTTPException(
                 status_code=403,
                 detail="Access denied: You can only access your own sessions",
             )
 
         if not session.questions_generated or not session.research_questions:
+            http_status = 404
             raise HTTPException(
                 status_code=404,
                 detail=f"No questionnaire found for session {session_id}",
             )
 
-        logger.info(f"✅ Retrieved questionnaire for session: {session_id}")
-        return {
+        response = {
             "success": True,
             "session_id": session_id,
             "questionnaire": session.research_questions,
@@ -449,11 +584,34 @@ async def get_questionnaire(
             ),
         }
 
-    except HTTPException:
+        request_end(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=session_id,
+            http_status=http_status,
+        )
+        return response
+
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(
-            f"❌ Error getting questionnaire for session {session_id}: {str(e)}"
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=getattr(user, "user_id", None),
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve questionnaire: {str(e)}"
@@ -467,34 +625,47 @@ async def export_questionnaire(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Export questionnaire in specified format."""
+    endpoint = "/api/research/sessions/{session_id}/export"
+    start = request_start(
+        endpoint,
+        user_id=None,
+        session_id=session_id,
+        export_type=export_request.get("type"),
+        export_format=export_request.get("format"),
+    )
+    http_status = 200
     try:
         export_type = export_request.get("type", "txt")
         export_format = export_request.get("format", "detailed")
-
-        logger.info(
-            f"📤 Exporting questionnaire for session: {session_id} as {export_type}"
-        )
 
         service = ResearchSessionService(db)
         session = service.get_session(session_id)
 
         if not session:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Research session {session_id} not found"
             )
 
         if not session.questions_generated or not session.research_questions:
+            http_status = 404
             raise HTTPException(
                 status_code=404,
                 detail=f"No questionnaire found for session {session_id}",
             )
 
-        # Create export record
         export_record = service.create_export(
             session_id=session_id, export_type=export_type, export_format=export_format
         )
 
-        logger.info(f"✅ Export record created for session: {session_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=session.user_id,
+            session_id=session_id,
+            http_status=http_status,
+            export_id=export_record.id,
+        )
         return {
             "success": True,
             "export_id": export_record.id,
@@ -504,11 +675,25 @@ async def export_questionnaire(
             "questionnaire": session.research_questions,
         }
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(
-            f"❌ Error exporting questionnaire for session {session_id}: {str(e)}"
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=None,
+            session_id=session_id,
+            http_status=http_status,
+            error=str(e),
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to export questionnaire: {str(e)}"

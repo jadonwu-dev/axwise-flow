@@ -1050,7 +1050,7 @@ export async function generateResearchQuestions(
  */
 export async function cleanupEmptySessions(): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/research/sessions?limit=100`);
+    const response = await fetch(`/api/research/sessions?limit=100`, { cache: 'no-store' });
     if (!response.ok) return;
 
     const sessions = await response.json();
@@ -1064,8 +1064,9 @@ export async function cleanupEmptySessions(): Promise<void> {
 
     for (const session of emptySessions) {
       try {
-        await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}`, {
-          method: 'DELETE'
+        await fetch(`/api/research/sessions/${session.session_id}`, {
+          method: 'DELETE',
+          cache: 'no-store'
         });
         console.log(`🗑️ Deleted empty session: ${session.session_id}`);
       } catch (error) {
@@ -1119,7 +1120,7 @@ export async function syncLocalSessionToDatabase(session: ResearchSession): Prom
     };
 
     // Try to create session with specific ID
-    let response = await fetch(`${API_BASE_URL}/api/research/sessions`, {
+    let response = await fetch(`/api/research/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sessionData)
@@ -1128,7 +1129,7 @@ export async function syncLocalSessionToDatabase(session: ResearchSession): Prom
     // If session already exists (500 error due to unique constraint), try to update it
     if (!response.ok && (response.status === 400 || response.status === 500)) {
       console.log(`🔄 Session ${session.session_id} already exists, updating instead...`);
-      response = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}`, {
+      response = await fetch(`/api/research/sessions/${session.session_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1149,7 +1150,7 @@ export async function syncLocalSessionToDatabase(session: ResearchSession): Prom
       // Only save questionnaire data if the session has one and it's not already saved
       if (questionnaireMessage?.metadata?.comprehensiveQuestions && session.questions_generated) {
         try {
-          const questionnaireResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`, {
+          const questionnaireResponse = await fetch(`/api/research/sessions/${session.session_id}/questionnaire`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(questionnaireMessage.metadata.comprehensiveQuestions)
@@ -1178,12 +1179,13 @@ export async function syncLocalSessionToDatabase(session: ResearchSession): Prom
  */
 export async function getResearchSessions(limit: number = 20, userId?: string): Promise<ResearchSession[]> {
   try {
-    // Try to fetch from backend first
-    const response = await fetch(`${API_BASE_URL}/api/research/sessions?limit=${limit}${userId ? `&user_id=${userId}` : ''}`, {
+    // Try to fetch from backend first via Next.js API proxy (attaches Clerk token)
+    const response = await fetch(`/api/research/sessions?limit=${limit}${userId ? `&user_id=${userId}` : ''}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      cache: 'no-store'
     });
 
     if (response.ok) {
@@ -1196,11 +1198,10 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
         let questionnaireData = session.research_questions;
 
         // If session has questionnaires but no research_questions data, fetch it separately
-        // Skip API calls for local sessions (they don't exist on backend)
-        if (session.questions_generated && !questionnaireData && !session.session_id.startsWith('local_')) {
+        if (session.questions_generated && !questionnaireData) {
           try {
             console.log(`🔄 Fetching questionnaire data for session ${session.session_id}`);
-            const questionnaireResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${session.session_id}/questionnaire`);
+            const questionnaireResponse = await fetch(`/api/research/sessions/${session.session_id}/questionnaire`, { cache: 'no-store' });
             if (questionnaireResponse.ok) {
               const questionnaireResult = await questionnaireResponse.json();
               questionnaireData = questionnaireResult.questionnaire;
@@ -1344,18 +1345,53 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
         console.log(`✅ Auto-restored ${restoredCount} sessions to localStorage`);
       }
 
-      // Prioritize local sessions - they may have questionnaire data that backend doesn't have
-      const mergedSessions = [...localSessions];
+      // Merge sessions with precedence for the most complete/advanced data
+      // 1) Start with local sessions as base
+      const mergedMap = new Map<string, ResearchSession>();
+      localSessions.forEach((s) => mergedMap.set(s.session_id, s));
 
-      // Add backend sessions that don't exist locally
-      convertedSessions.forEach(backendSession => {
-        const existsLocally = localSessions.some(local => local.session_id === backendSession.session_id);
-        if (!existsLocally) {
-          mergedSessions.push(backendSession);
+      // 2) Merge backend sessions: prefer backend when it reflects a more advanced state
+      convertedSessions.forEach((backendSession) => {
+        const existing = mergedMap.get(backendSession.session_id);
+        const backendHasQuestionnaire = !!backendSession.questions_generated || !!backendSession.completed_at;
+        const localHasQuestionnaire = !!existing?.questions_generated || !!existing?.completed_at;
+
+        if (!existing) {
+          mergedMap.set(backendSession.session_id, backendSession);
+          return;
+        }
+
+        // If backend is more advanced (questions generated or completed) and local is not, prefer backend
+        if (backendHasQuestionnaire && !localHasQuestionnaire) {
+          mergedMap.set(backendSession.session_id, backendSession);
+          // Opportunistic passive sync even on history page to avoid stale local state
+          try {
+            if (typeof window !== 'undefined') {
+              LocalResearchStorage.saveSession({ ...backendSession, isLocal: true });
+            }
+          } catch (e) {
+            console.warn('Passive sync to localStorage failed:', e);
+          }
+          return;
+        }
+
+        // If both have similar state, prefer the most recently updated
+        const backendUpdated = new Date(backendSession.updated_at).getTime();
+        const localUpdated = new Date(existing.updated_at).getTime();
+        if (backendUpdated > localUpdated) {
+          mergedMap.set(backendSession.session_id, backendSession);
         }
       });
 
-      const allSessions = mergedSessions;
+      // 3) Defensive: if questionnaire data exists but flag not set, set it for UI consistency
+      for (const [id, session] of Array.from(mergedMap.entries())) {
+        const hasQ = session.questions_generated || !!session.completed_at || session.messages?.some(m => m?.metadata?.comprehensiveQuestions);
+        if (hasQ && !session.questions_generated) {
+          mergedMap.set(id, { ...session, questions_generated: true });
+        }
+      }
+
+      const allSessions = Array.from(mergedMap.values());
 
       return allSessions
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
@@ -1380,25 +1416,27 @@ export async function getResearchSessions(limit: number = 20, userId?: string): 
  */
 export async function getResearchSession(sessionId: string): Promise<ResearchSession> {
   try {
-    // Try to fetch from backend first
-    const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}`, {
+    // Try to fetch from backend first via Next.js API proxy (attaches Clerk token)
+    const response = await fetch(`/api/research/sessions/${sessionId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      cache: 'no-store'
     });
 
     if (response.ok) {
       const backendSession = await response.json();
 
-      // Fetch messages separately
+      // Fetch messages separately (via proxy)
       let messages: Message[] = [];
       try {
-        const messagesResponse = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}/messages`, {
+        const messagesResponse = await fetch(`/api/research/sessions/${sessionId}/messages`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
+          cache: 'no-store'
         });
 
         if (messagesResponse.ok) {
@@ -1457,7 +1495,7 @@ export async function createResearchSession(sessionData: {
 }): Promise<ResearchSession> {
   try {
     // Try to create on backend first
-    const response = await fetch(`${API_BASE_URL}/api/research/sessions`, {
+    const response = await fetch(`/api/research/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1528,7 +1566,7 @@ export async function createResearchSession(sessionData: {
 export async function deleteResearchSession(sessionId: string): Promise<void> {
   try {
     // Try to delete from backend first
-    const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}`, {
+    const response = await fetch(`/api/research/sessions/${sessionId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

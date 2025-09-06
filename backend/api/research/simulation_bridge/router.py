@@ -4,6 +4,7 @@ FastAPI router for the Simulation Bridge system.
 
 import logging
 import os
+import time
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.responses import JSONResponse
@@ -27,6 +28,7 @@ from .services.file_processor import (
     FileProcessingRequest,
     FileProcessingResult,
 )
+from backend.utils.structured_logger import request_start, request_end, request_error
 from pydantic_ai.models.gemini import GeminiModel
 from backend.models import User
 from backend.services.external.auth_middleware import get_current_user
@@ -92,27 +94,27 @@ async def create_simulation(
     3. Formats the results for analysis pipeline
     4. Returns comprehensive simulation data
     """
+    endpoint = "/api/research/simulation-bridge/simulate"
+    start = request_start(endpoint, user_id=user.user_id)
+    http_status = 200
     try:
-        logger.info("Starting new simulation request")
-
         # Handle raw questionnaire content with PydanticAI parsing
         if request.raw_questionnaire_content:
-            logger.info("Processing raw questionnaire content with PydanticAI")
-            # Parse questionnaire using PydanticAI - delegate to orchestrator
             parsed_request = await orchestrator.parse_raw_questionnaire(
                 request.raw_questionnaire_content, request.config
             )
-            # Update request with parsed data
             request.questions_data = parsed_request.questions_data
             request.business_context = parsed_request.business_context
 
         # Validate request
         if not request.questions_data or not request.questions_data.stakeholders:
+            http_status = 400
             raise HTTPException(
                 status_code=400, detail="No stakeholders provided in questions data"
             )
 
         if not request.business_context or not request.business_context.business_idea:
+            http_status = 400
             raise HTTPException(
                 status_code=400, detail="Business idea is required for simulation"
             )
@@ -123,15 +125,32 @@ async def create_simulation(
         )
 
         if not response.success:
+            http_status = 500
             raise HTTPException(status_code=500, detail=response.message)
 
-        logger.info(f"Simulation completed successfully: {response.simulation_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            simulation_id=getattr(response, "simulation_id", None),
+        )
         return response
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"Simulation request failed: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint, start, user_id=user.user_id, http_status=http_status, error=str(e)
+        )
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
 
@@ -149,12 +168,12 @@ async def simulate_interviews_enhanced(
     3. Enhanced error handling and recovery
     4. Progress tracking with detailed metrics
     """
+    endpoint = "/api/research/simulation-bridge/simulate-enhanced"
+    start = request_start(endpoint, user_id=user.user_id)
+    http_status = 200
     try:
-        logger.info("Starting enhanced simulation request")
-
         # Handle raw questionnaire content with PydanticAI parsing
         if request.raw_questionnaire_content:
-            logger.info("Processing raw questionnaire content with PydanticAI")
             parsed_request = await orchestrator.parse_raw_questionnaire(
                 request.raw_questionnaire_content, request.config
             )
@@ -163,6 +182,7 @@ async def simulate_interviews_enhanced(
 
         # Validate required data
         if not request.questions_data or not request.business_context:
+            http_status = 400
             raise HTTPException(
                 status_code=400,
                 detail="Both questions_data and business_context are required",
@@ -171,13 +191,29 @@ async def simulate_interviews_enhanced(
         # Use enhanced simulation with persistence and parallel processing
         result = await orchestrator.simulate_with_persistence(request, user.user_id)
 
-        logger.info(f"Enhanced simulation completed: {result.simulation_id}")
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            simulation_id=getattr(result, "simulation_id", None),
+        )
         return result
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"Enhanced simulation failed: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint, start, user_id=user.user_id, http_status=http_status, error=str(e)
+        )
         raise HTTPException(
             status_code=500, detail=f"Enhanced simulation failed: {str(e)}"
         )
@@ -234,6 +270,11 @@ async def get_simulation_progress(
     """
     Get the progress of a running simulation.
     """
+    endpoint = "/api/research/simulation-bridge/simulate/{simulation_id}/progress"
+    start = request_start(
+        endpoint, user_id=user.user_id, session_id=None, simulation_id=simulation_id
+    )
+    http_status = 200
     try:
         # First verify the user owns this simulation
         from backend.infrastructure.persistence.unit_of_work import UnitOfWork
@@ -247,37 +288,32 @@ async def get_simulation_progress(
             db_simulation = await simulation_repo.get_by_simulation_id(simulation_id)
 
             if not db_simulation:
+                http_status = 404
                 raise HTTPException(status_code=404, detail="Simulation not found")
 
             # SECURITY: Always verify user owns this simulation - no bypasses
             if db_simulation.user_id != user.user_id:
-                logger.warning(
-                    f"Access denied: User {user.user_id} attempted to access simulation {simulation_id} owned by {db_simulation.user_id}"
-                )
+                http_status = 403
                 raise HTTPException(
                     status_code=403,
                     detail="Access denied: You can only access your own simulations",
                 )
 
-        # Get simulation progress with debug logging
-        logger.info(f"🔍 Checking progress for simulation: {simulation_id}")
-        logger.info(
-            f"📊 Active simulations count: {len(orchestrator.active_simulations)}"
-        )
-        logger.info(
-            f"🔑 Active simulation IDs: {list(orchestrator.active_simulations.keys())}"
-        )
-
         progress = orchestrator.get_simulation_progress(simulation_id)
 
         if not progress:
-            logger.warning(f"❌ Progress not found for simulation: {simulation_id}")
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail="Simulation not found or completed"
             )
 
-        logger.info(
-            f"✅ Found progress for simulation: {simulation_id} - {progress.progress_percentage}%"
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            simulation_id=simulation_id,
+            progress=progress.progress_percentage,
         )
 
         return {
@@ -782,12 +818,16 @@ async def analyze_simulation_conversational(
     This is the new conversational analysis endpoint that replaces complex orchestration
     with conversational workflows for improved performance and maintainability.
     """
+    endpoint = "/api/research/simulation-bridge/analyze-conversational/{simulation_id}"
+    start = request_start(
+        endpoint, user_id=user.user_id, session_id=None, simulation_id=simulation_id
+    )
+    http_status = 200
     try:
-        logger.info(f"Starting conversational analysis for simulation {simulation_id}")
-
         # Get simulation results first
         simulation_response = await get_completed_simulation(simulation_id)
         if not simulation_response:
+            http_status = 404
             raise HTTPException(
                 status_code=404,
                 detail=f"Simulation {simulation_id} not found or not completed",
@@ -799,19 +839,17 @@ async def analyze_simulation_conversational(
             hasattr(simulation_response, "interview_results")
             and simulation_response.interview_results
         ):
-            # Combine all interview results into single text
             for interview in simulation_response.interview_results:
                 simulation_text += f"\n\n--- Interview with {interview.get('persona_name', 'Unknown')} ---\n"
                 simulation_text += interview.get("dialogue", "")
 
         if not simulation_text.strip():
+            http_status = 400
             raise HTTPException(
                 status_code=400, detail="No interview data found in simulation results"
             )
 
-        # Process through conversational analysis
         file_processor = get_file_processor()
-
         processing_result = await file_processor.process_simulation_text_direct(
             simulation_text=simulation_text,
             simulation_id=simulation_id,
@@ -821,13 +859,20 @@ async def analyze_simulation_conversational(
         )
 
         if not processing_result.success:
+            http_status = 500
             raise HTTPException(
                 status_code=500,
                 detail=f"Conversational analysis failed: {processing_result.error_message}",
             )
 
-        logger.info(
-            f"Conversational analysis completed for simulation {simulation_id} in {processing_result.processing_time_seconds:.2f} seconds"
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            simulation_id=simulation_id,
+            analysis_id=processing_result.analysis_id,
+            processing_time_seconds=processing_result.processing_time_seconds,
         )
 
         return {
@@ -844,8 +889,7 @@ async def analyze_simulation_conversational(
                 else None
             ),
             "performance_metrics": {
-                "target_time_met": processing_result.processing_time_seconds
-                <= 420,  # 7 minutes
+                "target_time_met": processing_result.processing_time_seconds <= 420,
                 "processing_approach": "conversational_routine",
                 "efficiency_score": (
                     min(420 / processing_result.processing_time_seconds, 1.0)
@@ -855,11 +899,25 @@ async def analyze_simulation_conversational(
             },
         }
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+            simulation_id=simulation_id,
+        )
         raise
     except Exception as e:
-        logger.error(
-            f"Conversational analysis failed for simulation {simulation_id}: {str(e)}"
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            error=str(e),
+            simulation_id=simulation_id,
         )
         raise HTTPException(
             status_code=500, detail=f"Conversational analysis failed: {str(e)}"
@@ -880,6 +938,10 @@ async def analyze_file_conversational(
     try:
         logger.info(f"Starting conversational file analysis for {file_path}")
 
+        endpoint = "/api/research/simulation-bridge/analyze-file-conversational"
+        start = request_start(endpoint, user_id=user.user_id, file_path=file_path)
+        http_status = 200
+
         # Create processing request
         request = FileProcessingRequest(
             file_path=file_path,
@@ -894,13 +956,19 @@ async def analyze_file_conversational(
         processing_result = await file_processor.process_simulation_file(request)
 
         if not processing_result.success:
+            http_status = 500
             raise HTTPException(
                 status_code=500,
                 detail=f"File analysis failed: {processing_result.error_message}",
             )
 
-        logger.info(
-            f"File analysis completed for {file_path} in {processing_result.processing_time_seconds:.2f} seconds"
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            analysis_id=processing_result.analysis_id,
+            processing_time_seconds=processing_result.processing_time_seconds,
         )
 
         return {
@@ -950,9 +1018,19 @@ async def get_analysis_history(
     """
     Get analysis history for a user with pagination.
     """
+    endpoint = "/api/research/simulation-bridge/analysis-history/{user_id}"
+    start = request_start(
+        endpoint,
+        user_id=user.user_id,
+        session_id=None,
+        query_limit=limit,
+        query_offset=offset,
+    )
+    http_status = 200
     try:
         # Verify user can access this data
         if user.user_id != user_id:
+            http_status = 403
             raise HTTPException(
                 status_code=403,
                 detail="Access denied: Can only view your own analysis history",
@@ -961,16 +1039,33 @@ async def get_analysis_history(
         file_processor = get_file_processor()
         analyses = await file_processor.list_user_analyses(user_id, limit, offset)
 
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            count=len(analyses),
+        )
         return {
             "success": True,
             "analyses": analyses,
             "pagination": {"limit": limit, "offset": offset, "count": len(analyses)},
         }
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
         raise
     except Exception as e:
-        logger.error(f"Failed to get analysis history for user {user_id}: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint, start, user_id=user.user_id, http_status=http_status, error=str(e)
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to get analysis history: {str(e)}"
         )
@@ -983,6 +1078,11 @@ async def get_analysis_result(
     """
     Get specific analysis result by ID.
     """
+    endpoint = "/api/research/simulation-bridge/analysis/{analysis_id}"
+    start = request_start(
+        endpoint, user_id=user.user_id, session_id=None, analysis_id=analysis_id
+    )
+    http_status = 200
     try:
         file_processor = get_file_processor()
         analysis_result = await file_processor.get_analysis_from_database(
@@ -990,14 +1090,38 @@ async def get_analysis_result(
         )
 
         if not analysis_result:
+            http_status = 404
             raise HTTPException(
                 status_code=404, detail=f"Analysis {analysis_id} not found"
             )
 
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            analysis_id=analysis_id,
+        )
         return {"success": True, "analysis_result": analysis_result.model_dump()}
 
-    except HTTPException:
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+            analysis_id=analysis_id,
+        )
         raise
     except Exception as e:
-        logger.error(f"Failed to get analysis {analysis_id}: {str(e)}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            http_status=http_status,
+            error=str(e),
+            analysis_id=analysis_id,
+        )
         raise HTTPException(status_code=500, detail=f"Failed to get analysis: {str(e)}")

@@ -168,15 +168,25 @@ const renderDemographicsContent = (value: any): JSX.Element[] => {
   ));
 };
 
+// Helpers to guard against NaN/undefined
+const clamp01 = (n: any): number => {
+  const x = typeof n === 'number' ? n : parseFloat(n);
+  if (Number.isFinite(x)) return Math.min(1, Math.max(0, x));
+  return 0;
+};
+const toPercent = (n: any): number => Math.round(clamp01(n) * 100);
+
 // Get confidence color for badges - improved contrast
-const getConfidenceColor = (confidence: number) => {
+const getConfidenceColor = (confidenceRaw: any) => {
+  const confidence = clamp01(confidenceRaw);
   if (confidence >= 0.9) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
   if (confidence >= 0.7) return 'bg-amber-100 text-amber-800 border-amber-200';
   return 'bg-rose-100 text-rose-800 border-rose-200';
 };
 
 // Get trait card styling based on confidence
-const getTraitCardStyling = (confidence: number) => {
+const getTraitCardStyling = (confidenceRaw: any) => {
+  const confidence = clamp01(confidenceRaw);
   if (confidence >= 0.9) {
     return {
       border: 'border-emerald-200',
@@ -377,7 +387,7 @@ export const SimplePersonaCard: React.FC<SimplePersonaCardProps> = ({
           </div>
           <div className="text-right">
             <Badge variant="secondary" className={`text-xs ${getConfidenceColor(persona.overall_confidence)}`}>
-              {Math.round(persona.overall_confidence * 100)}%
+              {Math.round(clamp01(persona.overall_confidence) * 100)}%
             </Badge>
             <div className="text-xs text-gray-500 mt-1">
               {persona.trait_count} traits • {persona.evidence_count} evidence

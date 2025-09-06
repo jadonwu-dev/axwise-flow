@@ -22,7 +22,7 @@ import {
 const saveQuestionnaireToBackend = async (sessionId: string, questionnaireData: any): Promise<void> => {
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const response = await fetch(`${API_BASE_URL}/api/research/sessions/${sessionId}/questionnaire`, {
+  const response = await fetch(`/api/research/sessions/${sessionId}/questionnaire`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -495,6 +495,25 @@ export const loadSession = async (
       if (!sessionData) {
         console.error('Local session not found in localStorage:', sessionId);
         return;
+      }
+
+      // Defensive: If backend has a more advanced version of this local session, prefer it and sync locally
+      try {
+        const backendCandidate = await getResearchSession(sessionId);
+        const backendAdvanced = !!backendCandidate?.questions_generated || !!backendCandidate?.completed_at;
+        const localAdvanced = !!sessionData?.questions_generated || !!sessionData?.completed_at;
+        if (backendAdvanced && !localAdvanced) {
+          console.log('🔄 Upgrading local session from backend state (completed/questions present)');
+          sessionData = { ...backendCandidate, isLocal: true };
+          try {
+            LocalResearchStorage.saveSession(sessionData);
+            console.log('✅ Synced upgraded session to localStorage');
+          } catch (e) {
+            console.warn('Passive localStorage sync failed:', e);
+          }
+        }
+      } catch (e) {
+        console.log('Backend reconciliation skipped or failed (likely unauthenticated):', e?.message || e);
       }
     } else {
       // Load from backend API

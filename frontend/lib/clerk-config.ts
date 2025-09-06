@@ -45,8 +45,9 @@ export function getClerkProviderConfig() {
     domain: process.env.NEXT_PUBLIC_CLERK_DOMAIN,
     signInUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
     signUpUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-    afterSignInUrl: process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL || '/unified-dashboard',
-    afterSignUpUrl: process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL || '/unified-dashboard',
+    // Use Clerk v6 recommendations: fallbackRedirectUrl or forceRedirectUrl
+    fallbackRedirectUrl: process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL || '/unified-dashboard',
+    // forceRedirectUrl: '/unified-dashboard', // optional stronger redirect if desired,
     appearance: {
       baseTheme: undefined, // Use system theme
       variables: {

@@ -94,11 +94,16 @@ class ConversationRoutineService:
                     )
                 )
 
-                # Format for frontend - wrap stakeholder data in expected format
-                result = {"stakeholders": stakeholder_data}
+                # Format for frontend - use V3 format expected by ComprehensiveQuestionsComponent
+                result = {
+                    "primaryStakeholders": stakeholder_data.get("primary", []),
+                    "secondaryStakeholders": stakeholder_data.get("secondary", []),
+                    "timeEstimate": time_estimates,
+                }
                 logger.info(
                     f"✅ Generated questions for {len(stakeholder_data.get('primary', []))} primary + {len(stakeholder_data.get('secondary', []))} secondary stakeholders"
                 )
+                logger.info(f"🔍 Returning questions data: {list(result.keys())}")
                 return result
 
             except Exception as e:

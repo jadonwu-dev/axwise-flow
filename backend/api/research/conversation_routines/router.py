@@ -4,6 +4,8 @@ Implements the 2025 Conversation Routines framework endpoint
 """
 
 import logging
+import time
+from backend.utils.structured_logger import request_start, request_end, request_error
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
@@ -46,40 +48,60 @@ async def conversation_routine_chat(
     - Automatic user fatigue detection
     - Efficient stakeholder-based question generation
     """
+    endpoint = "/api/research/conversation-routines/chat"
+    start = request_start(
+        endpoint, user_id=user.user_id, session_id=getattr(request, "session_id", None)
+    )
+    http_status = 200
     try:
-        logger.info(f"🎯 Conversation Routines chat request: {request.input[:50]}...")
-
         # SECURITY: Override request user_id with authenticated user
         request.user_id = user.user_id
-        logger.info(f"🔐 Using authenticated user_id: {user.user_id}")
 
         # Process through conversation routine service
         response = await conversation_service.process_conversation(request)
 
-        # Debug logging for response
-        logger.info(f"🎯 API Response suggestions: {response.suggestions}")
-        logger.info(f"🎯 API Response content length: {len(response.content)}")
-        logger.info(
-            f"🎯 API Response should_generate_questions: {response.should_generate_questions}"
-        )
-
-        # Save conversation session synchronously for now (to debug background task issues)
-        logger.info(f"🔄 Attempting to save conversation session: {request.session_id}")
+        # Best-effort save (errors don’t fail main request)
         try:
             await save_conversation_session(request, response, db)
-            logger.info("✅ Conversation session saved successfully")
         except Exception as e:
-            logger.error(f"❌ Failed to save conversation session: {str(e)}")
-            import traceback
+            request_error(
+                endpoint,
+                start,
+                user_id=user.user_id,
+                session_id=getattr(request, "session_id", None),
+                http_status=200,
+                error=f"save_conversation_session: {str(e)}",
+            )
 
-            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
-            # Don't fail the main request if session saving fails
-
-        logger.info("✅ Conversation Routines chat completed successfully")
+        request_end(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            session_id=getattr(request, "session_id", None),
+            http_status=http_status,
+        )
         return response
 
+    except HTTPException as he:
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            session_id=getattr(request, "session_id", None),
+            http_status=getattr(he, "status_code", 500),
+            error=str(getattr(he, "detail", he)),
+        )
+        raise
     except Exception as e:
-        logger.error(f"🔴 Conversation Routines chat failed: {e}")
+        http_status = 500
+        request_error(
+            endpoint,
+            start,
+            user_id=user.user_id,
+            session_id=getattr(request, "session_id", None),
+            http_status=http_status,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Conversation service temporarily unavailable: {str(e)}",

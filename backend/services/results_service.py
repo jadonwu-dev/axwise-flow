@@ -121,6 +121,94 @@ class ResultsService:
                         f"Found {len(results_dict['personas'])} personas in results JSON"
                     )
 
+                    # Helper: compute influence metrics when missing or defaults
+                    def _compute_influence_metrics_for_persona(
+                        persona_dict: Dict[str, Any],
+                    ) -> Dict[str, float]:
+                        try:
+                            # Gather text for simple heuristic analysis (safe, no LLM)
+                            name = (persona_dict.get("name") or "").lower()
+                            description = (
+                                persona_dict.get("description") or ""
+                            ).lower()
+                            archetype = (persona_dict.get("archetype") or "").lower()
+                            demo_val = ""
+                            demo = persona_dict.get("demographics")
+                            if isinstance(demo, dict):
+                                demo_val = (demo.get("value") or "").lower()
+                            combined = f"{name} {description} {archetype} {demo_val}"
+
+                            # Defaults
+                            decision_power = 0.5
+                            technical_influence = 0.5
+                            budget_influence = 0.5
+
+                            # Keyword-based adjustments (subset of backend formation logic)
+                            decision_markers = [
+                                "manager",
+                                "director",
+                                "ceo",
+                                "owner",
+                                "executive",
+                                "leader",
+                                "decision maker",
+                                "authority",
+                                "supervisor",
+                                "head of",
+                                "chief",
+                            ]
+                            tech_markers = [
+                                "architect",
+                                "engineer",
+                                "technical",
+                                "it",
+                                "developer",
+                                "designer",
+                                "specialist",
+                                "technician",
+                            ]
+                            budget_markers = [
+                                "budget",
+                                "purchasing",
+                                "procurement",
+                                "finance",
+                                "cfo",
+                                "cost",
+                                "spending",
+                            ]
+                            influencer_markers = ["influencer", "advisor", "consultant"]
+
+                            if any(k in combined for k in decision_markers):
+                                decision_power = max(decision_power, 0.85)
+                                budget_influence = max(budget_influence, 0.8)
+                            if any(k in combined for k in tech_markers):
+                                technical_influence = max(technical_influence, 0.85)
+                                decision_power = max(decision_power, 0.6)
+                            if any(k in combined for k in budget_markers):
+                                budget_influence = max(budget_influence, 0.85)
+                                decision_power = max(decision_power, 0.7)
+                            if any(k in combined for k in influencer_markers):
+                                decision_power = max(decision_power, 0.6)
+
+                            # Clamp to [0,1]
+                            def clamp(x: float) -> float:
+                                try:
+                                    return max(0.0, min(1.0, float(x)))
+                                except Exception:
+                                    return 0.5
+
+                            return {
+                                "decision_power": clamp(decision_power),
+                                "technical_influence": clamp(technical_influence),
+                                "budget_influence": clamp(budget_influence),
+                            }
+                        except Exception as _:
+                            return {
+                                "decision_power": 0.5,
+                                "technical_influence": 0.5,
+                                "budget_influence": 0.5,
+                            }
+
                     # Process each persona from JSON with validation
                     for p_data in results_dict["personas"]:
                         try:
@@ -132,6 +220,16 @@ class ResultsService:
 
                             # Transform to frontend format and validate
                             transformed_persona = transform_to_frontend_format(p_data)
+
+                            # Ensure top-level confidence is numeric (fallback from overall_confidence)
+                            try:
+                                raw_conf = transformed_persona.get(
+                                    "confidence",
+                                    transformed_persona.get("overall_confidence", 0.7),
+                                )
+                                transformed_persona["confidence"] = float(raw_conf)
+                            except Exception:
+                                transformed_persona["confidence"] = 0.7
 
                             # ADDITIONAL FIX: Generate structured_demographics if missing
                             if "structured_demographics" not in transformed_persona:
@@ -188,6 +286,47 @@ class ResultsService:
                                             logger.warning(
                                                 f"[STRUCTURED_DEMOGRAPHICS_DIRECT_FIX] Failed to generate structured_demographics: {e}"
                                             )
+
+                            # Ensure stakeholder influence metrics exist and are not all defaults
+                            si = (
+                                transformed_persona.get("stakeholder_intelligence")
+                                or {}
+                            )
+                            im = (
+                                si.get("influence_metrics")
+                                if isinstance(si, dict)
+                                else None
+                            )
+                            needs_compute = True
+                            if isinstance(im, dict):
+                                try:
+                                    dp = float(im.get("decision_power", 0.5))
+                                    ti = float(im.get("technical_influence", 0.5))
+                                    bi = float(im.get("budget_influence", 0.5))
+                                    # If any value is not a number or all equal to 0.5, recompute
+                                    if any(
+                                        map(
+                                            lambda v: not isinstance(v, float),
+                                            [dp, ti, bi],
+                                        )
+                                    ) or (
+                                        abs(dp - 0.5) < 1e-6
+                                        and abs(ti - 0.5) < 1e-6
+                                        and abs(bi - 0.5) < 1e-6
+                                    ):
+                                        needs_compute = True
+                                    else:
+                                        needs_compute = False
+                                except Exception:
+                                    needs_compute = True
+                            if needs_compute:
+                                computed = _compute_influence_metrics_for_persona(
+                                    transformed_persona
+                                )
+                                if not isinstance(si, dict):
+                                    si = {}
+                                si["influence_metrics"] = computed
+                                transformed_persona["stakeholder_intelligence"] = si
 
                             # Validate the transformed persona
                             if validate_persona_data_safe(transformed_persona):
