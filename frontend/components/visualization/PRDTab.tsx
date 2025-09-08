@@ -214,13 +214,30 @@ export function PRDTab({ analysisId, isAnalysisComplete = true }: PRDTabProps) {
 
 // Component for displaying the Operational PRD content
 function OperationalPRDContent({ prd }: { prd: OperationalPRD }) {
+  // Prefer new BRD/Implementation Blueprint when present; fallback to legacy shape
+  const brd = prd.brd;
+  const impl = prd.implementation_blueprint ?? (prd as any).implementationBlueprint;
+
+  const objectives = brd?.objectives ?? prd.objectives;
+  const scope = brd?.scope ?? prd.scope;
+
+  // For scenarios: prefer stakeholder_scenarios; fallback to user_stories
+  const stakeholderScenarios = brd?.stakeholder_scenarios;
+  const userStories = !stakeholderScenarios || stakeholderScenarios.length === 0 ? prd.user_stories : [];
+
+  // For specifications: prefer core_specifications; fallback to requirements
+  const coreSpecifications = brd?.core_specifications;
+  const legacyRequirements = !coreSpecifications || coreSpecifications.length === 0 ? prd.requirements : [];
+
+  const successMetrics = brd?.success_metrics ?? prd.success_metrics;
+
   return (
     <div className="space-y-8">
       {/* Objectives Section */}
       <section>
         <h3 className="text-lg font-semibold mb-4">Objectives</h3>
         <div className="space-y-4">
-          {prd.objectives.map((objective, index) => (
+          {objectives.map((objective, index) => (
             <Card key={index}>
               <CardHeader className="py-3">
                 <CardTitle className="text-base">{objective.title}</CardTitle>
@@ -243,7 +260,7 @@ function OperationalPRDContent({ prd }: { prd: OperationalPRD }) {
             </CardHeader>
             <CardContent className="py-2">
               <ul className="list-disc pl-5 space-y-1">
-                {prd.scope.included.map((item, index) => (
+                {scope.included.map((item, index) => (
                   <li key={index}>{item}</li>
                 ))}
               </ul>
@@ -255,7 +272,7 @@ function OperationalPRDContent({ prd }: { prd: OperationalPRD }) {
             </CardHeader>
             <CardContent className="py-2">
               <ul className="list-disc pl-5 space-y-1">
-                {prd.scope.excluded.map((item, index) => (
+                {scope.excluded.map((item, index) => (
                   <li key={index}>{item}</li>
                 ))}
               </ul>
@@ -264,91 +281,199 @@ function OperationalPRDContent({ prd }: { prd: OperationalPRD }) {
         </div>
       </section>
 
-      {/* User Stories Section */}
-      <section>
-        <h3 className="text-lg font-semibold mb-4">User Stories</h3>
-        <Accordion type="multiple" className="space-y-2">
-          {prd.user_stories.map((story, index) => (
-            <AccordionItem key={index} value={`story-${index}`} className="border rounded-md">
-              <AccordionTrigger className="px-4 py-2 hover:no-underline">
-                <span className="text-left">{story.story}</span>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-3">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Acceptance Criteria</h4>
-                    <ul className="list-disc pl-5 space-y-1">
-                      {story.acceptance_criteria.map((criteria, idx) => (
-                        <li key={idx}>{criteria}</li>
-                      ))}
-                    </ul>
+      {/* Stakeholder Scenarios (new) or User Stories (legacy) */}
+      {stakeholderScenarios && stakeholderScenarios.length > 0 ? (
+        <section>
+          <h3 className="text-lg font-semibold mb-4">Stakeholder Scenarios</h3>
+          <Accordion type="multiple" className="space-y-2">
+            {stakeholderScenarios.map((sc, index) => (
+              <AccordionItem key={index} value={`scenario-${index}`} className="border rounded-md">
+                <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                  <span className="text-left">{sc.scenario}</span>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-3">
+                  <div className="space-y-4">
+                    {sc.acceptance_criteria && sc.acceptance_criteria.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Acceptance Criteria</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {sc.acceptance_criteria.map((criteria, idx) => (
+                            <li key={idx}>{criteria}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {sc.justification && (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                          <h4 className="font-medium mb-2">Linked Theme</h4>
+                          <p className="text-sm">{sc.justification.linked_theme}</p>
+                        </div>
+                        <div>
+                          <h4 className="font-medium mb-2">Impact Score</h4>
+                          <p className="text-sm">{sc.justification.impact_score}</p>
+                        </div>
+                        <div>
+                          <h4 className="font-medium mb-2">Frequency</h4>
+                          <p className="text-sm">{typeof sc.justification.frequency === 'number' ? sc.justification.frequency.toFixed(2) : sc.justification.frequency}</p>
+                        </div>
+                        <div>
+                          <h4 className="font-medium mb-2">Evidence</h4>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {(sc.justification.evidence_quotes || []).map((q, qi) => (
+                              <li key={qi} className="text-sm">{q}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      ) : (
+        <section>
+          <h3 className="text-lg font-semibold mb-4">User Stories</h3>
+          <Accordion type="multiple" className="space-y-2">
+            {userStories.map((story, index) => (
+              <AccordionItem key={index} value={`story-${index}`} className="border rounded-md">
+                <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                  <span className="text-left">{story.story}</span>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-3">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Acceptance Criteria</h4>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {story.acceptance_criteria.map((criteria, idx) => (
+                          <li key={idx}>{criteria}</li>
+                        ))}
+                      </ul>
+                    </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <h4 className="font-medium mb-2">What</h4>
-                      <p className="text-sm">{story.what}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-2">Why</h4>
-                      <p className="text-sm">{story.why}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-2">How</h4>
-                      <p className="text-sm">{story.how}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <h4 className="font-medium mb-2">What</h4>
+                        <p className="text-sm">{story.what}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Why</h4>
+                        <p className="text-sm">{story.why}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">How</h4>
+                        <p className="text-sm">{story.how}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </section>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      )}
 
-      {/* Requirements Section */}
-      <section>
-        <h3 className="text-lg font-semibold mb-4">Requirements</h3>
-        <Accordion type="multiple" className="space-y-2">
-          {prd.requirements.map((req, index) => (
-            <AccordionItem key={index} value={`req-${index}`} className="border rounded-md">
-              <AccordionTrigger className="px-4 py-2 hover:no-underline">
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-left">
-                    <span className="font-medium">{req.id}:</span> {req.title}
-                  </span>
-                  <Badge className={cn(
-                    "ml-2",
-                    req.priority === 'High' ? "bg-destructive text-destructive-foreground" :
-                    req.priority === 'Medium' ? "bg-amber-500 text-white" :
-                    "bg-green-500 text-white"
-                  )}>
-                    {req.priority}
-                  </Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-3">
-                <p className="mb-3">{req.description}</p>
-                {req.related_user_stories && req.related_user_stories.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1">Related User Stories</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {req.related_user_stories.map((storyId, idx) => (
-                        <Badge key={idx} variant="outline">{storyId}</Badge>
-                      ))}
-                    </div>
+      {/* Core Specifications (new) or Requirements (legacy) */}
+      {coreSpecifications && coreSpecifications.length > 0 ? (
+        <section>
+          <h3 className="text-lg font-semibold mb-4">Core Specifications</h3>
+          <Accordion type="multiple" className="space-y-2">
+            {coreSpecifications.map((spec, index) => (
+              <AccordionItem key={index} value={`spec-${index}`} className="border rounded-md">
+                <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-left">
+                      <span className="font-medium">{spec.id}:</span> {spec.specification}
+                    </span>
+                    <Badge className={cn(
+                      "ml-2",
+                      spec.priority === 'High' ? "bg-destructive text-destructive-foreground" :
+                      spec.priority === 'Medium' ? "bg-amber-500 text-white" :
+                      "bg-green-500 text-white"
+                    )}>
+                      {spec.priority}
+                    </Badge>
                   </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </section>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-3">
+                  {spec.weighting && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                      <div>
+                        <h4 className="font-medium mb-2">Impact Score</h4>
+                        <p className="text-sm">{spec.weighting.impact_score}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Frequency</h4>
+                        <p className="text-sm">{typeof spec.weighting.frequency === 'number' ? spec.weighting.frequency.toFixed(2) : spec.weighting.frequency}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Basis</h4>
+                        <p className="text-sm">{spec.weighting.priority_basis}</p>
+                      </div>
+                    </div>
+                  )}
+                  {spec.related_scenarios && spec.related_scenarios.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-1">Related Scenarios</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {spec.related_scenarios.map((sid, idx) => (
+                          <Badge key={idx} variant="outline">{sid}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      ) : (
+        <section>
+          <h3 className="text-lg font-semibold mb-4">Requirements</h3>
+          <Accordion type="multiple" className="space-y-2">
+            {legacyRequirements.map((req, index) => (
+              <AccordionItem key={index} value={`req-${index}`} className="border rounded-md">
+                <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-left">
+                      <span className="font-medium">{req.id}:</span> {req.title}
+                    </span>
+                    <Badge className={cn(
+                      "ml-2",
+                      req.priority === 'High' ? "bg-destructive text-destructive-foreground" :
+                      req.priority === 'Medium' ? "bg-amber-500 text-white" :
+                      "bg-green-500 text-white"
+                    )}>
+                      {req.priority}
+                    </Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-3">
+                  <p className="mb-3">{req.description}</p>
+                  {req.related_user_stories && req.related_user_stories.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-1">Related User Stories</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {req.related_user_stories.map((storyId, idx) => (
+                          <Badge key={idx} variant="outline">{storyId}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      )}
 
       {/* Success Metrics Section */}
       <section>
         <h3 className="text-lg font-semibold mb-4">Success Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {prd.success_metrics.map((metric, index) => (
+          {successMetrics.map((metric, index) => (
             <Card key={index}>
               <CardHeader className="py-3">
                 <CardTitle className="text-base">{metric.metric}</CardTitle>
@@ -367,6 +492,125 @@ function OperationalPRDContent({ prd }: { prd: OperationalPRD }) {
           ))}
         </div>
       </section>
+
+      {/* Implementation Blueprint (new) */}
+      {impl && (
+        <section>
+          <h3 className="text-lg font-semibold mb-4">Implementation Blueprint</h3>
+
+          {impl.solution_overview && (
+            <Card className="mb-4">
+              <CardHeader className="py-3">
+                <CardTitle className="text-base">Solution Overview</CardTitle>
+              </CardHeader>
+              <CardContent className="py-2">
+                <p>{impl.solution_overview}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {impl.solution_structure && impl.solution_structure.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Solution Structure</h4>
+              <Accordion type="multiple" className="space-y-2">
+                {impl.solution_structure.map((comp, index) => (
+                  <AccordionItem key={index} value={`impl-struct-${index}`} className="border rounded-md">
+                    <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                      <span className="text-left font-medium">{comp.component}</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-3">
+                      <div className="space-y-3">
+                        <div>
+                          <h5 className="font-medium text-sm">Role</h5>
+                          <p>{comp.role}</p>
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-sm">Interactions</h5>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {(comp.interactions || []).map((interaction, idx) => (
+                              <li key={idx}>{interaction}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+          )}
+
+          {impl.core_components_and_methodology && impl.core_components_and_methodology.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Core Components & Methodology</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {impl.core_components_and_methodology.map((item, idx) => (
+                  <li key={idx}><span className="font-medium">{item.name}:</span> {item.details}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {impl.key_implementation_tasks && impl.key_implementation_tasks.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Key Implementation Tasks</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {impl.key_implementation_tasks.map((t, idx) => (
+                  <li key={idx}><span className="font-medium">{t.task}</span>{t.dependencies && t.dependencies.length > 0 ? ` (deps: ${t.dependencies.join(', ')})` : ''}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {impl.quality_assurance_and_validation && impl.quality_assurance_and_validation.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Quality Assurance & Validation</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {impl.quality_assurance_and_validation.map((q, idx) => (
+                  <li key={idx}><span className="font-medium">{q.test_type}:</span> {q.success_criteria}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {impl.stakeholder_success_plan && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Stakeholder Success Plan</h4>
+              {impl.stakeholder_success_plan.relationship_requirements && impl.stakeholder_success_plan.relationship_requirements.length > 0 && (
+                <div className="mb-3">
+                  <h5 className="font-medium">Relationship Requirements</h5>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {impl.stakeholder_success_plan.relationship_requirements.map((r, idx) => (
+                      <li key={idx}><span className="font-medium">{r.need}:</span> {(r.actions || []).join(', ')}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {impl.stakeholder_success_plan.adoption_support && impl.stakeholder_success_plan.adoption_support.length > 0 && (
+                <div>
+                  <h5 className="font-medium">Adoption Support</h5>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {impl.stakeholder_success_plan.adoption_support.map((a, idx) => (
+                      <li key={idx}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {impl.tiered_solution_models && impl.tiered_solution_models.length > 0 && (
+            <div>
+              <h4 className="font-medium mb-3">Tiered Solution Models</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {impl.tiered_solution_models.map((m, idx) => (
+                  <li key={idx}><span className="font-medium">{m.tier}</span> — {m.target_stakeholder}; scope: {m.scope}; complexity: {m.complexity}; investment: {m.investment}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

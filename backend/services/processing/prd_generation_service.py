@@ -15,12 +15,18 @@ from backend.models import CachedPRD, User
 
 logger = logging.getLogger(__name__)
 
+
 class PRDGenerationService:
     """
     Service for generating Product Requirements Documents (PRDs) from analysis results.
     """
 
-    def __init__(self, db: Optional[Session] = None, llm_service=None, user: Optional[User] = None):
+    def __init__(
+        self,
+        db: Optional[Session] = None,
+        llm_service=None,
+        user: Optional[User] = None,
+    ):
         """
         Initialize the PRD generation service.
 
@@ -32,7 +38,9 @@ class PRDGenerationService:
         self.db = db
         self.user = user
         self.llm_service = llm_service or LLMServiceFactory.create("enhanced_gemini")
-        logger.info(f"Initialized PRDGenerationService with {self.llm_service.__class__.__name__}")
+        logger.info(
+            f"Initialized PRDGenerationService with {self.llm_service.__class__.__name__}"
+        )
 
     async def generate_prd(
         self,
@@ -40,7 +48,7 @@ class PRDGenerationService:
         prd_type: str = "both",
         industry: Optional[str] = None,
         result_id: Optional[int] = None,
-        force_regenerate: bool = False
+        force_regenerate: bool = False,
     ) -> Dict[str, Any]:
         """
         Generate a PRD from analysis results.
@@ -59,23 +67,35 @@ class PRDGenerationService:
             # Check if user can generate PRD
             if self.db and self.user:
                 from backend.services.usage_tracking_service import UsageTrackingService
+
                 usage_service = UsageTrackingService(self.db, self.user)
 
                 can_generate = await usage_service.can_generate_prd()
                 if not can_generate:
                     raise HTTPException(
                         status_code=403,
-                        detail="You have reached your monthly PRD generation limit. Please upgrade your subscription to continue."
+                        detail="You have reached your monthly PRD generation limit. Please upgrade your subscription to continue.",
                     )
 
             # Check cache first if database session is available and not forcing regeneration
             if self.db and result_id and not force_regenerate:
                 cached_prd = self._get_cached_prd(result_id, prd_type)
                 if cached_prd:
-                    logger.info(f"Using cached PRD for result_id: {result_id}, prd_type: {prd_type}")
-                    return cached_prd.prd_data
+                    logger.info(
+                        f"Using cached PRD for result_id: {result_id}, prd_type: {prd_type}"
+                    )
+                    # Ensure normalized shape even for older cached PRDs
+                    try:
+                        normalized = self._normalize_operational_prd(
+                            dict(cached_prd.prd_data)
+                        )
+                    except Exception:
+                        normalized = cached_prd.prd_data
+                    return normalized
 
-            logger.info(f"Generating {prd_type} PRD for result_id: {result_id or 'unknown'}")
+            logger.info(
+                f"Generating {prd_type} PRD for result_id: {result_id or 'unknown'}"
+            )
 
             # Extract relevant data from analysis results
             themes = analysis_results.get("themes", [])
@@ -96,7 +116,7 @@ class PRDGenerationService:
                 "personas": personas,
                 "prd_type": prd_type,
                 "industry": industry,
-                "enforce_json": True  # Flag to enforce JSON output
+                "enforce_json": True,  # Flag to enforce JSON output
             }
 
             # Call LLM to generate PRD
@@ -112,21 +132,18 @@ class PRDGenerationService:
                     "themes_count": len(themes),
                     "patterns_count": len(patterns),
                     "insights_count": len(insights),
-                    "personas_count": len(personas)
+                    "personas_count": len(personas),
                 },
                 "prd_type": prd_type,
-                "industry": industry
+                "industry": industry,
             }
+
+            # Normalize operational_prd to ensure required nested structure exists
+            prd_data = self._normalize_operational_prd(prd_data)
 
             # Cache the PRD if database session is available
             if self.db and result_id:
                 self._cache_prd(result_id, prd_type, prd_data)
-
-                # Track usage after generating the PRD
-                if self.user:
-                    from backend.services.usage_tracking_service import UsageTrackingService
-                    usage_service = UsageTrackingService(self.db, self.user)
-                    await usage_service.track_prd_generation(result_id)
 
             logger.info(f"Successfully generated PRD with type: {prd_type}")
             return prd_data
@@ -137,12 +154,24 @@ class PRDGenerationService:
             return {
                 "error": f"Failed to generate PRD: {str(e)}",
                 "prd_type": prd_type,
-                "operational_prd": {
-                    "objectives": [{"title": "Error", "description": "Failed to generate PRD"}]
-                } if prd_type in ["operational", "both"] else None,
-                "technical_prd": {
-                    "objectives": [{"title": "Error", "description": "Failed to generate PRD"}]
-                } if prd_type in ["technical", "both"] else None
+                "operational_prd": (
+                    {
+                        "objectives": [
+                            {"title": "Error", "description": "Failed to generate PRD"}
+                        ]
+                    }
+                    if prd_type in ["operational", "both"]
+                    else None
+                ),
+                "technical_prd": (
+                    {
+                        "objectives": [
+                            {"title": "Error", "description": "Failed to generate PRD"}
+                        ]
+                    }
+                    if prd_type in ["technical", "both"]
+                    else None
+                ),
             }
 
     def _parse_llm_response(self, response: Any) -> Dict[str, Any]:
@@ -184,6 +213,101 @@ class PRDGenerationService:
             logger.error(f"Error parsing LLM response: {str(e)}")
             return self._create_fallback_prd("Error parsing LLM response")
 
+    def _normalize_operational_prd(self, prd_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ensure operational_prd contains 'brd' and 'implementation_blueprint' keys.
+
+        - Map legacy top-level fields into brd if missing
+        - Scaffold empty implementation_blueprint if missing
+        - Preserve existing top-level fields for frontend compatibility
+        """
+        try:
+            op = prd_data.get("operational_prd")
+            if not isinstance(op, dict):
+                return prd_data
+
+            # 1) Build BRD if missing
+            if "brd" not in op or not isinstance(op.get("brd"), dict):
+                objectives = op.get("objectives") or []
+                scope = op.get("scope") or {"included": [], "excluded": []}
+                user_stories = op.get("user_stories") or []
+                requirements = op.get("requirements") or []
+                success_metrics = op.get("success_metrics") or []
+
+                # Transform user_stories -> stakeholder_scenarios with justification placeholder
+                stakeholder_scenarios = []
+                for us in user_stories:
+                    if not isinstance(us, dict):
+                        continue
+                    scenario_text = us.get("story") or us.get("scenario") or ""
+                    acceptance = us.get("acceptance_criteria") or []
+                    justification = us.get("justification") or {
+                        "linked_theme": "",
+                        "impact_score": "",
+                        "frequency": 0.0,
+                        "evidence_quotes": [],
+                    }
+                    stakeholder_scenarios.append(
+                        {
+                            "scenario": scenario_text,
+                            "acceptance_criteria": acceptance,
+                            "justification": justification,
+                        }
+                    )
+
+                # Transform requirements -> core_specifications
+                core_specifications = []
+                for req in requirements:
+                    if not isinstance(req, dict):
+                        continue
+                    core_specifications.append(
+                        {
+                            "id": req.get("id", ""),
+                            "specification": req.get("title")
+                            or req.get("description")
+                            or "",
+                            "priority": req.get("priority", ""),
+                            "weighting": {
+                                "impact_score": (req.get("weighting", {}) or {}).get(
+                                    "impact_score", ""
+                                ),
+                                "frequency": (req.get("weighting", {}) or {}).get(
+                                    "frequency", 0.0
+                                ),
+                                "priority_basis": "Impact x Frequency",
+                            },
+                            "related_scenarios": req.get("related_user_stories") or [],
+                        }
+                    )
+
+                op["brd"] = {
+                    "objectives": objectives,
+                    "scope": scope,
+                    "stakeholder_scenarios": stakeholder_scenarios,
+                    "core_specifications": core_specifications,
+                    "success_metrics": success_metrics,
+                }
+
+            # 2) Build Implementation Blueprint if missing
+            if "implementation_blueprint" not in op or not isinstance(
+                op.get("implementation_blueprint"), dict
+            ):
+                op["implementation_blueprint"] = {
+                    "solution_overview": "",
+                    "solution_structure": [],
+                    "core_components_and_methodology": [],
+                    "key_implementation_tasks": [],
+                    "quality_assurance_and_validation": [],
+                    "stakeholder_success_plan": {},
+                    "tiered_solution_models": [],
+                }
+
+            prd_data["operational_prd"] = op
+            return prd_data
+        except Exception as e:
+            logger.warning(f"Normalization of operational_prd failed: {e}")
+            return prd_data
+
     def _get_cached_prd(self, result_id: int, prd_type: str) -> Optional[CachedPRD]:
         """
         Get a cached PRD from the database.
@@ -202,8 +326,7 @@ class PRDGenerationService:
             cached_prd = (
                 self.db.query(CachedPRD)
                 .filter(
-                    CachedPRD.result_id == result_id,
-                    CachedPRD.prd_type == prd_type
+                    CachedPRD.result_id == result_id, CachedPRD.prd_type == prd_type
                 )
                 .first()
             )
@@ -213,7 +336,9 @@ class PRDGenerationService:
             logger.error(f"Error retrieving cached PRD: {str(e)}")
             return None
 
-    def _cache_prd(self, result_id: int, prd_type: str, prd_data: Dict[str, Any]) -> bool:
+    def _cache_prd(
+        self, result_id: int, prd_type: str, prd_data: Dict[str, Any]
+    ) -> bool:
         """
         Cache a PRD in the database.
 
@@ -233,8 +358,7 @@ class PRDGenerationService:
             existing_prd = (
                 self.db.query(CachedPRD)
                 .filter(
-                    CachedPRD.result_id == result_id,
-                    CachedPRD.prd_type == prd_type
+                    CachedPRD.result_id == result_id, CachedPRD.prd_type == prd_type
                 )
                 .first()
             )
@@ -244,7 +368,9 @@ class PRDGenerationService:
                 existing_prd.prd_data = prd_data
                 existing_prd.updated_at = datetime.utcnow()
                 self.db.commit()
-                logger.info(f"Updated cached PRD for result_id: {result_id}, prd_type: {prd_type}")
+                logger.info(
+                    f"Updated cached PRD for result_id: {result_id}, prd_type: {prd_type}"
+                )
             else:
                 # Create new cached PRD
                 cached_prd = CachedPRD(
@@ -252,11 +378,13 @@ class PRDGenerationService:
                     prd_type=prd_type,
                     prd_data=prd_data,
                     created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
+                    updated_at=datetime.utcnow(),
                 )
                 self.db.add(cached_prd)
                 self.db.commit()
-                logger.info(f"Created cached PRD for result_id: {result_id}, prd_type: {prd_type}")
+                logger.info(
+                    f"Created cached PRD for result_id: {result_id}, prd_type: {prd_type}"
+                )
 
             return True
         except SQLAlchemyError as e:
@@ -281,16 +409,17 @@ class PRDGenerationService:
         lines = text.split("\n")
         for line in lines:
             if "objective" in line.lower() or "goal" in line.lower():
-                objectives.append({
-                    "title": "Extracted Objective",
-                    "description": line.strip()
-                })
+                objectives.append(
+                    {"title": "Extracted Objective", "description": line.strip()}
+                )
 
         if not objectives:
-            objectives = [{
-                "title": "Fallback Objective",
-                "description": "Improve user experience based on research insights"
-            }]
+            objectives = [
+                {
+                    "title": "Fallback Objective",
+                    "description": "Improve user experience based on research insights",
+                }
+            ]
 
         return {
             "prd_type": "both",
@@ -298,67 +427,82 @@ class PRDGenerationService:
                 "objectives": objectives,
                 "scope": {
                     "included": ["Features based on user research"],
-                    "excluded": ["Features not supported by research"]
+                    "excluded": ["Features not supported by research"],
                 },
-                "user_stories": [{
-                    "story": "As a user, I want to accomplish my goals efficiently so that I can be more productive",
-                    "acceptance_criteria": [
-                        "Given I am using the application",
-                        "When I perform an action",
-                        "Then I should see the expected result"
-                    ],
-                    "what": "Efficient user interface",
-                    "why": "Improves user productivity",
-                    "how": "Implement based on research findings"
-                }],
-                "requirements": [{
-                    "id": "REQ-001",
-                    "title": "User-Centered Design",
-                    "description": "The application should follow user-centered design principles",
-                    "priority": "High",
-                    "related_user_stories": ["US-001"]
-                }],
-                "success_metrics": [{
-                    "metric": "User Satisfaction",
-                    "target": "90% positive feedback",
-                    "measurement_method": "User surveys"
-                }]
+                "user_stories": [
+                    {
+                        "story": "As a user, I want to accomplish my goals efficiently so that I can be more productive",
+                        "acceptance_criteria": [
+                            "Given I am using the application",
+                            "When I perform an action",
+                            "Then I should see the expected result",
+                        ],
+                        "what": "Efficient user interface",
+                        "why": "Improves user productivity",
+                        "how": "Implement based on research findings",
+                    }
+                ],
+                "requirements": [
+                    {
+                        "id": "REQ-001",
+                        "title": "User-Centered Design",
+                        "description": "The application should follow user-centered design principles",
+                        "priority": "High",
+                        "related_user_stories": ["US-001"],
+                    }
+                ],
+                "success_metrics": [
+                    {
+                        "metric": "User Satisfaction",
+                        "target": "90% positive feedback",
+                        "measurement_method": "User surveys",
+                    }
+                ],
             },
             "technical_prd": {
                 "objectives": objectives,
                 "scope": {
                     "included": ["Core functionality"],
-                    "excluded": ["Advanced features for future releases"]
+                    "excluded": ["Advanced features for future releases"],
                 },
                 "architecture": {
                     "overview": "Standard web application architecture",
-                    "components": [{
-                        "name": "Frontend",
-                        "purpose": "User interface",
-                        "interactions": ["Communicates with backend API"]
-                    }, {
-                        "name": "Backend",
-                        "purpose": "Business logic and data processing",
-                        "interactions": ["Communicates with database"]
-                    }],
-                    "data_flow": "Frontend → Backend → Database"
+                    "components": [
+                        {
+                            "name": "Frontend",
+                            "purpose": "User interface",
+                            "interactions": ["Communicates with backend API"],
+                        },
+                        {
+                            "name": "Backend",
+                            "purpose": "Business logic and data processing",
+                            "interactions": ["Communicates with database"],
+                        },
+                    ],
+                    "data_flow": "Frontend → Backend → Database",
                 },
-                "implementation_requirements": [{
-                    "id": "TECH-001",
-                    "title": "Performance Optimization",
-                    "description": "Ensure application responds within 2 seconds",
-                    "priority": "High",
-                    "dependencies": []
-                }],
-                "testing_validation": [{
-                    "test_type": "Performance Testing",
-                    "description": "Measure response times under load",
-                    "success_criteria": "95% of requests complete within 2 seconds"
-                }],
-                "success_metrics": [{
-                    "metric": "Response Time",
-                    "target": "< 2 seconds",
-                    "measurement_method": "Automated performance tests"
-                }]
-            }
+                "implementation_requirements": [
+                    {
+                        "id": "TECH-001",
+                        "title": "Performance Optimization",
+                        "description": "Ensure application responds within 2 seconds",
+                        "priority": "High",
+                        "dependencies": [],
+                    }
+                ],
+                "testing_validation": [
+                    {
+                        "test_type": "Performance Testing",
+                        "description": "Measure response times under load",
+                        "success_criteria": "95% of requests complete within 2 seconds",
+                    }
+                ],
+                "success_metrics": [
+                    {
+                        "metric": "Response Time",
+                        "target": "< 2 seconds",
+                        "measurement_method": "Automated performance tests",
+                    }
+                ],
+            },
         }

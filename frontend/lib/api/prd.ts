@@ -29,6 +29,7 @@ export interface PRDData {
  * Operational PRD structure
  */
 export interface OperationalPRD {
+  // Legacy top-level fields (kept for backward compatibility and fallback rendering)
   objectives: Array<{
     title: string;
     description: string;
@@ -48,7 +49,7 @@ export interface OperationalPRD {
     id: string;
     title: string;
     description: string;
-    priority: 'High' | 'Medium' | 'Low';
+    priority: 'High' | 'Medium' | 'Low' | string;
     related_user_stories?: string[];
   }>;
   success_metrics: Array<{
@@ -56,6 +57,53 @@ export interface OperationalPRD {
     target: string;
     measurement_method: string;
   }>;
+
+  // New domain-agnostic master blueprint containers (optional)
+  brd?: {
+    objectives: Array<{ title: string; description: string }>;
+    scope: { included: string[]; excluded: string[] };
+    stakeholder_scenarios: Array<{
+      scenario: string;
+      acceptance_criteria: string[];
+      justification: {
+        linked_theme: string;
+        impact_score: 'High' | 'Medium' | 'Low' | string;
+        frequency: number;
+        evidence_quotes: string[];
+      };
+    }>;
+    core_specifications: Array<{
+      id: string;
+      specification: string;
+      priority: 'High' | 'Medium' | 'Low' | string;
+      weighting: {
+        impact_score: 'High' | 'Medium' | 'Low' | string;
+        frequency: number;
+        priority_basis: string;
+      };
+      related_scenarios?: string[];
+    }>;
+    success_metrics: Array<{ metric: string; target: string; measurement_method: string }>;
+  };
+
+  implementation_blueprint?: {
+    solution_overview: string;
+    solution_structure: Array<{ component: string; role: string; interactions: string[] }>;
+    core_components_and_methodology: Array<{ name: string; details: string }>;
+    key_implementation_tasks: Array<{ task: string; dependencies?: string[] }>;
+    quality_assurance_and_validation: Array<{ test_type: string; success_criteria: string }>;
+    stakeholder_success_plan: {
+      relationship_requirements?: Array<{ need: string; actions: string[] }>;
+      adoption_support?: string[];
+    };
+    tiered_solution_models: Array<{
+      tier: string;
+      target_stakeholder: string;
+      scope: string;
+      complexity: string;
+      investment: string;
+    }>;
+  };
 }
 
 /**

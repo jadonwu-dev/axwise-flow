@@ -15,13 +15,26 @@ from jose.constants import ALGORITHMS
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
 class ClerkService:
     """Service for validating Clerk JWTs and managing user authentication."""
 
     def __init__(self):
         """Initialize the Clerk service."""
-        # Use environment-specific JWKS URL (dev: distinct-rattler-76, prod: clerk.axwise.de)
-        self.jwks_url = os.getenv("CLERK_JWKS_URL", "https://distinct-rattler-76.clerk.accounts.dev/.well-known/jwks.json")
+        # Environment flags
+        self.is_production = (
+            os.getenv("ENVIRONMENT", "development").lower() == "production"
+        )
+        self.validation_enabled = (
+            self.is_production
+            or os.getenv("ENABLE_CLERK_VALIDATION", "false").lower() == "true"
+        )
+
+        # Use environment-specific JWKS URL (dev default is a placeholder; prod should be set via env)
+        self.jwks_url = os.getenv(
+            "CLERK_JWKS_URL",
+            "https://distinct-rattler-76.clerk.accounts.dev/.well-known/jwks.json",
+        )
         self.CLERK_...=***REMOVED***"CLERK_API_URL", "https://api.clerk.com")
         self.CLERK_...=***REMOVED***"CLERK_SECRET_KEY", "")
         self.jwks = None
@@ -30,25 +43,43 @@ class ClerkService:
 
         # Validate configuration
         if not self.clerk_secret:
-            logger.warning("CLERK_SECRET_KEY not configured - authentication will fail in production")
+            logger.warning(
+                "CLERK_SECRET_KEY not configured - authentication will fail in production"
+            )
 
-        logger.info(f"Clerk service initialized with JWKS URL: {self.jwks_url}")
+        logger.info(
+            f"Clerk service initialized (validation_enabled={self.validation_enabled}, JWKS URL: {self.jwks_url})"
+        )
 
-        # Load JWKS on initialization
-        self._load_jwks()
+        # Load JWKS on initialization only when validation is enabled
+        if self.validation_enabled:
+            self._load_jwks()
+        else:
+            logger.warning(
+                "Clerk JWT validation disabled (development). Skipping JWKS load at startup."
+            )
 
     def _load_jwks(self) -> None:
         """Load the JSON Web Key Set (JWKS) from Clerk."""
         try:
             logger.info(f"Loading JWKS from {self.jwks_url}")
-            response = requests.get(self.jwks_url)
+            response = requests.get(self.jwks_url, timeout=5)
             response.raise_for_status()
             self.jwks = response.json()
             self.jwks_last_updated = time.time()
             logger.info("JWKS loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load JWKS: {str(e)}")
-            raise
+            if self.is_production:
+                # In production we fail fast; auth is required
+                raise
+            else:
+                # In development, degrade gracefully: keep jwks None and allow app to start
+                self.jwks = None
+                self.jwks_last_updated = 0
+                logger.warning(
+                    "Development mode: proceeding without JWKS; validation will fail-closed."
+                )
 
     def _refresh_jwks_if_needed(self) -> None:
         """Refresh the JWKS if it's older than the cache TTL."""
@@ -59,12 +90,12 @@ class ClerkService:
         """Get the key with the matching key ID from the JWKS."""
         self._refresh_jwks_if_needed()
 
-        if not self.jwks or 'keys' not in self.jwks:
+        if not self.jwks or "keys" not in self.jwks:
             logger.error("JWKS is not properly loaded")
             return None
 
-        for key in self.jwks['keys']:
-            if key.get('kid') == kid:
+        for key in self.jwks["keys"]:
+            if key.get("kid") == kid:
                 try:
                     # Convert JWK to RSA key
                     rsa_key = RSAKey(key, ALGORITHMS.RS256)
@@ -99,14 +130,16 @@ class ClerkService:
                 return False, None
 
             # Check if token has proper JWT format (3 parts separated by dots)
-            token_parts = token.split('.')
+            token_parts = token.split(".")
             if len(token_parts) != 3:
-                logger.error(f"Invalid JWT format: expected 3 parts, got {len(token_parts)}")
+                logger.error(
+                    f"Invalid JWT format: expected 3 parts, got {len(token_parts)}"
+                )
                 return False, None
 
             # Get the unverified headers to extract the key ID
             headers = jwt.get_unverified_header(token)
-            kid = headers.get('kid')
+            kid = headers.get("kid")
 
             if not kid:
                 logger.error("No key ID found in token header")
@@ -122,11 +155,11 @@ class ClerkService:
                 token,
                 key,
                 algorithms=[ALGORITHMS.RS256],
-                options={"verify_aud": False}  # Skipping audience verification for now
+                options={"verify_aud": False},  # Skipping audience verification for now
             )
 
             # Verify expiration
-            if 'exp' in payload and payload['exp'] < time.time():
+            if "exp" in payload and payload["exp"] < time.time():
                 logger.error("Token has expired")
                 return False, None
 
@@ -156,7 +189,7 @@ class ClerkService:
         try:
             headers = {
                 "Authorization": f"Bearer {self.clerk_secret}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             url = f"{self.clerk_api_url}/v1/users/{user_id}"
@@ -169,7 +202,9 @@ class ClerkService:
             logger.error(f"Error fetching user info: {str(e)}")
             return None
 
-    async def update_user_metadata(self, user_id: str, metadata: Dict[str, Any]) -> bool:
+    async def update_user_metadata(
+        self, user_id: str, metadata: Dict[str, Any]
+    ) -> bool:
         """
         Update a user's metadata in Clerk.
 
@@ -187,14 +222,16 @@ class ClerkService:
         try:
             headers = {
                 "Authorization": f"Bearer {self.clerk_secret}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             url = f"{self.clerk_api_url}/v1/users/{user_id}"
             response = requests.patch(url, headers=headers, json=metadata)
 
             if response.status_code != 200:
-                logger.error(f"Error updating Clerk metadata: {response.status_code} {response.text}")
+                logger.error(
+                    f"Error updating Clerk metadata: {response.status_code} {response.text}"
+                )
                 return False
 
             logger.info(f"Updated metadata for user {user_id}")

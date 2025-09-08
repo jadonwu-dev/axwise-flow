@@ -264,17 +264,43 @@ export function PRDDisplay({ analysis, prdData: serverPrdData }: PRDDisplayProps
 
 // Operational PRD Content Component
 function OperationalPRDContent({ prd, getPriorityColorClass }: { prd: OperationalPRD; getPriorityColorClass: (priority: string) => string }) {
+  // Prefer new BRD/Implementation Blueprint when present; fallback to legacy shape
+  const brd: any = (prd as any).brd;
+  const impl: any = (prd as any).implementation_blueprint ?? (prd as any).implementationBlueprint;
+
+  const objectives = (brd?.objectives ?? prd.objectives) || [];
+  const scope = brd?.scope ?? prd.scope;
+
+  // User stories: use only prd.user_stories (ignore stakeholder_scenarios for display)
+  const userStories: any[] = (prd as any).user_stories || [];
+  // Try to enrich user stories with justification from BRD stakeholder_scenarios when missing
+  const stakeholderScenarios: any[] | undefined = brd?.stakeholder_scenarios;
+  const enrichedUserStories: any[] = (userStories || []).map((s: any, i: number) => {
+    if (s?.justification) return s;
+    const fallbackJust = stakeholderScenarios && stakeholderScenarios.length === (userStories || []).length
+      ? stakeholderScenarios[i]?.justification
+      : undefined;
+    return fallbackJust ? { ...s, justification: fallbackJust } : s;
+  });
+
+
+  // For specifications: prefer core_specifications; fallback to requirements
+  const coreSpecifications: any[] | undefined = brd?.core_specifications;
+  const legacyRequirements = (!coreSpecifications || coreSpecifications.length === 0) ? (prd as any).requirements : [];
+
+  const successMetrics = (brd?.success_metrics ?? prd.success_metrics) || [];
+
   return (
     <div className="space-y-6">
       {/* Objectives */}
-      {prd.objectives && prd.objectives.length > 0 && (
+      {objectives.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Target className="h-5 w-5" />
             Objectives
           </h3>
           <div className="space-y-3">
-            {prd.objectives.map((objective, index) => (
+            {objectives.map((objective: any, index: number) => (
               <div key={index} className="border rounded-lg p-4 bg-muted/30 dark:bg-slate-800/50">
                 <h4 className="font-medium mb-2">{objective.title}</h4>
                 <p className="text-sm text-muted-foreground">{objective.description}</p>
@@ -285,31 +311,31 @@ function OperationalPRDContent({ prd, getPriorityColorClass }: { prd: Operationa
       )}
 
       {/* Scope */}
-      {prd.scope && (
+      {scope && (
         <div>
           <h3 className="text-lg font-semibold mb-3">Scope</h3>
           <div className="grid md:grid-cols-2 gap-4">
-            {prd.scope.included && prd.scope.included.length > 0 && (
+            {scope.included && scope.included.length > 0 && (
               <div className="border rounded-lg p-4">
                 <h4 className="font-medium mb-2 flex items-center gap-2 text-green-700 dark:text-green-300">
                   <CheckCircle className="h-4 w-4" />
                   Included
                 </h4>
                 <ul className="space-y-1">
-                  {prd.scope.included.map((item, index) => (
+                  {scope.included.map((item: string, index: number) => (
                     <li key={index} className="text-sm text-muted-foreground">• {item}</li>
                   ))}
                 </ul>
               </div>
             )}
-            {prd.scope.excluded && prd.scope.excluded.length > 0 && (
+            {scope.excluded && scope.excluded.length > 0 && (
               <div className="border rounded-lg p-4">
                 <h4 className="font-medium mb-2 flex items-center gap-2 text-red-700 dark:text-red-300">
                   <AlertTriangle className="h-4 w-4" />
                   Excluded
                 </h4>
                 <ul className="space-y-1">
-                  {prd.scope.excluded.map((item, index) => (
+                  {scope.excluded.map((item: string, index: number) => (
                     <li key={index} className="text-sm text-muted-foreground">• {item}</li>
                   ))}
                 </ul>
@@ -319,49 +345,47 @@ function OperationalPRDContent({ prd, getPriorityColorClass }: { prd: Operationa
         </div>
       )}
 
-      {/* User Stories */}
-      {prd.user_stories && prd.user_stories.length > 0 && (
+      {/* User Stories (What/Why/How + Justification) */}
+      {enrichedUserStories && enrichedUserStories.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Users className="h-5 w-5" />
             User Stories
           </h3>
           <Accordion type="single" collapsible className="w-full">
-            {prd.user_stories.map((story, index) => (
+            {enrichedUserStories.map((story: any, index: number) => (
               <AccordionItem key={index} value={`story-${index}`}>
                 <AccordionTrigger className="text-left">
                   {story.story}
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-3">
-                    {story.acceptance_criteria && story.acceptance_criteria.length > 0 && (
+                  <div className="grid md:grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="font-medium">What:</span> {story.what || '—'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Why:</span> {story.why || '—'}
+                    </div>
+                    <div>
+                      <span className="font-medium">How:</span> {story.how || '—'}
+                    </div>
+                  </div>
+                  {story.justification && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
                       <div>
-                        <h5 className="font-medium mb-1">Acceptance Criteria:</h5>
-                        <ul className="space-y-1">
-                          {story.acceptance_criteria.map((criteria, i) => (
-                            <li key={i} className="text-sm text-muted-foreground">• {criteria}</li>
+                        <h4 className="font-medium mb-1">Linked Theme</h4>
+                        <p className="text-sm text-muted-foreground">{story.justification.linked_theme}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-1">Evidence</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {(story.justification.evidence_quotes || []).map((q: string, qi: number) => (
+                            <li key={qi} className="text-sm text-muted-foreground">{q}</li>
                           ))}
                         </ul>
                       </div>
-                    )}
-                    <div className="grid md:grid-cols-3 gap-3 text-sm">
-                      {story.what && (
-                        <div>
-                          <span className="font-medium">What:</span> {story.what}
-                        </div>
-                      )}
-                      {story.why && (
-                        <div>
-                          <span className="font-medium">Why:</span> {story.why}
-                        </div>
-                      )}
-                      {story.how && (
-                        <div>
-                          <span className="font-medium">How:</span> {story.how}
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  )}
                 </AccordionContent>
               </AccordionItem>
             ))}
@@ -369,25 +393,86 @@ function OperationalPRDContent({ prd, getPriorityColorClass }: { prd: Operationa
         </div>
       )}
 
-      {/* Requirements */}
-      {prd.requirements && prd.requirements.length > 0 && (
+      {/* Core Specifications (new) or Requirements (legacy) */}
+      {coreSpecifications && coreSpecifications.length > 0 ? (
         <div>
-          <h3 className="text-lg font-semibold mb-3">Requirements</h3>
-          <div className="space-y-3">
-            {prd.requirements.map((req, index) => (
-              <div key={index} className={`border rounded-lg p-4 ${getPriorityColorClass(req.priority)}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-sm">{req.id}</span>
-                  <Badge variant="outline" className="bg-white dark:bg-slate-800 dark:border-slate-700">
-                    {req.priority} Priority
-                  </Badge>
-                </div>
-                <h4 className="font-medium mb-2">{req.title}</h4>
-                <p className="text-sm text-muted-foreground">{req.description}</p>
-              </div>
+          <h3 className="text-lg font-semibold mb-3">Core Specifications</h3>
+          <Accordion type="multiple" className="space-y-2">
+            {coreSpecifications.map((spec: any, index: number) => (
+              <AccordionItem key={index} value={`spec-${index}`} className="border rounded-md">
+                <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-left">
+                      <span className="font-medium">{spec.id}:</span> {spec.specification}
+                    </span>
+                    <Badge variant="outline">{spec.priority}</Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-3">
+                  {spec.weighting && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                      <div>
+                        <h4 className="font-medium mb-2">Impact Score</h4>
+                        <p className="text-sm">{spec.weighting.impact_score}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Frequency</h4>
+                        <p className="text-sm">{typeof spec.weighting.frequency === 'number' ? spec.weighting.frequency.toFixed(2) : spec.weighting.frequency}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Basis</h4>
+                        <p className="text-sm">{spec.weighting.priority_basis}</p>
+                      </div>
+                    </div>
+                  )}
+                  {spec.related_scenarios && spec.related_scenarios.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-1">Related Scenarios</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {spec.related_scenarios.map((sid: string, idx: number) => (
+                          <Badge key={idx} variant="outline">{sid}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
             ))}
-          </div>
+          </Accordion>
         </div>
+      ) : (
+        legacyRequirements && legacyRequirements.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Requirements</h3>
+            <Accordion type="multiple" className="space-y-2">
+              {legacyRequirements.map((req: any, index: number) => (
+                <AccordionItem key={index} value={`req-${index}`} className="border rounded-md">
+                  <AccordionTrigger className="px-4 py-2 hover:no-underline">
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-left">
+                        <span className="font-medium">{req.id}:</span> {req.title}
+                      </span>
+                      <Badge variant="outline">{req.priority}</Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-3">
+                    <p className="mb-3">{req.description}</p>
+                    {req.related_user_stories && req.related_user_stories.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-1">Related User Stories</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {req.related_user_stories.map((storyId: string, idx: number) => (
+                            <Badge key={idx} variant="outline">{storyId}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        )
       )}
 
       {/* Success Metrics */}
@@ -422,6 +507,7 @@ function TechnicalPRDContent({ prd, getPriorityColorClass }: { prd: TechnicalPRD
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Target className="h-5 w-5" />
             Technical Objectives
+
           </h3>
           <div className="space-y-3">
             {prd.objectives.map((objective, index) => (
