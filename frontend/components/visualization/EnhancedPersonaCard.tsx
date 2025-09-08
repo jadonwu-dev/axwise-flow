@@ -123,8 +123,8 @@ export function EnhancedPersonaCard({
     }
   };
 
-  const stakeholderIntelligence = persona.stakeholder_intelligence;
-  const hasStakeholderFeatures = showStakeholderFeatures && stakeholderIntelligence;
+  const stakeholderIntelligence = persona?.stakeholder_intelligence;
+  const hasStakeholderFeatures = Boolean(showStakeholderFeatures && stakeholderIntelligence);
 
   return (
     <Card className={cn("w-full", className)}>
@@ -133,12 +133,12 @@ export function EnhancedPersonaCard({
           <div className="flex items-center space-x-3">
             <Avatar className="h-12 w-12">
               <AvatarFallback className="bg-blue-100 text-blue-800 font-semibold">
-                {getInitials(persona.name)}
+                {getInitials(persona?.name || "?")}
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-lg">{persona.name}</CardTitle>
-              {persona.archetype && (
+              <CardTitle className="text-lg">{persona?.name || 'Unnamed Persona'}</CardTitle>
+              {persona?.archetype && (
                 <CardDescription className="text-sm text-gray-600">
                   {persona.archetype}
                 </CardDescription>
@@ -151,8 +151,8 @@ export function EnhancedPersonaCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge className={getConfidenceColor(persona.confidence ?? (persona as any).overall_confidence)}>
-                    {toPercent(persona.confidence ?? (persona as any).overall_confidence)}%
+                  <Badge className={getConfidenceColor(persona?.confidence ?? (persona as any)?.overall_confidence)}>
+                    {toPercent(persona?.confidence ?? (persona as any)?.overall_confidence)}%
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -166,11 +166,11 @@ export function EnhancedPersonaCard({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge className={getStakeholderTypeInfo(stakeholderIntelligence.stakeholder_type).color}>
-                      {React.createElement(getStakeholderTypeInfo(stakeholderIntelligence.stakeholder_type).icon, {
+                    <Badge className={getStakeholderTypeInfo(stakeholderIntelligence!.stakeholder_type).color}>
+                      {React.createElement(getStakeholderTypeInfo(stakeholderIntelligence!.stakeholder_type).icon, {
                         className: "h-3 w-3 mr-1"
                       })}
-                      {getStakeholderTypeInfo(stakeholderIntelligence.stakeholder_type).label}
+                      {getStakeholderTypeInfo(stakeholderIntelligence!.stakeholder_type).label}
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -258,11 +258,11 @@ export function EnhancedPersonaCard({
             </div>
 
             {/* Relationships */}
-            {stakeholderIntelligence.relationships.length > 0 && (
+            {hasStakeholderFeatures && Array.isArray(stakeholderIntelligence?.relationships) && stakeholderIntelligence!.relationships.length > 0 && (
               <div className="space-y-2">
                 <h5 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Relationships</h5>
                 <div className="space-y-1">
-                  {stakeholderIntelligence.relationships.slice(0, 3).map((relationship, index) => {
+                  {stakeholderIntelligence!.relationships.slice(0, 3).map((relationship, index) => {
                     const relationshipInfo = getRelationshipTypeInfo(relationship.relationship_type);
                     return (
                       <TooltipProvider key={index}>
@@ -277,7 +277,7 @@ export function EnhancedPersonaCard({
                                 <span className="text-gray-600">{relationship.target_persona_id}</span>
                               </div>
                               <Badge variant="outline" className="text-xs">
-                                {Math.round(relationship.strength * 100)}%
+                                {Math.round((relationship.strength ?? 0) * 100)}%
                               </Badge>
                             </div>
                           </TooltipTrigger>
@@ -288,9 +288,9 @@ export function EnhancedPersonaCard({
                       </TooltipProvider>
                     );
                   })}
-                  {stakeholderIntelligence.relationships.length > 3 && (
+                  {stakeholderIntelligence!.relationships.length > 3 && (
                     <p className="text-xs text-gray-500 text-center">
-                      +{stakeholderIntelligence.relationships.length - 3} more relationships
+                      +{stakeholderIntelligence!.relationships.length - 3} more relationships
                     </p>
                   )}
                 </div>
@@ -299,18 +299,18 @@ export function EnhancedPersonaCard({
 
             {/* Conflicts and Consensus Indicators */}
             <div className="flex space-x-4">
-              {stakeholderIntelligence.conflict_indicators.length > 0 && (
+              {hasStakeholderFeatures && Array.isArray(stakeholderIntelligence?.conflict_indicators) && stakeholderIntelligence!.conflict_indicators.length > 0 && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center space-x-1 text-xs text-red-600">
                         <AlertTriangle className="h-3 w-3" />
-                        <span>{stakeholderIntelligence.conflict_indicators.length} conflicts</span>
+                        <span>{stakeholderIntelligence!.conflict_indicators.length} conflicts</span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <div className="space-y-1">
-                        {stakeholderIntelligence.conflict_indicators.slice(0, 3).map((conflict, index) => (
+                        {stakeholderIntelligence!.conflict_indicators.slice(0, 3).map((conflict, index) => (
                           <p key={index} className="text-xs">{conflict.topic}</p>
                         ))}
                       </div>
@@ -319,20 +319,20 @@ export function EnhancedPersonaCard({
                 </TooltipProvider>
               )}
 
-              {stakeholderIntelligence.consensus_levels.length > 0 && (
+              {hasStakeholderFeatures && Array.isArray(stakeholderIntelligence?.consensus_levels) && stakeholderIntelligence!.consensus_levels.length > 0 && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center space-x-1 text-xs text-green-600">
                         <CheckCircle className="h-3 w-3" />
-                        <span>{stakeholderIntelligence.consensus_levels.length} consensus</span>
+                        <span>{stakeholderIntelligence!.consensus_levels.length} consensus</span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <div className="space-y-1">
-                        {stakeholderIntelligence.consensus_levels.slice(0, 3).map((consensus, index) => (
+                        {stakeholderIntelligence!.consensus_levels.slice(0, 3).map((consensus, index) => (
                           <p key={index} className="text-xs">
-                            {consensus.theme_or_pattern}: {Math.round(consensus.agreement_score * 100)}%
+                            {consensus.theme_or_pattern}: {Math.round((consensus.agreement_score ?? 0) * 100)}%
                           </p>
                         ))}
                       </div>
@@ -400,24 +400,66 @@ export function EnhancedPersonaCard({
                     <Badge variant="outline" className="text-xs">
                       {toPercent(persona?.demographics?.confidence)}% confidence
                     </Badge>
-                    <span className="text-xs text-gray-500">
-                      {persona?.demographics?.evidence?.length || 0} evidence points
-                    </span>
+                    {(() => {
+                      const evArr = Array.isArray(persona?.demographics?.evidence) ? persona.demographics.evidence : [];
+                      const normalizedEvidence = evArr
+                        .map((q: any) => (typeof q === 'string' ? q : (q && typeof q === 'object' && typeof q.quote === 'string' ? q.quote : null)))
+                        .filter((t: any): t is string => !!t && t.trim().length > 0);
+                      const fallbackQuotes = (() => {
+                        const v = persona?.demographics?.value;
+                        if (typeof v !== 'string') return [] as string[];
+                        const text = v.trim();
+                        if (!text.startsWith('{') || !text.includes("'quote'")) return [] as string[];
+                        const out: string[] = [];
+                        const re = /'quote'\s*:\s*("|')([\s\S]*?)\1/g;
+                        let m: RegExpExecArray | null;
+                        while ((m = re.exec(text)) !== null) {
+                          const quote = (m[2] || '').trim();
+                          if (quote) out.push(quote);
+                        }
+                        return out;
+                      })();
+                      const evidenceForCount = normalizedEvidence.length > 0 ? normalizedEvidence : fallbackQuotes;
+                      return (
+                        <span className="text-xs text-gray-500">{evidenceForCount.length} evidence points</span>
+                      );
+                    })()}
                   </div>
-                  {persona.demographics.evidence && persona.demographics.evidence.length > 0 && (
-                    <div className="mt-3">
-                      <h5 className="text-xs font-medium text-gray-600 mb-2">Supporting Evidence</h5>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {persona.demographics.evidence.map((evidence: string, idx: number) => (
-                          <li
-                            key={idx}
-                            className="text-xs text-gray-600"
-                            dangerouslySetInnerHTML={renderHighlightedText(evidence)}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {(() => {
+                    const evArr = Array.isArray(persona?.demographics?.evidence) ? persona.demographics.evidence : [];
+                    const normalizedEvidence = evArr
+                      .map((q: any) => (typeof q === 'string' ? q : (q && typeof q === 'object' && typeof q.quote === 'string' ? q.quote : null)))
+                      .filter((t: any): t is string => !!t && t.trim().length > 0);
+                    let evidenceForRender = normalizedEvidence;
+                    if (evidenceForRender.length === 0) {
+                      const v = persona?.demographics?.value;
+                      if (typeof v === 'string' && v.trim().startsWith('{') && v.includes("'quote'")) {
+                        const out: string[] = [];
+                        const re = /'quote'\s*:\s*("|')([\s\S]*?)\1/g;
+                        let m: RegExpExecArray | null;
+                        while ((m = re.exec(v)) !== null) {
+                          const quote = (m[2] || '').trim();
+                          if (quote) out.push(quote);
+                        }
+                        evidenceForRender = out;
+                      }
+                    }
+                    if (evidenceForRender.length === 0) return null;
+                    return (
+                      <div className="mt-3">
+                        <h5 className="text-xs font-medium text-gray-600 mb-2">Supporting Evidence</h5>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {evidenceForRender.map((text: string, idx: number) => (
+                            <li
+                              key={idx}
+                              className="text-xs text-gray-600"
+                              dangerouslySetInnerHTML={renderHighlightedText(text)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -446,13 +488,17 @@ export function EnhancedPersonaCard({
                     <div className="mt-3">
                       <h5 className="text-xs font-medium text-gray-600 mb-2">Supporting Evidence</h5>
                       <ul className="list-disc pl-5 space-y-1">
-                        {persona.goals_and_motivations.evidence.map((evidence: string, idx: number) => (
-                          <li
-                            key={idx}
-                            className="text-xs text-gray-600"
-                            dangerouslySetInnerHTML={renderHighlightedText(evidence)}
-                          />
-                        ))}
+                        {persona.goals_and_motivations.evidence.map((raw: any, idx: number) => {
+                          const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                          if (!text) return null;
+                          return (
+                            <li
+                              key={idx}
+                              className="text-xs text-gray-600"
+                              dangerouslySetInnerHTML={renderHighlightedText(text)}
+                            />
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -484,13 +530,17 @@ export function EnhancedPersonaCard({
                     <div className="mt-3">
                       <h5 className="text-xs font-medium text-gray-600 mb-2">Supporting Evidence</h5>
                       <ul className="list-disc pl-5 space-y-1">
-                        {persona.challenges_and_frustrations.evidence.map((evidence: string, idx: number) => (
-                          <li
-                            key={idx}
-                            className="text-xs text-gray-600"
-                            dangerouslySetInnerHTML={renderHighlightedText(evidence)}
-                          />
-                        ))}
+                        {persona.challenges_and_frustrations.evidence.map((raw: any, idx: number) => {
+                          const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                          if (!text) return null;
+                          return (
+                            <li
+                              key={idx}
+                              className="text-xs text-gray-600"
+                              dangerouslySetInnerHTML={renderHighlightedText(text)}
+                            />
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -524,22 +574,33 @@ export function EnhancedPersonaCard({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between mb-3">
                     <Badge variant="outline" className="text-xs">
-                      {Math.round(persona.key_quotes.confidence * 100)}% confidence
+                      {Math.round((persona.key_quotes.confidence ?? 0) * 100)}% confidence
                     </Badge>
                     <span className="text-xs text-gray-500">
-                      {persona.key_quotes.evidence?.length || 0} quotes
+                      {Array.isArray(persona.key_quotes?.evidence) ? persona.key_quotes!.evidence.filter((q: any) => typeof q === 'string' && q.trim().length > 0).length : 0} quotes
                     </span>
                   </div>
-                  {persona.key_quotes.evidence && persona.key_quotes.evidence.length > 0 && (
+                  {Array.isArray(persona.key_quotes?.evidence) && persona.key_quotes!.evidence.length > 0 && (
                     <div className="space-y-3">
-                      {persona.key_quotes.evidence.map((quote: string, idx: number) => (
-                        <blockquote key={idx} className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r-lg">
-                          <p
-                            className="text-sm italic text-gray-700"
-                            dangerouslySetInnerHTML={renderMarkdownWithHighlighting(`"${quote.replace(/^["']|["']$/g, '').trim()}"`)}
-                          />
-                        </blockquote>
-                      ))}
+                      {persona.key_quotes!.evidence.map((raw: any, idx: number) => {
+                        if (typeof raw !== 'string') {
+                          // Fallback: try to display quoted text from object shape or skip
+                          const fromObj = raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null;
+                          if (!fromObj) return null;
+                          const cleaned = fromObj.replace(/^['"]|['"]$/g, '').trim();
+                          return (
+                            <blockquote key={idx} className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r-lg">
+                              <p className="text-sm italic text-gray-700" dangerouslySetInnerHTML={renderMarkdownWithHighlighting(`"${cleaned}"`)} />
+                            </blockquote>
+                          );
+                        }
+                        const cleaned = raw.replace(/^['"]|['"]$/g, '').trim();
+                        return (
+                          <blockquote key={idx} className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r-lg">
+                            <p className="text-sm italic text-gray-700" dangerouslySetInnerHTML={renderMarkdownWithHighlighting(`"${cleaned}"`)} />
+                          </blockquote>
+                        );
+                      })}
                     </div>
                   )}
                   {persona.key_quotes.value && persona.key_quotes.value !== "Quotes extracted from other fields" && (

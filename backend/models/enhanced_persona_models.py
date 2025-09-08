@@ -6,11 +6,15 @@ with stakeholder intelligence features, eliminating duplication between personas
 and stakeholder entities.
 """
 
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Any, Union
+from pydantic import BaseModel, Field, field_validator
 
 # Import the new AttributedField and StructuredDemographics models
-from backend.domain.models.persona_schema import AttributedField, StructuredDemographics
+from backend.domain.models.persona_schema import (
+    AttributedField,
+    StructuredDemographics,
+    EvidenceItem,
+)
 
 
 class PersonaMetadata(BaseModel):
@@ -166,10 +170,36 @@ class DirectPersonaTrait(BaseModel):
         le=1.0,
         description="Confidence level in this trait (0.0-1.0)",
     )
-    evidence: List[str] = Field(
+    evidence: List[EvidenceItem] = Field(
         default_factory=list,
-        description="Supporting evidence quotes for this trait",
+        description="Supporting evidence items for this trait",
     )
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [{"quote": v}]
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        if isinstance(v, list):
+            out = []
+            for item in v:
+                if isinstance(item, str):
+                    out.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        out.append(item)
+                    elif "text" in item:
+                        out.append({"quote": item.get("text", "")})
+            return out
+        return v
 
 
 class DirectPersona(BaseModel):
@@ -338,12 +368,42 @@ class EnhancedPersonaTrait(BaseModel):
     confidence: float = Field(
         default=0.7, ge=0.0, le=1.0, description="Confidence in this trait (0.0-1.0)"
     )
-    evidence: List[str] = Field(
+    evidence: List[EvidenceItem] = Field(
         default_factory=list, description="Supporting evidence for this trait"
     )
     stakeholder_context: Optional[StakeholderContext] = Field(
         default=None, description="Structured stakeholder context for this trait"
     )
+
+    # Backward compatibility: allow strings or dicts to be coerced into EvidenceItem
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        # Single string -> single EvidenceItem
+        if isinstance(v, str):
+            return [{"quote": v}]
+        # Single dict -> assume it's an EvidenceItem-like mapping
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        # List handling
+        if isinstance(v, list):
+            normalized = []
+            for item in v:
+                if isinstance(item, str):
+                    normalized.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        normalized.append(item)
+                    elif "text" in item:
+                        normalized.append({"quote": item.get("text", "")})
+            return normalized
+        return v
 
 
 class EnhancedPersona(BaseModel):

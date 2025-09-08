@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { Switch } from '@/components/ui/switch';
+import PersonaSSOTDebugPanel from './PersonaSSOTDebugPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -12,7 +14,8 @@ import {
 } from 'lucide-react';
 import type {
   Persona,
-  StakeholderIntelligence
+  StakeholderIntelligence,
+  PersonaSSOT
 } from '@/types/api';
 import { PersonaList } from './PersonaList';
 import { PersonaRelationshipNetwork } from './PersonaRelationshipNetwork';
@@ -27,14 +30,39 @@ interface PersonasTabContentProps {
   stakeholderIntelligence?: StakeholderIntelligence;
   isMultiStakeholder: boolean;
   resultId?: number; // For simplified persona API calls
+  // Dev-only Phase 0 fields
+  personasSSOT?: PersonaSSOT[];
+  validationSummary?: any;
+  validationStatus?: string | null;
+  confidenceComponents?: any;
+  sourceInfo?: any;
 }
 
 export function PersonasTabContent({
   personas,
   stakeholderIntelligence,
   isMultiStakeholder,
-  resultId
+  resultId,
+  personasSSOT = [],
+  validationSummary,
+  validationStatus,
+  confidenceComponents,
+  sourceInfo
 }: PersonasTabContentProps) {
+  // Dev-only toggle: visible in development or when NEXT_PUBLIC_SHOW_PERSONA_DEBUG is 'true'
+  const showDebugToggle = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_...=***REMOVED*** 'true';
+  const [showDebug, setShowDebug] = React.useState(false);
+
+  // Header tools: add dev-only debug toggle
+  const DebugToggle = () => (
+    showDebugToggle ? (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">SSoT Debug</span>
+        <Switch checked={showDebug} onCheckedChange={setShowDebug} />
+      </div>
+    ) : null
+  );
+
   // Check if personas have stakeholder intelligence features
   const hasStakeholderFeatures = personas?.some(persona => persona.stakeholder_intelligence);
 
@@ -75,10 +103,26 @@ export function PersonasTabContent({
             {stakeholderCount} Stakeholders
           </Badge>
         </div>
-        <Badge variant="outline" className="text-green-700 bg-green-50">
-          Enhanced Analysis
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="text-green-700 bg-green-50">
+            Enhanced Analysis
+          </Badge>
+          <DebugToggle />
+        </div>
       </div>
+
+      {showDebug && (
+        <div className="w-full mt-4">
+          <PersonaSSOTDebugPanel
+            personas={personas}
+            personasSSOT={personasSSOT}
+            validationSummary={validationSummary}
+            validationStatus={validationStatus}
+            confidenceComponents={confidenceComponents}
+            sourceInfo={sourceInfo}
+          />
+        </div>
+      )}
 
       {/* Embedded sub-tabs for multi-stakeholder content */}
       <Tabs defaultValue="personas" className="w-full">

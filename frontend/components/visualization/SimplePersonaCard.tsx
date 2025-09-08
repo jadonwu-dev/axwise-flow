@@ -9,7 +9,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseDemographics } from '@/utils/demographicsParser';
 import StructuredDemographicsDisplay from './StructuredDemographicsDisplay';
-import type { StructuredDemographics as StructuredDemographicsType } from '@/types/api';
+import type { StructuredDemographicsSSOT as StructuredDemographicsType } from '@/types/api';
 
 // Interface for structured demographics
 interface StructuredDemographics {

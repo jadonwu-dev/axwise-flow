@@ -15,6 +15,8 @@ import { EnhancedPersonaCard } from './EnhancedPersonaCard';
 import { PersonaRelationshipNetwork } from './PersonaRelationshipNetwork';
 import { renderMarkdownWithHighlighting } from '@/utils/personaEnhancements';
 
+import { CustomErrorBoundary } from './ErrorBoundary';
+
 type PersonaListProps = {
   personas: Persona[];
   className?: string;
@@ -178,10 +180,16 @@ export function PersonaList({ personas, className }: PersonaListProps) {
     return <li className="text-muted-foreground italic">N/A</li>;
   };
 
-  // Helper function to render key quotes in expanded format
+  // Helper function to render key quotes in expanded format (supports strings and EvidenceItem objects)
   const renderExpandedQuotes = (persona: any): React.ReactNode => {
     const quotes = persona.key_quotes;
     if (!quotes) return <p className="text-muted-foreground">No quotes available.</p>;
+
+    const toText = (q: any): string | null => {
+      if (typeof q === 'string') return q;
+      if (q && typeof q === 'object' && typeof q.quote === 'string') return q.quote;
+      return null;
+    };
 
     // Handle different quote formats
     let quoteList: string[] = [];
@@ -196,10 +204,15 @@ export function PersonaList({ personas, className }: PersonaListProps) {
         quoteList = [quotes];
       }
     } else if (Array.isArray(quotes)) {
-      quoteList = quotes.filter(q => typeof q === 'string' && q.trim().length > 0);
+      quoteList = quotes
+        .map(toText)
+        .filter((q): q is string => typeof q === 'string' && q.trim().length > 0);
     } else if (typeof quotes === 'object' && quotes.evidence) {
-      // Handle evidence format
-      quoteList = Array.isArray(quotes.evidence) ? quotes.evidence : [quotes.evidence];
+      // Handle evidence format (array or single item)
+      const arr = Array.isArray(quotes.evidence) ? quotes.evidence : [quotes.evidence];
+      quoteList = arr
+        .map(toText)
+        .filter((q): q is string => typeof q === 'string' && q.trim().length > 0);
     }
 
     if (quoteList.length === 0) {
@@ -208,17 +221,21 @@ export function PersonaList({ personas, className }: PersonaListProps) {
 
     return (
       <div className="space-y-4">
-        {quoteList.map((quote, index) => (
-          <blockquote key={index} className="border-l-4 border-primary pl-4 py-2 bg-muted/30 rounded-r-lg">
-            <p
-              className="text-sm italic"
-              dangerouslySetInnerHTML={renderMarkdownWithHighlighting(`"${quote.replace(/^["']|["']$/g, '').trim()}"`)}
-            />
-          </blockquote>
-        ))}
+        {quoteList.map((q, index) => {
+          const cleaned = q.replace(/^["']|["']$/g, '').trim();
+          return (
+            <blockquote key={index} className="border-l-4 border-primary pl-4 py-2 bg-muted/30 rounded-r-lg">
+              <p
+                className="text-sm italic"
+                dangerouslySetInnerHTML={renderMarkdownWithHighlighting(`"${cleaned}"`)}
+              />
+            </blockquote>
+          );
+        })}
       </div>
     );
   };
+
 
   // Helper function to group and render patterns by category
   const renderGroupedPatterns = (patterns: string[]): React.ReactNode => {
@@ -390,9 +407,14 @@ export function PersonaList({ personas, className }: PersonaListProps) {
               </AccordionTrigger>
               <AccordionContent>
                 <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                  {evidence.map((item: string, i: number) => (
-                    <li key={i}>{item}</li>
-                  ))}
+                  {evidence.map((item: any, i: number) => {
+                    const text = typeof item === 'string'
+                      ? item
+                      : (item && typeof item === 'object' && typeof item.quote === 'string')
+                        ? item.quote
+                        : null;
+                    return <li key={i}>{text ?? '[Unsupported evidence item]'}</li>;
+                  })}
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -466,11 +488,20 @@ export function PersonaList({ personas, className }: PersonaListProps) {
         {viewMode === 'cards' && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2">
             {validPersonas.map((persona, index) => (
-              <EnhancedPersonaCard
-                key={`persona-card-${index}`}
-                persona={persona}
-                showStakeholderFeatures={hasStakeholderFeatures}
-              />
+              <CustomErrorBoundary
+                key={`persona-card-boundary-${index}`}
+                fallback={
+                  <div className="p-3 border border-red-200 bg-red-50 rounded text-xs text-red-700">
+                    Failed to render persona card.
+                  </div>
+                }
+              >
+                <EnhancedPersonaCard
+                  key={`persona-card-${index}`}
+                  persona={persona}
+                  showStakeholderFeatures={hasStakeholderFeatures}
+                />
+              </CustomErrorBoundary>
             ))}
           </div>
         )}
@@ -550,9 +581,14 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                       </AccordionTrigger>
                       <AccordionContent>
                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                          {persona.evidence.map((item: string, i: number) => (
-                            <li key={i}>{item}</li>
-                          ))}
+                          {persona.evidence.map((item: any, i: number) => {
+                            const text = typeof item === 'string'
+                              ? item
+                              : (item && typeof item === 'object' && typeof item.quote === 'string')
+                                ? item.quote
+                                : String(item);
+                            return <li key={i}>{text}</li>;
+                          })}
                         </ul>
                       </AccordionContent>
                     </AccordionItem>

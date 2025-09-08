@@ -7,7 +7,25 @@ and stakeholder entities.
 """
 
 from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+class EvidenceItem(BaseModel):
+    """Structured evidence with traceability to the source text/transcript."""
+
+    quote: str = Field(..., description="Verbatim quote supporting the value")
+    start_char: Optional[int] = Field(
+        default=None, ge=0, description="Start character offset in source text"
+    )
+    end_char: Optional[int] = Field(
+        default=None, ge=0, description="End character offset in source text"
+    )
+    speaker: Optional[str] = Field(
+        default=None, description="Speaker identifier if transcripted"
+    )
+    document_id: Optional[str] = Field(
+        default=None, description="Source document identifier"
+    )
 
 
 # This is the ONLY model for a field with evidence.
@@ -15,10 +33,47 @@ class AttributedField(BaseModel):
     """A container for a single value and its specific supporting evidence."""
 
     value: Optional[str] = Field(description="The extracted piece of information.")
-    evidence: List[str] = Field(
-        default=[],
-        description="A list of direct quotes that specifically support this value.",
+    evidence: List[EvidenceItem] = Field(
+        default_factory=list,
+        description="A list of evidence items with quotes and optional offsets/speaker.",
     )
+
+    # Backward compatibility: allow strings or dicts to be coerced into EvidenceItem
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        # Single string -> single EvidenceItem
+        if isinstance(v, str):
+            return [{"quote": v}]
+        # Single dict -> assume it's an EvidenceItem-like mapping
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            # Common alias fallback
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        # List handling
+        if isinstance(v, list):
+            normalized = []
+            for item in v:
+                if isinstance(item, str):
+                    normalized.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        normalized.append(item)
+                    elif "text" in item:
+                        normalized.append({"quote": item.get("text", "")})
+                    else:
+                        # Unknown dict shape; skip
+                        continue
+                else:
+                    # Unknown type; skip
+                    continue
+            return normalized
+        return v
 
 
 # This is the ONLY model for the demographics section.
@@ -47,9 +102,36 @@ class PersonaTrait(BaseModel):
         le=1.0,
         description="Confidence level in this trait (0.0-1.0)",
     )
-    evidence: List[str] = Field(
+    evidence: List[EvidenceItem] = Field(
         default_factory=list, description="Supporting evidence for this trait"
     )
+
+    # Backward compatibility: allow strings or dicts to be coerced into EvidenceItem
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [{"quote": v}]
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        if isinstance(v, list):
+            out = []
+            for item in v:
+                if isinstance(item, str):
+                    out.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        out.append(item)
+                    elif "text" in item:
+                        out.append({"quote": item.get("text", "")})
+            return out
+        return v
 
 
 class Persona(BaseModel):
@@ -164,12 +246,42 @@ class EnhancedPersonaTrait(BaseModel):
     confidence: float = Field(
         default=0.7, ge=0.0, le=1.0, description="Confidence in this trait (0.0-1.0)"
     )
-    evidence: List[str] = Field(
+    evidence: List[EvidenceItem] = Field(
         default_factory=list, description="Supporting evidence for this trait"
     )
     stakeholder_context: Optional[Dict[str, Any]] = Field(
         default=None, description="Additional stakeholder context for this trait"
     )
+
+    # Backward compatibility: allow strings or dicts to be coerced into EvidenceItem
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        # Single string -> single EvidenceItem
+        if isinstance(v, str):
+            return [{"quote": v}]
+        # Single dict -> assume it's an EvidenceItem-like mapping
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        # List handling
+        if isinstance(v, list):
+            normalized = []
+            for item in v:
+                if isinstance(item, str):
+                    normalized.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        normalized.append(item)
+                    elif "text" in item:
+                        normalized.append({"quote": item.get("text", "")})
+            return normalized
+        return v
 
 
 class EnhancedPersona(BaseModel):

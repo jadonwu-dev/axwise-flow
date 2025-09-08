@@ -23,23 +23,27 @@ export async function GET(request: NextRequest) {
   try {
     console.log('Proxying research sessions request to backend');
 
-    // Get authentication token (required in prod)
-    let authToken: string;
-    try {
-      authToken = await getAuthTokenRequired();
-    } catch (e) {
-      return NextResponse.json({ error: 'Authentication token required' }, { status: 401 });
+    // Auth token: required in production or when Clerk validation is explicitly enabled
+    const requireAuth = process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    let authToken = '';
+    if (requireAuth) {
+      try {
+        authToken = await getAuthTokenRequired();
+      } catch (e) {
+        return NextResponse.json({ error: 'Authentication token required' }, { status: 401 });
+      }
     }
 
     // Forward query params (limit, etc.)
     const url = new URL(request.url);
     const query = url.search ? url.search : '';
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
     const response = await fetch(`${API_BASE_URL}/api/research/sessions${query}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      },
+      headers,
     });
 
     console.log('Backend response status:', response.status);

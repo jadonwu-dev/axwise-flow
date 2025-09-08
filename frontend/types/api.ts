@@ -213,10 +213,47 @@ export type PersonaTrait = {
   stakeholder_context?: Record<string, any>; // Additional stakeholder context for enhanced personas
 };
 
-// NEW: Enhanced attributed field structure for perfect evidence traceability
+// NEW (Phase 0): Evidence item with traceability
+export interface EvidenceItem {
+  quote: string;
+  start_char?: number | null;
+  end_char?: number | null;
+  speaker?: string | null;
+  document_id?: string | null;
+}
+
+// NEW (Phase 0): Attributed field using evidence items
+export interface AttributedFieldSSOT {
+  value?: string;
+  evidence?: EvidenceItem[];
+}
+
+// NEW (Phase 0): Structured demographics with attributed fields using EvidenceItem[]
+export interface StructuredDemographicsSSOT {
+  experience_level?: AttributedFieldSSOT;
+  industry?: AttributedFieldSSOT;
+  age_range?: AttributedFieldSSOT;
+  location?: AttributedFieldSSOT;
+  professional_context?: AttributedFieldSSOT;
+  roles?: AttributedFieldSSOT;
+  confidence?: number;
+}
+
+// Legacy AttributedField kept for older persona rendering
 export interface AttributedField {
   value: string;
   evidence: string[];
+}
+
+// NEW (Phase 0): SSOT persona for dev-only visualization
+export interface PersonaSSOT {
+  name: string;
+  description?: string;
+  archetype?: string;
+  demographics?: StructuredDemographicsSSOT | null;
+  goals_and_motivations?: AttributedFieldSSOT | null;
+  challenges_and_frustrations?: AttributedFieldSSOT | null;
+  key_quotes?: AttributedFieldSSOT | null;
 }
 
 // NEW: Structured demographics with evidence attribution for each field

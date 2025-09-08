@@ -402,7 +402,13 @@ export default function VisualizationTabsRefactored({
                     personas={analysis.personas || []}
                     stakeholderIntelligence={stakeholderIntelligence}
                     isMultiStakeholder={isMultiStakeholder}
-                    resultId={analysisId}
+                    resultId={analysisId as any}
+                    // Dev-only Phase 0 fields
+                    personasSSOT={(analysis as any)?.personas_ssot || []}
+                    validationSummary={(analysis as any)?.validation_summary || null}
+                    validationStatus={(analysis as any)?.validation_status || null}
+                    confidenceComponents={(analysis as any)?.confidence_components || null}
+                    sourceInfo={(analysis as any)?.source || {}}
                   />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

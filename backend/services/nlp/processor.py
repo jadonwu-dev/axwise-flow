@@ -1573,15 +1573,10 @@ class NLPProcessor:
                             )
 
                             # Make sure it has the required fields
+                            # Legacy required fields removed; modern personas only require name/description
                             required_fields = [
                                 "name",
                                 "description",
-                                "role_context",
-                                "key_responsibilities",
-                                "tools_used",
-                                "collaboration_style",
-                                "analysis_approach",
-                                "pain_points",
                             ]
                             missing_fields = [
                                 field

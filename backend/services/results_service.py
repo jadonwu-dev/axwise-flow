@@ -395,6 +395,83 @@ class ResultsService:
                                 )
                         # Continue anyway but log the issue - validation shouldn't block persona delivery
 
+                # Phase 0 additions: build SSoT personas, source payload, and validation placeholders
+                personas_ssot: List[Dict[str, Any]] = []
+                try:
+                    from backend.services.adapters.persona_adapters import (
+                        to_ssot_persona,
+                    )
+
+                    for p in results_dict.get("personas", []) or []:
+                        if isinstance(p, dict):
+                            personas_ssot.append(to_ssot_persona(p))
+                except Exception as e:
+                    logger.warning(f"SSoT adapter failed: {e}")
+
+                # Attach source with priority: transcript > original_text > dataId
+                source_payload: Dict[str, Any] = {}
+                try:
+                    transcript = results_dict.get("transcript")
+                    if isinstance(transcript, list) and all(
+                        isinstance(x, dict) for x in transcript
+                    ):
+                        source_payload["transcript"] = transcript
+                    else:
+                        original_text = results_dict.get(
+                            "original_text"
+                        ) or results_dict.get("source_text")
+                        if isinstance(original_text, str) and original_text.strip():
+                            source_payload["original_text"] = original_text
+                        elif analysis_result.data_id:
+                            source_payload["dataId"] = analysis_result.data_id
+                except Exception as e:
+                    logger.warning(f"Could not attach source payload: {e}")
+
+                # Compute validation placeholders (no gating in Phase 0)
+                validation_summary = None
+                validation_status = None
+                confidence_components = None
+                try:
+                    if personas_ssot:
+                        from backend.services.validation.persona_evidence_validator import (
+                            PersonaEvidenceValidator,
+                        )
+
+                        validator = PersonaEvidenceValidator()
+                        transcript = source_payload.get("transcript")
+                        original_text = source_payload.get("original_text")
+                        first_persona = personas_ssot[0]
+                        matches = validator.match_evidence(
+                            first_persona,
+                            source_text=original_text,
+                            transcript=transcript,
+                        )
+                        duplication = validator.detect_duplication(first_persona)
+                        speaker_check = validator.check_speaker_consistency(
+                            first_persona, transcript
+                        )
+                        validation_summary = validator.summarize(
+                            matches, duplication, speaker_check
+                        )
+                        validation_status = validator.compute_status(validation_summary)
+                        confidence_components = validator.compute_confidence_components(
+                            validation_summary
+                        )
+                except Exception as e:
+                    logger.warning(f"Validation skeleton failed: {e}")
+
+                # Feature flag for future enforcement (Phase 1)
+                try:
+                    import os
+
+                    validation_enforcement = (
+                        os.getenv("PERSONA_VALIDATION_ENFORCEMENT", "false").lower()
+                        == "true"
+                    )
+                except Exception:
+                    validation_enforcement = False
+
+                # Create formatted response (flattened structure to match frontend expectations)
                 # Create formatted response (flattened structure to match frontend expectations)
                 formatted_results = {
                     "status": "completed",
@@ -437,6 +514,17 @@ class ResultsService:
                         }
                     ),
                 }
+
+                # Extend formatted_results with SSoT and validation fields
+                try:
+                    formatted_results["personas_ssot"] = personas_ssot
+                    formatted_results["source"] = source_payload
+                    formatted_results["validation_summary"] = validation_summary
+                    formatted_results["validation_status"] = validation_status
+                    formatted_results["confidence_components"] = confidence_components
+                    formatted_results["validation_enforcement"] = validation_enforcement
+                except Exception as e:
+                    logger.warning(f"Failed to attach SSoT/validation fields: {e}")
 
                 # Log whether sentimentStatements were found
                 has_sentiment_statements = "sentimentStatements" in results_dict
@@ -729,6 +817,27 @@ class ResultsService:
             "analysis_approach",
         ]
 
+        # Helper to coerce evidence items to list[str]
+        def _coerce_evidence(evd: Any) -> List[str]:
+            quotes: List[str] = []
+            if not evd:
+                return quotes
+            if isinstance(evd, list):
+                for item in evd:
+                    if isinstance(item, str):
+                        quotes.append(item)
+                    elif isinstance(item, dict):
+                        q = item.get("quote")
+                        if isinstance(q, str) and q:
+                            quotes.append(q)
+            elif isinstance(evd, dict):
+                q = evd.get("quote")
+                if isinstance(q, str) and q:
+                    quotes.append(q)
+            elif isinstance(evd, str):
+                quotes.append(evd)
+            return quotes
+
         # Convert trait fields from EnhancedPersonaTrait to simple dict
         for field in trait_fields:
             if field in persona_dict and persona_dict[field] is not None:
@@ -738,8 +847,18 @@ class ResultsService:
                     persona_dict[field] = {
                         "value": trait.get("value", ""),
                         "confidence": trait.get("confidence", 0.7),
-                        "evidence": trait.get("evidence", []),
+                        "evidence": _coerce_evidence(trait.get("evidence", [])),
                     }
+                else:
+                    # Fallback to empty trait structure
+                    persona_dict[field] = {
+                        "value": "",
+                        "confidence": 0.7,
+                        "evidence": [],
+                    }
+            else:
+                # Ensure field exists with default structure for legacy consumers
+                persona_dict[field] = {"value": "", "confidence": 0.7, "evidence": []}
 
         # RESTORE key_quotes from preserved metadata if it's missing
         if "key_quotes" not in persona_dict or persona_dict["key_quotes"] is None:

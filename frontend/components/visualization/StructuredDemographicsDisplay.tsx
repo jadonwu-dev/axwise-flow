@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Quote, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { StructuredDemographics, AttributedField } from '@/types/api';
+import type { StructuredDemographicsSSOT as StructuredDemographics, AttributedFieldSSOT as AttributedField, EvidenceItem } from '@/types/api';
 
 interface StructuredDemographicsDisplayProps {
   demographics: StructuredDemographics;
@@ -19,11 +19,21 @@ interface DemographicItemProps {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
+// Normalize evidence to text + attribution
+const formatEvidence = (item: string | EvidenceItem) => {
+  if (typeof item === 'string') {
+    return { text: item.replace(/^['"]|['"]$/g, '').trim(), speaker: undefined };
+  }
+  const text = (item?.quote || '').replace(/^['"]|['"]$/g, '').trim();
+  const speaker = item?.speaker || undefined;
+  return { text, speaker };
+};
+
 // Component to display a single demographic item with its evidence
-const DemographicItem: React.FC<DemographicItemProps> = ({ 
-  label, 
-  attributedField, 
-  icon: Icon 
+const DemographicItem: React.FC<DemographicItemProps> = ({
+  label,
+  attributedField,
+  icon: Icon
 }) => {
   const [showEvidence, setShowEvidence] = useState(false);
 
@@ -31,7 +41,8 @@ const DemographicItem: React.FC<DemographicItemProps> = ({
     return null;
   }
 
-  const hasEvidence = attributedField.evidence && attributedField.evidence.length > 0;
+  const evidenceArray = Array.isArray(attributedField.evidence) ? attributedField.evidence : [];
+  const hasEvidence = evidenceArray.length > 0;
 
   return (
     <div className="p-4 rounded-lg border border-gray-200 bg-white hover:shadow-sm transition-shadow">
@@ -44,14 +55,14 @@ const DemographicItem: React.FC<DemographicItemProps> = ({
             </span>
             {hasEvidence && (
               <Badge variant="outline" className="text-xs">
-                {attributedField.evidence.length} evidence
+                {evidenceArray.length} evidence
               </Badge>
             )}
           </div>
           <div className="text-gray-700 leading-relaxed mb-2">
             {attributedField.value}
           </div>
-          
+
           {hasEvidence && (
             <Button
               variant="ghost"
@@ -75,17 +86,24 @@ const DemographicItem: React.FC<DemographicItemProps> = ({
       {hasEvidence && showEvidence && (
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="space-y-2">
-            {attributedField.evidence.map((quote, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-2 p-2 bg-blue-50 rounded border-l-2 border-blue-200"
-              >
-                <Quote className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
-                <span className="text-xs text-gray-700 italic leading-relaxed">
-                  "{quote}"
-                </span>
-              </div>
-            ))}
+            {evidenceArray.map((ev, index) => {
+              const { text, speaker } = formatEvidence(ev as any);
+              if (!text) return null;
+              return (
+                <div
+                  key={index}
+                  className="flex items-start gap-2 p-2 bg-blue-50 rounded border-l-2 border-blue-200"
+                >
+                  <Quote className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-gray-700 leading-relaxed">
+                    <span className="italic">"{text}"</span>
+                    {speaker && (
+                      <span className="not-italic text-gray-500 ml-2">— {speaker}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -114,7 +132,8 @@ export const StructuredDemographicsDisplay: React.FC<StructuredDemographicsDispl
 
   // Filter out fields that don't have values
   const availableFields = demographicFields.filter(
-    field => demographics[field.key] && demographics[field.key]?.value
+    // @ts-expect-error SSOT type uses optional fields
+    field => demographics[field.key] && (demographics as any)[field.key]?.value
   );
 
   if (availableFields.length === 0) {
@@ -137,9 +156,11 @@ export const StructuredDemographicsDisplay: React.FC<StructuredDemographicsDispl
             Demographics
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {Math.round(demographics.confidence * 100)}% confidence
-            </Badge>
+            {typeof demographics.confidence === 'number' && (
+              <Badge variant="outline" className="text-xs">
+                {Math.round((demographics.confidence || 0) * 100)}% confidence
+              </Badge>
+            )}
             <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
               Enhanced
             </Badge>
@@ -149,7 +170,8 @@ export const StructuredDemographicsDisplay: React.FC<StructuredDemographicsDispl
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {availableFields.map(({ key, label }) => {
-            const attributedField = demographics[key];
+            // @ts-expect-error index access on SSOT type
+            const attributedField = (demographics as any)[key] as AttributedField | undefined;
             if (!attributedField) return null;
 
             return (

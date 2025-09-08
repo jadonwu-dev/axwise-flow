@@ -99,8 +99,15 @@ def apply_domain_keywords_to_persona(
         if isinstance(trait_data, dict) and "evidence" in trait_data:
             evidence_list = trait_data["evidence"]
             if evidence_list:
-                enhanced_evidence = []
-                for quote in evidence_list:
+                enhanced_evidence: List[str] = []
+                for item in evidence_list:
+                    quote = (
+                        item
+                        if isinstance(item, str)
+                        else (item.get("quote") if isinstance(item, dict) else None)
+                    )
+                    if not isinstance(quote, str) or not quote:
+                        continue
                     enhanced_quote = apply_domain_highlighting_to_quote(
                         quote, normalized_keywords
                     )

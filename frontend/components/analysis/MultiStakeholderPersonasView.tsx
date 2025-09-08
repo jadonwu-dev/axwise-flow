@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { User, Users, Target, Lightbulb, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 import { parseDemographics } from '@/utils/demographicsParser';
+import StructuredDemographicsDisplay from '@/components/visualization/StructuredDemographicsDisplay';
 
 interface Persona {
   name: string;
@@ -417,6 +418,35 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
   const getConfidenceTooltip = (confidence?: number) => {
     if (!confidence) return 'Confidence level not available';
     if (confidence >= 0.9) return 'High confidence: Based on direct statements from the interview';
+  // Heuristic parser for Python-like dict string in demographics.value
+  const tryParseDemographicsPyDict = (s: string): Array<{ key: string; value: string }> => {
+    if (typeof s !== 'string') return [];
+    const text = s.trim();
+    if (!text.startsWith('{') || !text.includes("'value':")) return [];
+    const res: Array<{ key: string; value: string }> = [];
+    // Match: 'key': { ... 'value': '...' or "..." }
+    const re = /'([a-z_]+)'\s*:\s*\{[^}]*?'value'\s*:\s*("|')([\s\S]*?)\2/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const key = m[1];
+      const value = (m[3] || '').trim();
+      res.push({ key, value });
+    }
+    return res;
+  };
+
+  const labelForDemoKey = (k: string): string => {
+    const map: Record<string, string> = {
+      experience_level: 'Experience Level',
+      industry: 'Industry',
+      location: 'Location',
+      professional_context: 'Professional Context',
+      roles: 'Roles',
+      age_range: 'Age Range',
+    };
+    return map[k] || k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
     if (confidence >= 0.7) return 'Good confidence: Based on strong evidence across multiple mentions';
     if (confidence >= 0.5) return 'Moderate confidence: Based on contextual clues';
     return 'Limited confidence: Based on inferences with minimal evidence';
@@ -425,12 +455,10 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
   // Helper function to render trait values consistently
   const renderTraitValue = (value: any, isDemographics: boolean = false): React.ReactNode => {
     if (typeof value === 'string') {
-      // Special handling for demographics using our improved parser
       if (isDemographics) {
         try {
           const parsedDemographics = parseDemographics(value);
           if (parsedDemographics.length > 1 || (parsedDemographics.length === 1 && parsedDemographics[0].key !== 'Demographics')) {
-            // Successfully parsed into structured data - render as key-value pairs
             return parsedDemographics.map((item, i) => (
               <li key={i} className="mb-2">
                 <div className="flex flex-col sm:flex-row sm:items-start">
@@ -444,37 +472,37 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
               </li>
             ));
           } else {
-            // Fall back to default parsing if structured parsing didn't work well
             return renderDefaultTraitValue(value);
           }
-        } catch (error) {
-          console.warn('Demographics parsing failed, falling back to default:', error);
+        } catch {
           return renderDefaultTraitValue(value);
         }
       } else {
         return renderDefaultTraitValue(value);
       }
     } else if (Array.isArray(value)) {
-      // Render array items as list items
-      return value.filter(item => typeof item === 'string' || typeof item === 'number').map((item, i) => (
-        <li key={i}>{String(item)}</li>
-      ));
+      return value
+        .map((item) => (typeof item === 'string' ? item : (item && typeof item === 'object' && typeof (item as any).quote === 'string' ? (item as any).quote : null)))
+        .filter((text): text is string => !!text && text.trim().length > 0)
+        .map((text, i) => <li key={i}>{text}</li>);
+    } else if (value && typeof value === 'object' && 'value' in value && 'evidence' in value) {
+      // AttributedField-like object
+      const v = (value as any).value;
+      if (typeof v === 'string') return renderDefaultTraitValue(v);
+      return <li>{String(v)}</li>;
     } else if (typeof value === 'object' && value !== null) {
-      // Try to render simple key-value pairs from a dict
       try {
         const entries = Object.entries(value);
         const displayLimit = 5;
         return entries.slice(0, displayLimit).map(([key, val]) => (
           <li key={key}><strong>{key}:</strong> {String(val)}</li>
         )).concat(entries.length > displayLimit ? [<li key="more" className="text-muted-foreground italic">...and more</li>] : []);
-      } catch (e) {
+      } catch {
         return <li className="text-muted-foreground italic">[Complex Object]</li>;
       }
     } else if (value !== null && value !== undefined) {
-      // Render other primitive types as a single list item
       return <li>{String(value)}</li>;
     }
-    // Fallback for null, undefined, or empty values
     return <li className="text-muted-foreground italic">N/A</li>;
   };
 
@@ -686,7 +714,23 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                   <div>
                     <h4 className="font-semibold mb-2">Profile</h4>
                     <ul className="list-disc pl-5 space-y-1">
-                      {renderTraitValue(persona.demographics.value, true)}
+                      {(() => {
+                        const v = persona.demographics.value;
+                        if (typeof v === 'string' && v.trim().startsWith('{') && v.includes("'value':")) {
+                          const parsed = tryParseDemographicsPyDict(v);
+                          if (parsed.length > 0) {
+                            return parsed.map(({ key, value }, i) => (
+                              <li key={i}>
+                                <span className="font-semibold text-gray-900 min-w-[140px] mr-1 text-sm uppercase tracking-wide">
+                                  {labelForDemoKey(key)}:
+                                </span>
+                                <span className="text-gray-700">{value}</span>
+                              </li>
+                            ));
+                          }
+                        }
+                        return renderTraitValue(v, true);
+                      })()}
                     </ul>
                   </div>
                   {persona.demographics.evidence && persona.demographics.evidence.length > 0 && (
@@ -697,9 +741,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                         </AccordionTrigger>
                         <AccordionContent>
                           <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {persona.demographics.evidence.map((evidence: string, idx: number) => (
-                              <li key={idx}>{evidence}</li>
-                            ))}
+                            {persona.demographics.evidence.map((raw: any, idx: number) => {
+                              const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                              if (!text) return null;
+                              return <li key={idx}>{text}</li>;
+                            })}
                           </ul>
                         </AccordionContent>
                       </AccordionItem>
@@ -735,9 +781,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                         </AccordionTrigger>
                         <AccordionContent>
                           <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {persona.goals_and_motivations.evidence.map((evidence: string, idx: number) => (
-                              <li key={idx}>{evidence}</li>
-                            ))}
+                            {persona.goals_and_motivations.evidence.map((raw: any, idx: number) => {
+                              const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                              if (!text) return null;
+                              return <li key={idx}>{text}</li>;
+                            })}
                           </ul>
                         </AccordionContent>
                       </AccordionItem>
@@ -773,9 +821,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                         </AccordionTrigger>
                         <AccordionContent>
                           <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {persona.pain_points.evidence.map((evidence: string, idx: number) => (
-                              <li key={idx}>{evidence}</li>
-                            ))}
+                            {persona.pain_points.evidence.map((raw: any, idx: number) => {
+                              const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                              if (!text) return null;
+                              return <li key={idx}>{text}</li>;
+                            })}
                           </ul>
                         </AccordionContent>
                       </AccordionItem>
@@ -813,9 +863,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                         </AccordionTrigger>
                         <AccordionContent>
                           <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {(persona.challenges_and_frustrations || persona.pain_points)?.evidence.map((evidence: string, idx: number) => (
-                              <li key={idx}>{evidence}</li>
-                            ))}
+                            {(persona.challenges_and_frustrations || persona.pain_points)?.evidence.map((raw: any, idx: number) => {
+                              const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                              if (!text) return null;
+                              return <li key={idx}>{text}</li>;
+                            })}
                           </ul>
                         </AccordionContent>
                       </AccordionItem>
@@ -851,11 +903,15 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
                         </AccordionTrigger>
                         <AccordionContent>
                           <div className="space-y-2">
-                            {persona.key_quotes.evidence.map((quote: string, idx: number) => (
-                              <blockquote key={idx} className="border-l-4 border-blue-500 pl-4 italic text-sm text-gray-600">
-                                "{quote}"
-                              </blockquote>
-                            ))}
+                            {persona.key_quotes.evidence.map((raw: any, idx: number) => {
+                              const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : null);
+                              if (!text) return null;
+                              return (
+                                <blockquote key={idx} className="border-l-4 border-blue-500 pl-4 italic text-sm text-gray-600">
+                                  "{text}"
+                                </blockquote>
+                              );
+                            })}
                           </div>
                         </AccordionContent>
                       </AccordionItem>

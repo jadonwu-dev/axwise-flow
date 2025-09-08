@@ -315,15 +315,45 @@ class PersonaEnhancementService:
         return enhanced_persona
 
     def _convert_trait(self, trait_data: Any) -> Optional[EnhancedPersonaTrait]:
-        """Convert a trait to enhanced format"""
+        """Convert a trait to enhanced format with evidence coercion to strings."""
         if not trait_data:
             return None
+
+        def _coerce_evidence_to_strings(evd: Any) -> List[str]:
+            # Backward-compat: accept List[str] | List[EvidenceItem] | EvidenceItem | str | dict
+            quotes: List[str] = []
+            if not evd:
+                return quotes
+            if isinstance(evd, list):
+                for item in evd:
+                    if isinstance(item, str):
+                        quotes.append(item)
+                    elif isinstance(item, dict):
+                        q = item.get("quote")
+                        if isinstance(q, str) and q:
+                            quotes.append(q)
+                    else:
+                        # Pydantic model (EvidenceItem) or other
+                        q = getattr(item, "quote", None)
+                        if isinstance(q, str) and q:
+                            quotes.append(q)
+            elif isinstance(evd, dict):
+                q = evd.get("quote")
+                if isinstance(q, str) and q:
+                    quotes.append(q)
+            elif isinstance(evd, str):
+                quotes.append(evd)
+            else:
+                q = getattr(evd, "quote", None)
+                if isinstance(q, str) and q:
+                    quotes.append(q)
+            return quotes
 
         if isinstance(trait_data, dict):
             return EnhancedPersonaTrait(
                 value=trait_data.get("value", ""),
                 confidence=trait_data.get("confidence", 0.7),
-                evidence=trait_data.get("evidence", []),
+                evidence=_coerce_evidence_to_strings(trait_data.get("evidence", [])),
             )
         elif isinstance(trait_data, str):
             return EnhancedPersonaTrait(value=trait_data, confidence=0.7, evidence=[])

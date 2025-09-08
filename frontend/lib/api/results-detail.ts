@@ -88,11 +88,20 @@ function cleanPersonaTraits(persona: Persona): Persona {
       // Always include core fields even if they have quality issues (but log them)
       if (coreFields.includes(key)) {
         cleanedPersona[key] = trait;
+        // Improve logging for demographics StructuredDemographics value
+        const loggedValue = typeof trait.value === 'string'
+          ? trait.value
+          : Array.isArray(trait.value)
+            ? trait.value.join(', ')
+            : trait.value && typeof trait.value === 'object'
+              ? JSON.stringify(trait.value)
+              : String(trait.value);
         if (!filterPersonaTrait(trait)) {
           console.warn(`[PERSONA_QUALITY] Core field '${key}' has quality issues but preserved:`, {
             confidence: trait.confidence,
             evidenceCount: trait.evidence?.length || 0,
-            isGeneric: isGenericContent(trait.value)
+            isGeneric: isGenericContent(trait.value),
+            valuePreview: loggedValue,
           });
         }
       } else {
@@ -177,11 +186,15 @@ function processStructuredDemographics(persona: Persona): Persona {
 
   const demographics = persona.demographics as PersonaTrait;
 
-  // Check if demographics value is a string that can be converted
+  // If value is already structured demographics (object of attributed subfields), leave as-is
+  if (demographics && typeof demographics.value === 'object' && demographics.value !== null) {
+    return persona;
+  }
+
+  // Otherwise, if it's a string, attempt to convert to structured format
   if (typeof demographics.value === 'string') {
     const structuredValue = convertStringToStructuredDemographics(demographics.value);
 
-    // If we successfully converted to structured format, update the trait
     if (typeof structuredValue === 'object' && structuredValue !== demographics.value) {
       return {
         ...persona,
@@ -620,7 +633,13 @@ export async function getAnalysisById(id: string): Promise<DetailedAnalysisResul
       sentimentStatements: results.sentimentStatements ||
                           (results.sentiment && results.sentiment.sentimentStatements) ||
                           {positive: [], neutral: [], negative: []},
-      // Apply persona quality filtering
+      // SSoT Phase 0: propagate new additive fields
+      personas_ssot: Array.isArray(results.personas_ssot) ? results.personas_ssot : [],
+      source: results.source || {},
+      validation_summary: results.validation_summary || null,
+      validation_status: results.validation_status || null,
+      confidence_components: results.confidence_components || null,
+      // Apply persona quality filtering (legacy personas only)
       personas: results.personas ? filterPersonaQuality(results.personas) : []
     };
 

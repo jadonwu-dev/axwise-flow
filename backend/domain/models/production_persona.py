@@ -15,6 +15,7 @@ Key Features:
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 import json
+from backend.domain.models.persona_schema import EvidenceItem
 
 
 class PersonaTrait(BaseModel):
@@ -32,32 +33,55 @@ class PersonaTrait(BaseModel):
         le=1.0,
         description="Confidence level in this trait (0.0-1.0)",
     )
-    evidence: List[str] = Field(
-        default_factory=list, description="Supporting evidence quotes for this trait"
+    evidence: List[EvidenceItem] = Field(
+        default_factory=list, description="Supporting evidence items for this trait"
     )
 
+    # Backward-compat: accept strings/dicts and coerce to EvidenceItem
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [{"quote": v}]
+        if isinstance(v, dict):
+            if "quote" in v:
+                return [v]
+            if "text" in v:
+                return [{"quote": v.get("text", "")}]
+            return []
+        if isinstance(v, list):
+            out = []
+            for item in v:
+                if isinstance(item, str):
+                    out.append({"quote": item})
+                elif isinstance(item, dict):
+                    if "quote" in item:
+                        out.append(item)
+                    elif "text" in item:
+                        out.append({"quote": item.get("text", "")})
+            return out
+        return v
+
+    # Post-coercion validation: remove generic placeholders
     @field_validator("evidence")
-    def validate_evidence(cls, v):
-        """Ensure evidence contains authentic quotes, not placeholders"""
+    @classmethod
+    def _filter_generic_placeholders(cls, v: List[EvidenceItem]):
         if not v:
             return []
-
-        # Filter out generic placeholders
         generic_patterns = [
             "no specific information provided",
             "inferred from interview",
             "general context",
             "derived from overall conversation",
         ]
-
-        filtered_evidence = []
-        for evidence_item in v:
-            if isinstance(evidence_item, str):
-                evidence_lower = evidence_item.lower()
-                if not any(pattern in evidence_lower for pattern in generic_patterns):
-                    filtered_evidence.append(evidence_item)
-
-        return filtered_evidence
+        filtered: List[EvidenceItem] = []
+        for item in v:
+            q = (item.quote or "").lower()
+            if not any(pattern in q for pattern in generic_patterns):
+                filtered.append(item)
+        return filtered
 
 
 class ProductionPersona(BaseModel):
@@ -137,7 +161,11 @@ class ProductionPersona(BaseModel):
         ]:
             field_value = getattr(self, field_name, None)
             if field_value and hasattr(field_value, "evidence"):
-                result["evidence"].extend(field_value.evidence)
+                # Convert EvidenceItem[] to plain quotes for legacy field
+                for ev in field_value.evidence:
+                    quote = getattr(ev, "quote", ev if isinstance(ev, str) else None)
+                    if isinstance(quote, str) and quote.strip():
+                        result["evidence"].append(quote.strip())
 
         return result
 
