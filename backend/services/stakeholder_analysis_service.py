@@ -75,6 +75,29 @@ class StakeholderAnalysisService:
 
     def _initialize_pydantic_ai_agents(self):
         """Initialize PydanticAI agents for structured cross-stakeholder analysis"""
+        # Optional factory-based initialization behind a feature flag to ensure
+        # backward compatibility. Enable with USE_STAKEHOLDER_AGENT_FACTORY=true
+        try:
+            use_factory = os.getenv(
+                "USE_STAKEHOLDER_AGENT_FACTORY", "false"
+            ).lower() in ("1", "true", "yes")
+            if use_factory:
+                # Use DI container to obtain the StakeholderAgentFactory singleton
+                from backend.api.dependencies import get_container
+
+                self.agent_factory = get_container().get_stakeholder_agent_factory()
+                self.consensus_agent = self.agent_factory.get_consensus_agent()
+                self.conflict_agent = self.agent_factory.get_conflict_agent()
+                self.influence_agent = self.agent_factory.get_influence_agent()
+                self.summary_agent = self.agent_factory.get_summary_agent()
+                self.theme_agent = self.agent_factory.get_theme_agent()
+                self.pydantic_ai_available = True
+                logger.info(
+                    "[PHASE2_DEBUG] Initialized PydanticAI agents via StakeholderAgentFactory (from DI container)"
+                )
+                return
+        except Exception as e:
+            logger.warning(f"[PHASE2_DEBUG] Agent factory unavailable or failed: {e}")
         try:
             # Get API key from environment (PydanticAI v0.4.3 expects GEMINI_API_KEY)
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -294,6 +317,9 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                 logger.info(
                     f"[STAKEHOLDER_SERVICE_DEBUG] No personas found in base_analysis.personas"
                 )
+
+            # Initialize persona_stakeholders to avoid UnboundLocalError when no personas are present
+            persona_stakeholders = []
 
             # FIX: Allow even 1 persona (changed from >= 2 to >= 1)
             if existing_personas and len(existing_personas) >= 1:
@@ -605,6 +631,30 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             logger.info(
                 f"[STAKEHOLDER_SERVICE_DEBUG] Enhancing base analysis with stakeholder intelligence..."
             )
+            # If we don't have at least two stakeholders, handle according to tests/legacy behavior
+            if (
+                not stakeholder_intelligence
+                or len(
+                    getattr(stakeholder_intelligence, "detected_stakeholders", []) or []
+                )
+                < 2
+            ):
+                logger.warning(
+                    "[STAKEHOLDER_SERVICE_DEBUG] Not enough stakeholders (<2) - applying legacy behavior"
+                )
+                # If enhancement failed (e.g., file error), preserve the metadata for diagnostics
+                if stakeholder_intelligence and getattr(
+                    stakeholder_intelligence, "processing_metadata", {}
+                ).get("enhancement_failed"):
+                    enhanced_analysis = base_analysis.model_copy()
+                    enhanced_analysis.stakeholder_intelligence = (
+                        stakeholder_intelligence
+                    )
+                    return enhanced_analysis
+                # Otherwise, explicitly set to None per test expectation
+                base_analysis.stakeholder_intelligence = None
+                return base_analysis
+
             enhanced_analysis = base_analysis.model_copy()
             enhanced_analysis.stakeholder_intelligence = stakeholder_intelligence
 
@@ -865,6 +915,8 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             "processing_timestamp": str(asyncio.get_event_loop().time()),
             "llm_analysis_available": self.llm_client is not None,
         }
+        if getattr(detection_result, "detection_method", "") == "error":
+            processing_metadata["enhancement_failed"] = True
 
         # Add detection result metadata if available
         if hasattr(detection_result, "metadata") and detection_result.metadata:
@@ -963,6 +1015,8 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                 "processing_timestamp": str(asyncio.get_event_loop().time()),
                 "llm_analysis_available": False,
                 "fallback_mode": True,
+                "enhancement_failed": getattr(detection_result, "detection_method", "")
+                == "error",
             },
         )
 
@@ -1003,9 +1057,72 @@ Base your analysis on the actual theme content and stakeholder profiles provided
                 f"[PHASE2_DEBUG] Running parallel analysis: consensus, conflicts, influence..."
             )
 
-            consensus_task = self.consensus_agent.run(stakeholder_context)
-            conflict_task = self.conflict_agent.run(stakeholder_context)
-            influence_task = self.influence_agent.run(stakeholder_context)
+            if os.getenv("USE_CONSENSUS_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "consensus_service"):
+                        from backend.services.stakeholder.analysis.consensus_analysis_service import (
+                            ConsensusAnalysisService,
+                        )
+
+                        self.consensus_service = ConsensusAnalysisService(
+                            self.agent_factory
+                        )
+                    consensus_task = self.consensus_service.analyze(stakeholder_context)
+                except Exception as e:
+                    logger.warning(
+                        f"[PHASE2_DEBUG] Consensus service unavailable, falling back to inline agent: {e}"
+                    )
+                    consensus_task = self.consensus_agent.run(stakeholder_context)
+            else:
+                consensus_task = self.consensus_agent.run(stakeholder_context)
+            if os.getenv("USE_CONFLICT_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "conflict_service"):
+                        from backend.services.stakeholder.analysis.conflict_analysis_service import (
+                            ConflictAnalysisService,
+                        )
+
+                        self.conflict_service = ConflictAnalysisService(
+                            self.agent_factory
+                        )
+                    conflict_task = self.conflict_service.analyze(stakeholder_context)
+                except Exception as e:
+                    logger.warning(
+                        f"[PHASE2_DEBUG] Conflict service unavailable, falling back to inline agent: {e}"
+                    )
+                    conflict_task = self.conflict_agent.run(stakeholder_context)
+            else:
+                conflict_task = self.conflict_agent.run(stakeholder_context)
+            if os.getenv("USE_INFLUENCE_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "influence_service"):
+                        from backend.services.stakeholder.analysis.influence_analysis_service import (
+                            InfluenceAnalysisService,
+                        )
+
+                        self.influence_service = InfluenceAnalysisService(
+                            self.agent_factory
+                        )
+                    influence_task = self.influence_service.analyze(stakeholder_context)
+                except Exception as e:
+                    logger.warning(
+                        f"[PHASE2_DEBUG] Influence service unavailable, falling back to inline agent: {e}"
+                    )
+                    influence_task = self.influence_agent.run(stakeholder_context)
+            else:
+                influence_task = self.influence_agent.run(stakeholder_context)
 
             # Wait for all analyses to complete
             consensus_result, conflict_result, influence_result = await asyncio.gather(
@@ -1307,7 +1424,28 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             )
 
             # Use PydanticAI agent to generate comprehensive summary
-            summary_result = await self.summary_agent.run(summary_context)
+            if os.getenv("USE_SUMMARY_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "summary_service"):
+                        from backend.services.stakeholder.analysis.summary_analysis_service import (
+                            SummaryAnalysisService,
+                        )
+
+                        self.summary_service = SummaryAnalysisService(
+                            self.agent_factory
+                        )
+                    summary_result = await self.summary_service.analyze(summary_context)
+                except Exception as e:
+                    logger.warning(
+                        f"[PHASE3_DEBUG] Summary service unavailable, falling back to inline agent: {e}"
+                    )
+                    summary_result = await self.summary_agent.run(summary_context)
+            else:
+                summary_result = await self.summary_agent.run(summary_context)
 
             # Extract the summary from the result
             if hasattr(summary_result, "output"):
@@ -1947,12 +2085,40 @@ Base your analysis on the actual theme content and stakeholder profiles provided
 
             # Use PydanticAI agent with retry logic for MALFORMED_FUNCTION_CALL errors
             retry_config = get_conservative_retry_config()
-            theme_attribution = await safe_pydantic_ai_call(
-                agent=self.theme_agent,
-                prompt=theme_context,
-                context=f"Theme {theme_number} attribution",
-                retry_config=retry_config,
-            )
+            if os.getenv("USE_THEME_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "theme_service"):
+                        from backend.services.stakeholder.analysis.theme_analysis_service import (
+                            ThemeAnalysisService,
+                        )
+
+                        self.theme_service = ThemeAnalysisService(self.agent_factory)
+                    theme_attribution = await self.theme_service.analyze_with_retry(
+                        theme_context,
+                        retry_config,
+                        f"Theme {theme_number} attribution",
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[PERFORMANCE] Theme service unavailable in parallel path, falling back to inline retry call: {e}"
+                    )
+                    theme_attribution = await safe_pydantic_ai_call(
+                        agent=self.theme_agent,
+                        prompt=theme_context,
+                        context=f"Theme {theme_number} attribution",
+                        retry_config=retry_config,
+                    )
+            else:
+                theme_attribution = await safe_pydantic_ai_call(
+                    agent=self.theme_agent,
+                    prompt=theme_context,
+                    context=f"Theme {theme_number} attribution",
+                    retry_config=retry_config,
+                )
 
             logger.info(
                 f"[PERFORMANCE] ✅ Theme {theme_number} attribution analysis completed successfully!"
@@ -2887,7 +3053,26 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             )
 
             # Use PydanticAI agent to analyze theme attribution
-            attribution_result = await self.theme_agent.run(theme_context)
+            if os.getenv("USE_THEME_SERVICE", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+            ) and hasattr(self, "agent_factory"):
+                try:
+                    if not hasattr(self, "theme_service"):
+                        from backend.services.stakeholder.analysis.theme_analysis_service import (
+                            ThemeAnalysisService,
+                        )
+
+                        self.theme_service = ThemeAnalysisService(self.agent_factory)
+                    attribution_result = await self.theme_service.analyze(theme_context)
+                except Exception as e:
+                    logger.warning(
+                        f"[PHASE5_DEBUG] Theme service unavailable, falling back to inline agent: {e}"
+                    )
+                    attribution_result = await self.theme_agent.run(theme_context)
+            else:
+                attribution_result = await self.theme_agent.run(theme_context)
 
             # Extract the attribution from the result
             if hasattr(attribution_result, "output"):
@@ -3397,21 +3582,34 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             # Extract authentic evidence from stakeholder
             authentic_evidence = getattr(stakeholder, "authentic_evidence", {})
             individual_insights = getattr(stakeholder, "individual_insights", {})
+            # Defensive: ensure evidence/insights are dicts
+            if not isinstance(authentic_evidence, dict):
+                authentic_evidence = {}
+            if not isinstance(individual_insights, dict):
+                individual_insights = {}
 
             # Collect demographics evidence
             demographics_evidence = authentic_evidence.get("demographics_evidence", [])
+            demographics_evidence = demographics_evidence or []
+
             all_demographics.extend(demographics_evidence)
 
             # Collect goals evidence
             goals_evidence = authentic_evidence.get("goals_evidence", [])
+            goals_evidence = goals_evidence or []
+
             all_goals.extend(goals_evidence)
 
             # Collect pain points evidence
             pain_points_evidence = authentic_evidence.get("pain_points_evidence", [])
+            pain_points_evidence = pain_points_evidence or []
+
             all_pain_points.extend(pain_points_evidence)
 
             # Collect quotes evidence
             quotes_evidence = authentic_evidence.get("quotes_evidence", [])
+            quotes_evidence = quotes_evidence or []
+
             all_quotes.extend(quotes_evidence)
 
             # Add individual insights

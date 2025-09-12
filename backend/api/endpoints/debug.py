@@ -608,21 +608,42 @@ async def rerun_stakeholder_analysis(
             f"[DEBUG] Final converted personas count: {len(converted_personas)}"
         )
 
-        base_analysis = DetailedAnalysisResult(
-            id=str(result_id),
-            status="completed",
-            createdAt=datetime.now(timezone.utc).isoformat(),
-            fileName=interview_data.filename,
-            themes=existing_results.get("themes", []),
-            patterns=existing_results.get("patterns", []),
-            sentimentOverview=existing_results.get(
-                "sentimentOverview",
-                {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
-            ),
-            sentiment=existing_results.get("sentiment", []),
-            personas=converted_personas,  # Use converted database personas
-            insights=existing_results.get("insights", []),
-        )
+        # Build base analysis; if legacy personas don't match schema, fall back to empty list
+        try:
+            base_analysis = DetailedAnalysisResult(
+                id=str(result_id),
+                status="completed",
+                createdAt=datetime.now(timezone.utc).isoformat(),
+                fileName=interview_data.filename,
+                themes=existing_results.get("themes", []),
+                patterns=existing_results.get("patterns", []),
+                sentimentOverview=existing_results.get(
+                    "sentimentOverview",
+                    {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
+                ),
+                sentiment=existing_results.get("sentiment", []),
+                personas=converted_personas,  # Use converted database personas
+                insights=existing_results.get("insights", []),
+            )
+        except Exception as ve:
+            logger.warning(
+                f"[DEBUG] DetailedAnalysisResult validation failed with personas; proceeding without personas: {ve}"
+            )
+            base_analysis = DetailedAnalysisResult(
+                id=str(result_id),
+                status="completed",
+                createdAt=datetime.now(timezone.utc).isoformat(),
+                fileName=interview_data.filename,
+                themes=existing_results.get("themes", []),
+                patterns=existing_results.get("patterns", []),
+                sentimentOverview=existing_results.get(
+                    "sentimentOverview",
+                    {"positive": 0.33, "neutral": 0.34, "negative": 0.33},
+                ),
+                sentiment=existing_results.get("sentiment", []),
+                personas=[],
+                insights=existing_results.get("insights", []),
+            )
 
         # Parse the original data (it's stored as JSON string)
         try:

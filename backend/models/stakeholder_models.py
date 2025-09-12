@@ -920,6 +920,8 @@ class StakeholderDetector:
         # Look for persona mentions
         persona_patterns = [
             r"Persona \d+: ([^\n]+)",
+            r"Persona:\s*([^\n]+)",
+            r"Stakeholder:\s*([^\n]+)",
             r"Participant: ([^\n]+)",
             r"Interviewee: ([^\n]+)",
         ]
@@ -960,7 +962,7 @@ class StakeholderDetector:
                 total_confidence += single_result.confidence_score
 
         avg_confidence = total_confidence / len(files) if files else 0.0
-        is_multi_stakeholder = len(all_stakeholders) >= 2 and avg_confidence > 0.3
+        is_multi_stakeholder = len(all_stakeholders) >= 2 and avg_confidence > 0.1
 
         return StakeholderDetectionResult(
             is_multi_stakeholder=is_multi_stakeholder,

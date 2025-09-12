@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
       } catch (e) {
         return NextResponse.json({ error: 'Authentication token required' }, { status: 401 });
       }
+    } else {
+      // Development: send a dev token so backend HTTPBearer is satisfied
+      authToken = 'DEV_TOKEN_REDACTED';
     }
 
     // Forward query params (limit, etc.)

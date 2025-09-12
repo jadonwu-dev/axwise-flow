@@ -489,7 +489,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2">
             {validPersonas.map((persona, index) => (
               <CustomErrorBoundary
-                key={`persona-card-boundary-${index}`}
+                key={`persona-card-boundary-${persona.name}`}
                 fallback={
                   <div className="p-3 border border-red-200 bg-red-50 rounded text-xs text-red-700">
                     Failed to render persona card.
@@ -497,7 +497,7 @@ export function PersonaList({ personas, className }: PersonaListProps) {
                 }
               >
                 <EnhancedPersonaCard
-                  key={`persona-card-${index}`}
+                  key={`persona-card-${persona.name}`}
                   persona={persona}
                   showStakeholderFeatures={hasStakeholderFeatures}
                 />

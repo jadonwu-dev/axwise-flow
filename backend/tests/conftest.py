@@ -12,6 +12,17 @@ from fastapi.testclient import TestClient
 from backend.database import Base, get_db
 from backend.models import User, InterviewData
 
+import os
+
+
+# Enable factory-based stakeholder agent and consensus service in tests (development behavior)
+@pytest.fixture(scope="session", autouse=True)
+def _enable_stakeholder_features_for_tests():
+    os.environ["USE_STAKEHOLDER_AGENT_FACTORY"] = "true"
+    os.environ["USE_CONSENSUS_SERVICE"] = "true"
+    yield
+
+
 # Test database URL
 SQLALCHEMY_TEST_DATABASE_URL=***REDACTED***
 
