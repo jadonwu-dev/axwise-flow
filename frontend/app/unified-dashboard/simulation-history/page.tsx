@@ -312,15 +312,23 @@ export default function SimulationHistoryPage(): JSX.Element {
               }
             }
 
+            // Prefer authoritative creation timestamps from metadata when available
+            const metaCreatedAt = simulationData?.metadata?.created_at || simulationData?.data?.metadata?.created_at;
+            const createdAt = (metaCreatedAt || (source === 'localStorage' ? data.timestamp : data.created_at) || new Date().toISOString());
+
+            // Prefer totals from detailed data (simulationData.metadata) when available; fallback to summary
+            const totalPersonas = (simulationData?.metadata?.total_personas ?? data.total_personas ?? 0);
+            const totalInterviews = (simulationData?.metadata?.total_interviews ?? data.total_interviews ?? 0);
+
             return {
               id: simulationId,
               displayName: businessContext
                 ? `${businessContext.split(' ').slice(0, 4).join(' ')}...`
                 : `Simulation ${simulationId.slice(0, 8)}`,
-              createdAt: (source === 'localStorage' ? data.timestamp : data.created_at) || new Date().toISOString(),
+              createdAt,
               status: (source === 'localStorage' ? (simulationData.success ? 'completed' : 'failed') : (data.success ? 'completed' : 'failed')),
-              totalPersonas: simulationData.metadata?.total_personas || data.total_personas || 0,
-              totalInterviews: simulationData.metadata?.total_interviews || data.total_interviews || 0,
+              totalPersonas,
+              totalInterviews,
               businessContext,
               stakeholders,
             };

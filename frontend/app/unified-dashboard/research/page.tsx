@@ -208,6 +208,14 @@ export default function InterviewSimulationPage() {
                   console.log('  ℹ️ Using timeEstimate.totalQuestions as fallback:', questionCount);
                 }
 
+                // Use the timestamp from the selected questionnaire message for UI ordering
+                try {
+                  const ts = questionnaireMessage?.timestamp || session.updated_at || session.created_at;
+                  if (ts) {
+                    session.questionnaire_generated_at = ts;
+                  }
+                } catch {}
+
                 console.log(`  ✅ Final counts - Questions: ${questionCount}, Stakeholders: ${stakeholderCount}`);
               } else {
                 console.log(`  ❌ No comprehensiveQuestions found in metadata`);
@@ -225,7 +233,7 @@ export default function InterviewSimulationPage() {
             title: session.business_idea || 'Untitled Research Session',
             question_count: questionCount,
             stakeholder_count: stakeholderCount,
-            questionnaire_generated_at: session.updated_at || session.created_at || new Date().toISOString(),
+            questionnaire_generated_at: (session as any).questionnaire_generated_at || session.updated_at || session.created_at || new Date().toISOString(),
           };
 
           console.log(`  📊 Final UI data for ${session.session_id}:`);
