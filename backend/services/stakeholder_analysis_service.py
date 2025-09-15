@@ -2470,7 +2470,10 @@ Base your analysis on the actual theme content and stakeholder profiles provided
             try:
                 personas = await persona_service.form_personas_from_transcript(
                     [transcript_entry],
-                    context={"stakeholder_type": stakeholder.stakeholder_type},
+                    context={
+                        "stakeholder_type": stakeholder.stakeholder_type,
+                        "original_text": content,
+                    },
                 )
                 logger.info(
                     f"[PERSONA_DEBUG] form_personas_from_transcript returned {len(personas) if personas else 0} personas for {stakeholder.stakeholder_id}"

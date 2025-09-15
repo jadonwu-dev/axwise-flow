@@ -38,10 +38,20 @@ class PersonaEvidenceValidator:
     @staticmethod
     def _normalize(text: str) -> str:
         t = text or ""
-        # Lowercase, collapse whitespace, strip quotes
+        # Lowercase
         t = t.lower()
+        # Normalize smart quotes/apostrophes
         t = t.replace("\u201c", '"').replace("\u201d", '"').replace("\u2019", "'")
+        # Normalize dashes and ellipsis
+        t = t.replace("\u2013", "-").replace("\u2014", "-").replace("\u2026", "...")
+        # Remove zero-width and non-breaking spaces
+        t = t.replace("\u200b", "").replace("\u00a0", " ")
+        # Strip common speaker labels if accidentally included at start
+        t = re.sub(r"^(researcher|interviewer|moderator)\s*:\s*", "", t)
+        # Collapse whitespace
         t = re.sub(r"[\s\n\r\t]+", " ", t).strip()
+        # Light punctuation normalization: remove surrounding quotes/brackets
+        t = t.strip("\"'“”‘’[]()")
         return t
 
     def _find_in_text(

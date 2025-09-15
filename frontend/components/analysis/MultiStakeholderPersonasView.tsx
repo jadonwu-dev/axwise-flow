@@ -58,16 +58,28 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
 
     const originalPersona = personas[0]; // Original persona with authentic quotes
 
+    const toStringEvidence = (e: any): string => {
+      if (typeof e === 'string') return e;
+      if (e && typeof e === 'object') return (e.quote ?? e.text ?? '').toString();
+      return '';
+    };
+    const asStringArray = (arr: any): string[] => Array.isArray(arr) ? arr.map(toStringEvidence).filter((s) => typeof s === 'string' && s.length > 0) : [];
+
+    const demographicsAll = asStringArray(originalPersona.demographics?.evidence);
+    const goalsAll = asStringArray(originalPersona.goals_and_motivations?.evidence);
+    const painPointsAll = asStringArray(originalPersona.pain_points?.evidence);
+    const quotesAll = asStringArray(originalPersona.key_quotes?.evidence);
+
     const authenticQuotes = {
-      demographics: originalPersona.demographics?.evidence?.filter(ev => ev.includes('"') || ev.includes("'")) || [],
-      goals: originalPersona.goals_and_motivations?.evidence?.filter(ev => ev.includes('"') || ev.includes("'")) || [],
-      painPoints: originalPersona.pain_points?.evidence?.filter(ev => ev.includes('"') || ev.includes("'")) || [],
-      quotes: originalPersona.key_quotes?.evidence?.filter(ev => ev.includes('"') || ev.includes("'")) || [],
+      demographics: demographicsAll.filter((ev) => ev.includes('"') || ev.includes("'")),
+      goals: goalsAll.filter((ev) => ev.includes('"') || ev.includes("'")),
+      painPoints: painPointsAll.filter((ev) => ev.includes('"') || ev.includes("'")),
+      quotes: quotesAll.filter((ev) => ev.includes('"') || ev.includes("'")),
       // Also include non-quote evidence for context
-      demographicsAll: originalPersona.demographics?.evidence || [],
-      goalsAll: originalPersona.goals_and_motivations?.evidence || [],
-      painPointsAll: originalPersona.pain_points?.evidence || [],
-      quotesAll: originalPersona.key_quotes?.evidence || []
+      demographicsAll,
+      goalsAll,
+      painPointsAll,
+      quotesAll
     };
 
     return authenticQuotes;
@@ -554,9 +566,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
             <div className="text-sm text-muted-foreground">
               <p className="font-medium mb-2">Supporting Evidence:</p>
               <ul className="list-disc pl-5 space-y-1">
-                {evidence.map((item: string, i: number) => (
-                  <li key={i}>{item}</li>
-                ))}
+                {evidence.map((raw: any, i: number) => {
+                  const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : (typeof raw?.text === 'string' ? raw.text : null));
+                  if (!text) return null;
+                  return <li key={i}>{text}</li>;
+                })}
               </ul>
             </div>
           )}
@@ -607,9 +621,11 @@ const MultiStakeholderPersonasView: React.FC<MultiStakeholderPersonasViewProps> 
               </AccordionTrigger>
               <AccordionContent>
                 <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                  {evidence.map((item: string, i: number) => (
-                    <li key={i}>{item}</li>
-                  ))}
+                  {evidence.map((raw: any, i: number) => {
+                    const text = typeof raw === 'string' ? raw : (raw && typeof raw === 'object' && typeof raw.quote === 'string' ? raw.quote : (typeof raw?.text === 'string' ? raw.text : null));
+                    if (!text) return null;
+                    return <li key={i}>{text}</li>;
+                  })}
                 </ul>
               </AccordionContent>
             </AccordionItem>

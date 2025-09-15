@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
 from sqlalchemy import desc, asc
 
+import re
+
 from backend.models import User, InterviewData, AnalysisResult, Persona
 from backend.utils.timezone_utils import format_iso_utc
 
@@ -31,6 +33,204 @@ class ResultsService:
         """
         self.db = db
         self.user = user
+
+    # -----------------------------
+    # Helper: Filter out Researcher-attributed evidence from SSoT personas
+    # -----------------------------
+    def _filter_researcher_evidence_for_ssot(
+        self,
+        personas_ssot: List[Dict[str, Any]],
+        transcript: Optional[List[Dict[str, Any]]] = None,
+        original_text: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        if not personas_ssot:
+            return personas_ssot
+        try:
+            from backend.services.validation.persona_evidence_validator import (
+                PersonaEvidenceValidator,
+            )
+
+            validator = PersonaEvidenceValidator()
+
+            # Build normalized corpus of Researcher/Interviewer dialogues
+            researcher_texts_norm: List[str] = []
+            if isinstance(transcript, list):
+                for seg in transcript:
+                    sp = (seg.get("speaker") or "").strip().lower()
+                    if sp in {"researcher", "interviewer", "moderator"}:
+                        dialogue = seg.get("dialogue") or seg.get("text") or ""
+                        researcher_texts_norm.append(validator._normalize(dialogue))
+            elif isinstance(original_text, str) and original_text.strip():
+                for line in original_text.splitlines():
+                    if re.match(
+                        r"^(researcher|interviewer|moderator)\s*:\s*",
+                        line.strip(),
+                        re.IGNORECASE,
+                    ):
+                        content = re.sub(
+                            r"^(researcher|interviewer|moderator)\s*:\s*",
+                            "",
+                            line.strip(),
+                            flags=re.IGNORECASE,
+                        )
+                        researcher_texts_norm.append(validator._normalize(content))
+
+            def is_researcher_quote(q: str) -> bool:
+                if not q:
+                    return False
+                qn = validator._normalize(q)
+                return any(qn in d for d in researcher_texts_norm)
+
+            cleaned: List[Dict[str, Any]] = []
+            fields = [
+                "demographics",
+                "goals_and_motivations",
+                "challenges_and_frustrations",
+                "key_quotes",
+            ]
+            for p in personas_ssot:
+                p2 = dict(p) if isinstance(p, dict) else p
+                for f in fields:
+                    trait = p2.get(f)
+                    if isinstance(trait, dict) and "evidence" in trait:
+                        ev = trait.get("evidence") or []
+                        new_ev = []
+                        for item in ev:
+                            quote = (
+                                item.get("quote")
+                                if isinstance(item, dict)
+                                else (item if isinstance(item, str) else None)
+                            )
+                            if quote is None:
+                                continue
+                            if not is_researcher_quote(quote):
+                                new_ev.append(item)
+                        trait["evidence"] = new_ev
+                cleaned.append(p2)
+            return cleaned
+        except Exception as e:
+            logger.warning(f"Failed to filter researcher evidence: {e}", exc_info=True)
+            return personas_ssot
+
+    # -----------------------------
+    # Helper: Inject age_range into SSoT personas by parsing source
+    # -----------------------------
+    def _inject_age_ranges_from_source(
+        self,
+        personas_ssot: List[Dict[str, Any]],
+        transcript: Optional[List[Dict[str, Any]]] = None,
+        original_text: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        try:
+            # Collect ages from transcript or original text
+            ages: List[int] = []
+
+            def extract_ages_from_text(s: str) -> List[int]:
+                if not isinstance(s, str):
+                    return []
+                found: List[int] = []
+                for m in re.finditer(
+                    r"\b(?:age\s*[:=]\s*(\d{2})|(\d{2})\s*years?\s*old)\b",
+                    s,
+                    re.IGNORECASE,
+                ):
+                    age = None
+                    if m.group(1):
+                        age = int(m.group(1))
+                    elif m.group(2):
+                        age = int(m.group(2))
+                    if age and 15 <= age <= 100:
+                        found.append(age)
+                return found
+
+            if isinstance(transcript, list):
+                for seg in transcript:
+                    text = (seg.get("dialogue") or seg.get("text") or "").strip()
+                    if text:
+                        ages.extend(extract_ages_from_text(text))
+            if not ages and isinstance(original_text, str):
+                ages.extend(extract_ages_from_text(original_text))
+
+            ages = [a for a in ages if 15 <= a <= 100]
+            if not ages:
+                return personas_ssot
+
+            # Create a concise bucket label
+            ages.sort()
+            min_age, max_age = ages[0], ages[-1]
+            if len(ages) == 1:
+                center = ages[0]
+                label = f"{max(center-2,15)}–{min(center+2,100)}"
+            else:
+                if max_age - min_age <= 4:
+                    label = f"{min_age}–{max_age}"
+                else:
+                    mid = ages[len(ages) // 2]
+                    low = max(mid - 2, 15)
+                    high = min(mid + 2, 100)
+                    label = f"{low}–{high}"
+
+            # Inject into each persona demographics.age_range if missing/empty
+            for p in personas_ssot:
+                if not isinstance(p, dict):
+                    continue
+                demo = p.get("demographics")
+                if not isinstance(demo, dict):
+                    continue
+                age_field = demo.get("age_range") or {}
+                current_val = (
+                    age_field.get("value") if isinstance(age_field, dict) else None
+                ) or ""
+                if str(current_val).strip().lower() in {
+                    "",
+                    "n/a",
+                    "undisclosed",
+                    "not specified",
+                    "unknown",
+                }:
+                    if not isinstance(age_field, dict):
+                        age_field = {}
+                    age_field["value"] = label
+                    demo["age_range"] = age_field
+            return personas_ssot
+        except Exception as e:
+            logger.warning(f"Failed to inject age ranges: {e}")
+            return personas_ssot
+
+    # -----------------------------
+    # Helper: Derive detected stakeholders from personas (fallback)
+    # -----------------------------
+    def _derive_detected_stakeholders_from_personas(
+        self, personas: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for i, p in enumerate(personas or []):
+            if not isinstance(p, dict):
+                continue
+            name = p.get("name") or f"Persona_{i+1}"
+            archetype = p.get("archetype") or p.get("stakeholder_mapping", {}).get(
+                "stakeholder_category", "primary_customer"
+            )
+            demo_profile = {}
+            # Try to extract a concise demographic snippet if present
+            demo = p.get("demographics")
+            if isinstance(demo, dict):
+                val = demo.get("value") if isinstance(demo.get("value"), str) else None
+                if val:
+                    demo_profile["summary"] = val[:200]
+            out.append(
+                {
+                    "stakeholder_id": name.replace(" ", "_")[:64],
+                    "stakeholder_type": archetype or "primary_customer",
+                    "confidence_score": float(p.get("overall_confidence", 0.7)),
+                    "demographic_profile": demo_profile,
+                    "individual_insights": {},
+                    "influence_metrics": p.get("stakeholder_intelligence", {}).get(
+                        "influence_metrics", {}
+                    ),
+                }
+            )
+        return out
 
     def get_analysis_result(self, result_id: int) -> Dict[str, Any]:
         """
@@ -427,7 +627,20 @@ class ResultsService:
                 except Exception as e:
                     logger.warning(f"Could not attach source payload: {e}")
 
-                # Compute validation placeholders (no gating in Phase 0)
+                # Evidence attribution filtering: remove Researcher quotes from persona evidence
+                try:
+                    if personas_ssot:
+                        personas_ssot = self._filter_researcher_evidence_for_ssot(
+                            personas_ssot,
+                            source_payload.get("transcript"),
+                            source_payload.get("original_text"),
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to apply evidence attribution filtering: {e}"
+                    )
+
+                # Compute validation across all personas using a simple robust check
                 validation_summary = None
                 validation_status = None
                 confidence_components = None
@@ -438,27 +651,73 @@ class ResultsService:
                         )
 
                         validator = PersonaEvidenceValidator()
+
+                        def norm(s: str) -> str:
+                            try:
+                                return validator._normalize(s)
+                            except Exception:
+                                return (s or "").strip().lower()
+
+                        # Build normalized source corpus
                         transcript = source_payload.get("transcript")
-                        original_text = source_payload.get("original_text")
-                        first_persona = personas_ssot[0]
-                        matches = validator.match_evidence(
-                            first_persona,
-                            source_text=original_text,
-                            transcript=transcript,
-                        )
-                        duplication = validator.detect_duplication(first_persona)
-                        speaker_check = validator.check_speaker_consistency(
-                            first_persona, transcript
-                        )
-                        validation_summary = validator.summarize(
-                            matches, duplication, speaker_check
-                        )
-                        validation_status = validator.compute_status(validation_summary)
-                        confidence_components = validator.compute_confidence_components(
-                            validation_summary
-                        )
+                        original_text = source_payload.get("original_text") or ""
+                        corpus_parts: List[str] = []
+                        if isinstance(transcript, list):
+                            for seg in transcript:
+                                corpus_parts.append(
+                                    seg.get("dialogue") or seg.get("text") or ""
+                                )
+                        if isinstance(original_text, str):
+                            corpus_parts.append(original_text)
+                        corpus_norm = norm("\n".join(corpus_parts))
+
+                        # Collect all evidence strings
+                        def to_text(item: Any) -> Optional[str]:
+                            if isinstance(item, str):
+                                return item
+                            if isinstance(item, dict):
+                                q = item.get("quote") or item.get("text")
+                                return q if isinstance(q, str) else None
+                            return None
+
+                        evidence_texts: List[str] = []
+                        for p in personas_ssot:
+                            if not isinstance(p, dict):
+                                continue
+                            for field in [
+                                "demographics",
+                                "goals_and_motivations",
+                                "challenges_and_frustrations",
+                                "key_quotes",
+                            ]:
+                                trait = p.get(field)
+                                if isinstance(trait, dict) and trait.get("evidence"):
+                                    for it in trait["evidence"]:
+                                        t = to_text(it)
+                                        if isinstance(t, str) and t.strip():
+                                            evidence_texts.append(t)
+
+                        matched = 0
+                        no_match = 0
+                        for ev in evidence_texts:
+                            evn = norm(ev)
+                            # Consider short snippets unreliable; require length >= 8 after norm
+                            if len(evn) >= 8 and evn in corpus_norm:
+                                matched += 1
+                            else:
+                                no_match += 1
+
+                        validation_summary = {
+                            "counts": {"matched": matched, "no_match": no_match},
+                            "method": "results_service_simple_validator",
+                        }
+                        validation_status = "pass" if no_match == 0 else "warning"
+                        confidence_components = {
+                            "evidence_coverage": matched / max(1, matched + no_match),
+                            "no_match_ratio": no_match / max(1, matched + no_match),
+                        }
                 except Exception as e:
-                    logger.warning(f"Validation skeleton failed: {e}")
+                    logger.warning(f"Validation summary computation failed: {e}")
 
                 # Feature flag for future enforcement (Phase 1)
                 try:
@@ -553,6 +812,21 @@ class ResultsService:
                         f"Extracted sentiment statements: positive={len(sentimentStatements['positive'])}, "
                         + f"neutral={len(sentimentStatements['neutral'])}, "
                         + f"negative={len(sentimentStatements['negative'])}"
+                    )
+
+                # Ensure stakeholder_intelligence.detected_stakeholders is populated
+                try:
+                    si = formatted_results.get("stakeholder_intelligence")
+                    if isinstance(si, dict):
+                        detected = si.get("detected_stakeholders")
+                        if not detected:
+                            derived = self._derive_detected_stakeholders_from_personas(
+                                persona_list
+                            )
+                            si["detected_stakeholders"] = derived
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to derive detected_stakeholders from personas: {e}"
                     )
 
                 # Return the formatted results wrapped in the expected ResultResponse structure

@@ -2291,6 +2291,94 @@ Generate a complete DirectPersona object with all required traits populated base
                             "budget_influence": 0.5,
                         }
 
+                    # Post-process demographics: extract exact ages from original text and create age_range bucket via LLM
+                    try:
+                        ctx = context or {}
+                        original_text = (
+                            ctx.get("original_text")
+                            or ctx.get("source_text")
+                            or ctx.get("raw_text")
+                        )
+                        if isinstance(original_text, str) and original_text.strip():
+                            import re
+
+                            ages = []
+                            evidence_lines = []
+                            # Look for header-like lines containing explicit ages
+                            for line in original_text.splitlines():
+                                m1 = re.search(
+                                    r"\b(?:age|years? old)\s*[:\-]?\s*(\d{2})\b",
+                                    line,
+                                    re.IGNORECASE,
+                                )
+                                m2 = re.search(
+                                    r"\b(\d{2})\s*(?:years? old)\b", line, re.IGNORECASE
+                                )
+                                age = None
+                                if m1:
+                                    age = m1.group(1)
+                                elif m2:
+                                    age = m2.group(1)
+                                if age:
+                                    try:
+                                        age_int = int(age)
+                                        if 14 <= age_int <= 99:
+                                            ages.append(age_int)
+                                            # Bold highlight the age for evidence quoting
+                                            highlighted = re.sub(
+                                                rf"\b{age}\b",
+                                                f"**{age}**",
+                                                line.strip(),
+                                            )
+                                            evidence_lines.append(highlighted[:220])
+                                    except Exception:
+                                        pass
+                            if ages:
+                                # Ask LLM to produce a concise bucket for this stakeholder
+                                try:
+                                    prompt = (
+                                        "You are summarizing participant ages for a stakeholder persona. "
+                                        "Given the ages: "
+                                        + ", ".join(str(a) for a in ages)
+                                        + ". Respond with a single concise age range label capturing the cluster, "
+                                        "prefer en-dash like '31–35' or 'mid-30s'. Output ONLY the label."
+                                    )
+                                    llm_resp = await self.llm_service.analyze(
+                                        {"task": "text_generation", "text": prompt}
+                                    )
+                                    bucket = (llm_resp or {}).get(
+                                        "text", ""
+                                    ).strip() or None
+                                except Exception:
+                                    bucket = None
+
+                                if bucket:
+                                    # Ensure demographics structure exists and inject age_range AttributedField
+                                    demo = persona_dict.get("demographics")
+                                    if not isinstance(demo, dict):
+                                        persona_dict["demographics"] = {
+                                            "experience_level": None,
+                                            "industry": None,
+                                            "location": None,
+                                            "professional_context": None,
+                                            "roles": None,
+                                            "age_range": None,
+                                            "confidence": float(
+                                                persona_dict.get(
+                                                    "overall_confidence", 0.7
+                                                )
+                                            ),
+                                        }
+                                        demo = persona_dict["demographics"]
+                                    demo["age_range"] = {
+                                        "value": bucket,
+                                        "evidence": evidence_lines[:5],
+                                    }
+                    except Exception as age_e:
+                        logger.warning(
+                            f"[SINGLE_STAKEHOLDER] Age extraction/bucketing skipped due to error: {age_e}"
+                        )
+
                     logger.info(
                         f"[SINGLE_STAKEHOLDER] Successfully generated persona: {persona_dict.get('name', 'Unknown')}"
                     )
