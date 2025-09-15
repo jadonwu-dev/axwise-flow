@@ -7,10 +7,11 @@ This module provides functionality for:
 3. Including quote context when necessary
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 import logging
 import re
 import json
+import os
 
 try:
     # Try to import from backend structure
@@ -62,6 +63,13 @@ class EvidenceLinkingService:
             llm_service: LLM service for finding relevant quotes
         """
         self.llm_service = llm_service
+        # Feature flag to enable scoped, deterministic attribution with offsets/speaker
+        self.enable_v2 = os.getenv("EVIDENCE_LINKING_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         logger.info("Initialized EvidenceLinkingService")
 
     async def link_evidence_to_attributes(
@@ -164,6 +172,7 @@ class EvidenceLinkingService:
                                 "confidence": 0.7,
                                 "evidence": [],
                             }
+
                         logger.warning(f"No relevant quotes found for {field}")
                 except Exception as e:
                     logger.error(
@@ -554,3 +563,264 @@ class EvidenceLinkingService:
         except Exception as e:
             logger.error(f"Error in enhanced quote extraction for {field}: {str(e)}")
             return []
+
+    # -------------------- V2: Scoped deterministic attribution with offsets --------------------
+    def _tokenize(self, text: str) -> List[str]:
+        if not text:
+            return []
+        return [t for t in re.findall(r"\b[\w-]+\b", text.lower()) if len(t) > 3]
+
+    def _overlap_ok(self, a: str, b: str) -> Tuple[bool, float]:
+        a_set = set(self._tokenize(a))
+        b_set = set(self._tokenize(b))
+        if not a_set or not b_set:
+            return False, 0.0
+        inter = a_set & b_set
+        jacc = len(inter) / max(1, len(a_set | b_set))
+        ok = len(inter) >= 2 or jacc >= 0.25
+        return ok, jacc
+
+    def _iter_sentences_with_spans(self, text: str) -> List[Tuple[int, int, str]]:
+        if not text:
+            return []
+        # Simple sentence segmentation by punctuation, preserving spans
+        spans = []
+        for m in re.finditer(r"[^.!?\n]+[.!?]", text, flags=re.MULTILINE):
+            s, e = m.span()
+            sent = text[s:e].strip()
+            if len(sent) >= 20:
+                spans.append((s, e, sent))
+        # Fallback: if no sentences matched, use the whole text
+        if not spans:
+            spans.append((0, len(text), text.strip()))
+        return spans
+
+    def _span_overlaps(self, a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+        return not (a[1] <= b[0] or b[1] <= a[0])
+
+    def _select_candidate_spans(
+        self,
+        trait_value: str,
+        scoped_text: str,
+        used_spans: List[Tuple[int, int]],
+        limit: int = 3,
+        metrics: Optional[Dict[str, int]] = None,
+    ) -> List[Tuple[int, int, str, float]]:
+        """
+        Return up to `limit` candidate sentence spans (start, end, text, score) in scoped_text
+        that adequately overlap with the trait_value tokens and do not collide with used_spans.
+        """
+        candidates: List[Tuple[int, int, str, float]] = []
+        for s, e, sent in self._iter_sentences_with_spans(scoped_text):
+            if metrics is not None:
+                metrics["checked_sentences"] = metrics.get("checked_sentences", 0) + 1
+            ok, j = self._overlap_ok(trait_value or "", sent)
+            if not ok:
+                if metrics is not None:
+                    metrics["rejected_low_overlap"] = (
+                        metrics.get("rejected_low_overlap", 0) + 1
+                    )
+                continue
+            # Dedup against already used spans across traits
+            if any(self._span_overlaps((s, e), u) for u in used_spans):
+                if metrics is not None:
+                    metrics["rejected_collision"] = (
+                        metrics.get("rejected_collision", 0) + 1
+                    )
+                continue
+            # Score could be Jaccard; sort later
+            candidates.append((s, e, sent, j))
+        # Sort best-first by score, then by length desc
+        candidates.sort(key=lambda t: (t[3], len(t[2])), reverse=True)
+        return candidates[:limit]
+
+    def _evidence_item(
+        self, quote: str, s: int, e: int, meta: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return {
+            "quote": quote,
+            "start_char": s,
+            "end_char": e,
+            "speaker": meta.get("speaker"),
+            "document_id": meta.get("document_id"),
+        }
+
+    def link_evidence_to_attributes_v2(
+        self,
+        attributes: Dict[str, Any],
+        scoped_text: str,
+        scope_meta: Optional[Dict[str, Any]] = None,
+        protect_key_quotes: bool = True,
+    ) -> Tuple[Dict[str, Any], Dict[str, List[Dict[str, Any]]]]:
+        """
+        Deterministic, persona-scoped evidence attribution with offsets/speaker.
+        - Searches only within scoped_text
+        - Requires keyword overlap between trait value and sentence
+        - Populates start_char/end_char and speaker/document_id (from scope_meta)
+        - Tracks used spans across traits to avoid cross-field duplication
+        - Optionally preserves existing key_quotes if present
+
+        Returns: (enhanced_attributes, evidence_items_by_trait)
+        """
+        scope_meta = scope_meta or {}
+        # Initialize metrics for A/B instrumentation
+        metrics: Dict[str, int] = {
+            "checked_sentences": 0,
+            "rejected_low_overlap": 0,
+            "rejected_collision": 0,
+            "accepted_items": 0,
+        }
+
+        enhanced = dict(attributes) if attributes else {}
+        used_spans: List[Tuple[int, int]] = []
+        evidence_map: Dict[str, List[Dict[str, Any]]] = {}
+
+        trait_fields = [
+            "demographics",
+            "goals_and_motivations",
+            "skills_and_expertise",
+            "workflow_and_environment",
+            "challenges_and_frustrations",
+            "technology_and_tools",
+            "attitude_towards_research",
+            "attitude_towards_ai",
+            "role_context",
+            "key_responsibilities",
+            "tools_used",
+            "collaboration_style",
+            "analysis_approach",
+            "pain_points",
+            "needs_and_expectations",
+            "decision_making_process",
+            "communication_style",
+            "technology_usage",
+            # key_quotes handled specially below
+        ]
+
+        # Helper to get trait value string
+        def get_value(field_data: Any) -> str:
+            if isinstance(field_data, dict):
+                return str(field_data.get("value", ""))
+            if isinstance(field_data, str):
+                return field_data
+            return ""
+
+        # Iterate traits and select candidate quotes
+        for field in trait_fields:
+            field_data = enhanced.get(field)
+            if field_data is None:
+                continue
+            trait_value = get_value(field_data)
+            if not scoped_text or not trait_value:
+                # Nothing to do
+                continue
+
+            candidates = self._select_candidate_spans(
+                trait_value, scoped_text, used_spans, limit=3, metrics=metrics
+            )
+            items: List[Dict[str, Any]] = []
+            for s, e, sent, _score in candidates:
+                items.append(self._evidence_item(sent.strip(), s, e, scope_meta))
+                used_spans.append((s, e))
+
+                # Write back evidence quotes as strings (back-compat) and collect structured items separately
+                # Metrics: count accepted items per sentence
+                metrics["accepted_items"] = metrics.get("accepted_items", 0) + 1
+
+            if items:
+                evidence_map[field] = items
+                quotes = [it["quote"] for it in items]
+                if isinstance(field_data, dict):
+                    field_data = dict(field_data)
+                    field_data["evidence"] = quotes
+                    # Slightly boost confidence since grounded
+                    conf = field_data.get("confidence", 0.7)
+                    field_data["confidence"] = min(conf + 0.1, 1.0)
+                    enhanced[field] = field_data
+                else:
+                    enhanced[field] = {
+                        "value": trait_value,
+                        "confidence": 0.8,
+                        "evidence": quotes,
+                    }
+
+        # key_quotes: protect unless empty
+        kq = enhanced.get("key_quotes")
+        if isinstance(kq, dict):
+            existing = kq.get("evidence")
+            if not protect_key_quotes or not existing:
+                # If empty (or not protecting), compose from top spans
+                # Use first 5 non-overlapping items across prior map
+                all_items = []
+                for items in evidence_map.values():
+                    all_items.extend(items)
+                # Sort by length desc to prefer fuller quotes
+                all_items.sort(key=lambda it: len(it["quote"]), reverse=True)
+                kq_items = []
+                kq_spans: List[Tuple[int, int]] = []
+                for it in all_items:
+                    span = (it["start_char"], it["end_char"])
+                    if any(self._span_overlaps(span, u) for u in kq_spans):
+                        continue
+                    kq_items.append(it)
+                    kq_spans.append(span)
+                    if len(kq_items) >= 5:
+                        break
+                if kq_items:
+                    evidence_map["key_quotes"] = kq_items
+                    kq_quotes = [it["quote"] for it in kq_items]
+                    kq = dict(kq)
+                    kq["evidence"] = kq_quotes
+                    enhanced["key_quotes"] = kq
+
+        # Compute and store V2 metrics
+        total_items = sum(len(v) for v in evidence_map.values())
+        complete = 0
+        for items in evidence_map.values():
+            for it in items:
+                if (
+                    it.get("start_char") is not None
+                    and it.get("end_char") is not None
+                    and it.get("speaker")
+                ):
+                    complete += 1
+        offset_completeness = complete / max(1, total_items)
+
+        # Cross-field duplicate ratio
+        quote_to_fields: Dict[str, Set[str]] = {}
+        for field, items in evidence_map.items():
+            if field == "key_quotes":
+                continue
+            for it in items:
+                q = it.get("quote", "")
+                if not q:
+                    continue
+                if q not in quote_to_fields:
+                    quote_to_fields[q] = set()
+                quote_to_fields[q].add(field)
+        multi_field_quotes = {q for q, fs in quote_to_fields.items() if len(fs) > 1}
+        dup_items = 0
+        for field, items in evidence_map.items():
+            if field == "key_quotes":
+                continue
+            for it in items:
+                if it.get("quote", "") in multi_field_quotes:
+                    dup_items += 1
+        cross_field_duplicate_ratio = dup_items / max(1, total_items)
+
+        rejection_rate_overlap = metrics.get("rejected_low_overlap", 0) / max(
+            1, metrics.get("checked_sentences", 0)
+        )
+
+        metrics.update(
+            {
+                "total_items": total_items,
+                "offset_completeness": offset_completeness,
+                "cross_field_duplicate_ratio": cross_field_duplicate_ratio,
+                "rejection_rate_overlap": rejection_rate_overlap,
+            }
+        )
+        # Expose last metrics for external inspection (e.g., tests/AB instrumentation)
+        self.last_metrics_v2 = metrics
+
+        return enhanced, evidence_map

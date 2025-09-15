@@ -130,15 +130,11 @@ class ResultsService:
                     return []
                 found: List[int] = []
                 for m in re.finditer(
-                    r"\b(?:age\s*[:=]\s*(\d{2})|(\d{2})\s*years?\s*old)\b",
+                    r"\b(?:age\s*[:=]\s*(\d{2})|(\d{2})\s*years?\s*old|(\d{2})\s*yo|(?:\(|,)\s*(\d{2})\s*(?:\)|,))\b",
                     s,
                     re.IGNORECASE,
                 ):
-                    age = None
-                    if m.group(1):
-                        age = int(m.group(1))
-                    elif m.group(2):
-                        age = int(m.group(2))
+                    age = next((int(g) for g in m.groups() if g), None)
                     if age and 15 <= age <= 100:
                         found.append(age)
                 return found
@@ -204,30 +200,51 @@ class ResultsService:
         self, personas: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
+        import re
+
+        def slugify(v: str) -> str:
+            v = (v or "").lower()
+            v = re.sub(r"[^a-z0-9]+", "_", v).strip("_")
+            return v[:64] if v else "unknown"
+
+        def to_allowed_type(v: str) -> str:
+            v = (v or "").lower()
+            if "decision" in v:
+                return "decision_maker"
+            if "influenc" in v:
+                return "influencer"
+            if "second" in v or "support" in v:
+                return "secondary_user"
+            return "primary_customer"
+
         for i, p in enumerate(personas or []):
             if not isinstance(p, dict):
                 continue
             name = p.get("name") or f"Persona_{i+1}"
-            archetype = p.get("archetype") or p.get("stakeholder_mapping", {}).get(
-                "stakeholder_category", "primary_customer"
-            )
+            mapping = p.get("stakeholder_mapping", {}) or {}
+            intel = p.get("stakeholder_intelligence", {}) or {}
+            cat = mapping.get("stakeholder_category")
+            stype = intel.get("stakeholder_type") or p.get("archetype")
+
+            sid_source = cat or stype or name
+            stakeholder_id = slugify(sid_source)
+            stakeholder_type = to_allowed_type(stype or cat or "")
+
             demo_profile = {}
-            # Try to extract a concise demographic snippet if present
             demo = p.get("demographics")
             if isinstance(demo, dict):
                 val = demo.get("value") if isinstance(demo.get("value"), str) else None
                 if val:
                     demo_profile["summary"] = val[:200]
+
             out.append(
                 {
-                    "stakeholder_id": name.replace(" ", "_")[:64],
-                    "stakeholder_type": archetype or "primary_customer",
+                    "stakeholder_id": stakeholder_id,
+                    "stakeholder_type": stakeholder_type,
                     "confidence_score": float(p.get("overall_confidence", 0.7)),
                     "demographic_profile": demo_profile,
                     "individual_insights": {},
-                    "influence_metrics": p.get("stakeholder_intelligence", {}).get(
-                        "influence_metrics", {}
-                    ),
+                    "influence_metrics": intel.get("influence_metrics", {}),
                 }
             )
         return out
@@ -635,12 +652,18 @@ class ResultsService:
                             source_payload.get("transcript"),
                             source_payload.get("original_text"),
                         )
+                        # Inject missing age ranges from source text/transcript
+                        personas_ssot = self._inject_age_ranges_from_source(
+                            personas_ssot,
+                            transcript=source_payload.get("transcript"),
+                            original_text=source_payload.get("original_text"),
+                        )
                 except Exception as e:
                     logger.warning(
                         f"Failed to apply evidence attribution filtering: {e}"
                     )
 
-                # Compute validation across all personas using a simple robust check
+                # Compute validation using PersonaEvidenceValidator with transcript-aware matching
                 validation_summary = None
                 validation_status = None
                 confidence_components = None
@@ -651,71 +674,49 @@ class ResultsService:
                         )
 
                         validator = PersonaEvidenceValidator()
-
-                        def norm(s: str) -> str:
-                            try:
-                                return validator._normalize(s)
-                            except Exception:
-                                return (s or "").strip().lower()
-
-                        # Build normalized source corpus
+                        all_matches = []
+                        all_dup = {"duplicates": [], "cross_trait_reuse": []}
                         transcript = source_payload.get("transcript")
                         original_text = source_payload.get("original_text") or ""
-                        corpus_parts: List[str] = []
-                        if isinstance(transcript, list):
-                            for seg in transcript:
-                                corpus_parts.append(
-                                    seg.get("dialogue") or seg.get("text") or ""
-                                )
-                        if isinstance(original_text, str):
-                            corpus_parts.append(original_text)
-                        corpus_norm = norm("\n".join(corpus_parts))
 
-                        # Collect all evidence strings
-                        def to_text(item: Any) -> Optional[str]:
-                            if isinstance(item, str):
-                                return item
-                            if isinstance(item, dict):
-                                q = item.get("quote") or item.get("text")
-                                return q if isinstance(q, str) else None
-                            return None
-
-                        evidence_texts: List[str] = []
                         for p in personas_ssot:
                             if not isinstance(p, dict):
                                 continue
-                            for field in [
-                                "demographics",
-                                "goals_and_motivations",
-                                "challenges_and_frustrations",
-                                "key_quotes",
-                            ]:
-                                trait = p.get(field)
-                                if isinstance(trait, dict) and trait.get("evidence"):
-                                    for it in trait["evidence"]:
-                                        t = to_text(it)
-                                        if isinstance(t, str) and t.strip():
-                                            evidence_texts.append(t)
-
-                        matched = 0
-                        no_match = 0
-                        for ev in evidence_texts:
-                            evn = norm(ev)
-                            # Consider short snippets unreliable; require length >= 8 after norm
-                            if len(evn) >= 8 and evn in corpus_norm:
-                                matched += 1
-                            else:
-                                no_match += 1
-
+                            matches = validator.match_evidence(
+                                persona_ssot=p,
+                                source_text=original_text,
+                                transcript=(
+                                    transcript if isinstance(transcript, list) else None
+                                ),
+                            )
+                            all_matches.extend(matches)
+                            dup = validator.detect_duplication(p)
+                            # Merge duplication info
+                            all_dup["duplicates"].extend(dup.get("duplicates", []))
+                            all_dup["cross_trait_reuse"].extend(
+                                dup.get("cross_trait_reuse", [])
+                            )
+                        speaker_check = (
+                            validator.check_speaker_consistency(
+                                p, transcript if isinstance(transcript, list) else None
+                            )
+                            if personas_ssot
+                            else {"speaker_mismatches": []}
+                        )
+                        summary = validator.summarize(
+                            all_matches,
+                            duplication=all_dup,
+                            speaker_check=speaker_check,
+                        )
                         validation_summary = {
-                            "counts": {"matched": matched, "no_match": no_match},
-                            "method": "results_service_simple_validator",
+                            "counts": summary.get("counts", {}),
+                            "method": "persona_evidence_validator_v1",
                         }
-                        validation_status = "pass" if no_match == 0 else "warning"
-                        confidence_components = {
-                            "evidence_coverage": matched / max(1, matched + no_match),
-                            "no_match_ratio": no_match / max(1, matched + no_match),
-                        }
+                        status = validator.compute_status(summary)
+                        validation_status = "pass" if status == "PASS" else "warning"
+                        confidence_components = validator.compute_confidence_components(
+                            summary
+                        )
                 except Exception as e:
                     logger.warning(f"Validation summary computation failed: {e}")
 

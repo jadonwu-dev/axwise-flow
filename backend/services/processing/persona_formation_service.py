@@ -2084,12 +2084,19 @@ Generate a complete DirectPersona object with all required traits populated base
             for segment in segments:
                 if isinstance(segment, dict):
                     text = segment.get("text", "")
-                    speaker = segment.get("speaker", "Unknown")
+                    speaker = (segment.get("speaker") or "Unknown").strip()
+                    # Exclude researcher/interviewer/moderator lines from stakeholder text
+                    if speaker.lower() in {"researcher", "interviewer", "moderator"}:
+                        continue
                     speakers.add(speaker)
                     stakeholder_text += f"\n{text}"
                 elif hasattr(segment, "text"):
                     text = segment.text
-                    speaker = getattr(segment, "speaker", "Unknown")
+                    speaker = (
+                        getattr(segment, "speaker", "Unknown") or "Unknown"
+                    ).strip()
+                    if speaker.lower() in {"researcher", "interviewer", "moderator"}:
+                        continue
                     speakers.add(speaker)
                     stakeholder_text += f"\n{text}"
 
@@ -2378,6 +2385,39 @@ Generate a complete DirectPersona object with all required traits populated base
                         logger.warning(
                             f"[SINGLE_STAKEHOLDER] Age extraction/bucketing skipped due to error: {age_e}"
                         )
+
+                        # Enhance evidence with V2 linking for stakeholder-specific persona
+                        try:
+                            if getattr(
+                                self.evidence_linking_service, "enable_v2", False
+                            ):
+                                scope_meta = {
+                                    "speaker": stakeholder_category,
+                                    "stakeholder_category": stakeholder_category,
+                                }
+                                try:
+                                    if (
+                                        context
+                                        and isinstance(context, dict)
+                                        and context.get("document_id")
+                                    ):
+                                        scope_meta["document_id"] = context[
+                                            "document_id"
+                                        ]
+                                except Exception:
+                                    pass
+                                persona_dict, _evmap = (
+                                    self.evidence_linking_service.link_evidence_to_attributes_v2(
+                                        persona_dict,
+                                        scoped_text=stakeholder_text,
+                                        scope_meta=scope_meta,
+                                        protect_key_quotes=True,
+                                    )
+                                )
+                        except Exception as el_err:
+                            logger.warning(
+                                f"[EVIDENCE_LINKING_V2] Skipped for stakeholder {stakeholder_category}: {el_err}"
+                            )
 
                     logger.info(
                         f"[SINGLE_STAKEHOLDER] Successfully generated persona: {persona_dict.get('name', 'Unknown')}"
@@ -3249,6 +3289,33 @@ Please analyze this speaker's content and generate a comprehensive SimplifiedPer
                 logger.info(
                     f"[PYDANTIC_AI] Successfully converted persona model to dictionary for {speaker}"
                 )
+
+                # Enhance evidence with V2 linking using scoped speaker text and metadata
+                try:
+                    if getattr(self.evidence_linking_service, "enable_v2", False):
+                        scope_meta = {"speaker_id": speaker, "speaker": role}
+                        try:
+                            if context and isinstance(context, dict):
+                                if context.get("stakeholder_category"):
+                                    scope_meta["stakeholder_category"] = context[
+                                        "stakeholder_category"
+                                    ]
+                                if context.get("document_id"):
+                                    scope_meta["document_id"] = context["document_id"]
+                        except Exception:
+                            pass
+                        persona_data, _evmap = (
+                            self.evidence_linking_service.link_evidence_to_attributes_v2(
+                                persona_data,
+                                scoped_text=text,
+                                scope_meta=scope_meta,
+                                protect_key_quotes=True,
+                            )
+                        )
+                except Exception as el_err:
+                    logger.warning(
+                        f"[EVIDENCE_LINKING_V2] Skipped during persona build for {speaker}: {el_err}"
+                    )
 
                 # DEBUG: Log the actual PersonaTrait field values to understand why they're empty
                 logger.info(

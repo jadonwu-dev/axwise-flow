@@ -54,6 +54,13 @@ class PersonaEvidenceValidator:
         t = t.strip("\"'“”‘’[]()")
         return t
 
+    def _fuzzy_contains(self, src: str, q: str) -> bool:
+        a = self._normalize(src)
+        b = self._normalize(q)
+        at = set(a.split())
+        bt = set(b.split())
+        return len(bt) >= 2 and len(at & bt) / max(1, len(bt)) >= 0.25
+
     def _find_in_text(
         self, source: str, quote: str
     ) -> Tuple[str, Optional[int], Optional[int]]:
@@ -71,6 +78,9 @@ class PersonaEvidenceValidator:
             idx = norm_src.find(norm_quote)
             if idx != -1:
                 # Best-effort: cannot easily map back to original offsets; leave None
+                return ("normalized", None, None)
+            # Fuzzy token overlap as last resort
+            if self._fuzzy_contains(source, quote):
                 return ("normalized", None, None)
         return ("no_match", None, None)
 
