@@ -52,6 +52,11 @@ import re
 from .evidence_validator import EvidenceValidator, ValidationResult
 from .keyword_highlighter import ContextAwareKeywordHighlighter
 
+try:
+    from backend.services.processing.persona_formation_v2 import PersonaFormationFacade
+except Exception:
+    from services.processing.persona_formation_v2 import PersonaFormationFacade
+
 
 def apply_domain_keywords_to_persona(
     persona: Dict[str, Any], domain_keywords: List[str], persona_name: str
@@ -728,6 +733,22 @@ class PersonaFormationService:
         logger.info("Using TraitFormattingService for improved trait value formatting")
         logger.info(
             "Using PydanticAI for structured persona outputs (migrated from Instructor)"
+        )
+        # Initialize V2 facade (modular) for opt-in usage via feature flag
+        self._v2_facade = None
+        try:
+            self._v2_facade = PersonaFormationFacade(llm_service)
+            logger.info("Initialized PersonaFormationFacade (V2)")
+        except Exception as e:
+            logger.warning(f"Could not initialize PersonaFormationFacade: {e}")
+
+    def _use_v2(self) -> bool:
+        """Feature flag gate for PERSONA_FORMATION_V2."""
+        return os.getenv("PERSONA_FORMATION_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
         )
 
     def _validate_structured_demographics(self, demographics_data: Any) -> bool:
@@ -1674,6 +1695,15 @@ Generate a complete DirectPersona object with all required traits populated base
         Returns:
             List of persona dictionaries
         """
+        # V2 feature-flagged path
+        if self._use_v2() and self._v2_facade is not None:
+            try:
+                return await self._v2_facade.generate_persona_from_text(
+                    text, context=context
+                )
+            except Exception as e:
+                logger.warning(f"V2 facade failed, falling back to V1: {e}")
+
         try:
             logger.info(f"Generating persona from text of type {type(text)}")
 
@@ -1949,6 +1979,17 @@ Generate a complete DirectPersona object with all required traits populated base
         Returns:
             List of persona dictionaries
         """
+        # V2 feature-flagged path
+        if self._use_v2() and self._v2_facade is not None:
+            try:
+                return await self._v2_facade.form_personas_from_transcript(
+                    transcript, participants, context
+                )
+            except Exception as e:
+                logger.warning(
+                    f"V2 facade (transcript) failed, falling back to V1: {e}"
+                )
+
         # Use the new parallel implementation
         return await self._form_personas_from_transcript_parallel(
             transcript, participants, context

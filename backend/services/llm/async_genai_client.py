@@ -9,6 +9,8 @@ import logging
 import json
 import asyncio
 import re
+import os
+import random
 from typing import Dict, Any, List, Union, Optional, AsyncGenerator, Tuple
 
 import google.genai as genai
@@ -87,14 +89,25 @@ class AsyncGenAIClient:
             # Prepare prompt with system instruction if provided
             final_prompt = self._prepare_prompt(prompt, system_instruction)
 
+            # Adjust retry/backoff for heavy tasks like PRD generation
+            task_name = task.value if isinstance(task, TaskType) else str(task)
+            local_max_retries = max_retries
+            local_initial_delay = initial_delay
+            local_backoff = backoff_factor
+            if task_name == "prd_generation":
+                # More patience for overloaded model scenarios
+                local_max_retries = max(local_max_retries, 5)
+                local_initial_delay = max(local_initial_delay, 2.0)
+                local_backoff = max(local_backoff, 2.5)
+
             # Generate content with retry
             response = await self._generate_with_retry(
                 model=self.default_model,
                 prompt=final_prompt,
                 config=config,
-                max_retries=max_retries,
-                initial_delay=initial_delay,
-                backoff_factor=backoff_factor,
+                max_retries=local_max_retries,
+                initial_delay=local_initial_delay,
+                backoff_factor=local_backoff,
                 task=task,
             )
 
@@ -148,14 +161,24 @@ class AsyncGenAIClient:
             # Prepare prompt with system instruction if provided
             final_prompt = self._prepare_prompt(prompt, system_instruction)
 
+            # Adjust retry/backoff for heavy tasks like PRD generation
+            task_name = task.value if isinstance(task, TaskType) else str(task)
+            local_max_retries = max_retries
+            local_initial_delay = initial_delay
+            local_backoff = backoff_factor
+            if task_name == "prd_generation":
+                local_max_retries = max(local_max_retries, 5)
+                local_initial_delay = max(local_initial_delay, 2.0)
+                local_backoff = max(local_backoff, 2.5)
+
             # Generate content stream with retry
             stream = await self._generate_stream_with_retry(
                 model=self.default_model,
                 prompt=final_prompt,
                 config=config,
-                max_retries=max_retries,
-                initial_delay=initial_delay,
-                backoff_factor=backoff_factor,
+                max_retries=local_max_retries,
+                initial_delay=local_initial_delay,
+                backoff_factor=local_backoff,
                 task=task,
             )
 
@@ -263,6 +286,10 @@ class AsyncGenAIClient:
             # Complex analysis tasks need more time
             base_timeout = 150.0  # 2.5 minutes base
             complexity_multiplier = 2.0  # 2x more time per character
+        elif task == TaskType.PRD_GENERATION or task == "prd_generation":
+            # PRD generation produces very long structured outputs
+            base_timeout = 300.0  # 5 minutes base
+            complexity_multiplier = 3.0
         else:
             # Standard tasks
             base_timeout = 120.0  # 2 minutes base
@@ -316,12 +343,21 @@ class AsyncGenAIClient:
         # Calculate dynamic timeout based on content size and task complexity
         timeout_seconds = self._calculate_dynamic_timeout(prompt, task)
 
+        # Optional fallback model for overload scenarios
+        fallback_model = os.getenv(
+            "GEMINI_FALLBACK_MODEL", "models/gemini-2.5-flash-latest"
+        )
+        use_fallback_next = False
+
         for attempt in range(max_retries):
             try:
+                # Choose model (fallback after certain errors)
+                effective_model = fallback_model if use_fallback_next else model
+
                 # Make the API call with dynamic timeout
                 response = await asyncio.wait_for(
                     self.client.aio.models.generate_content(
-                        model=model, contents=prompt, config=config
+                        model=effective_model, contents=prompt, config=config
                     ),
                     timeout=timeout_seconds,
                 )
@@ -347,12 +383,25 @@ class AsyncGenAIClient:
             except Exception as e:
                 last_exception = e
                 if attempt < max_retries - 1:
-                    # Log the error and retry
-                    logger.warning(
-                        f"API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}. "
-                        f"Retrying in {delay:.2f}s..."
+                    # Detect overload/unavailable and consider switching model
+                    message = str(e)
+                    overloaded = any(
+                        s in message for s in ["503", "UNAVAILABLE", "overloaded"]
                     )
-                    await asyncio.sleep(delay)
+                    if overloaded:
+                        use_fallback_next = True
+                        logger.warning(
+                            f"API call failed with service unavailable/overload (attempt {attempt + 1}/{max_retries})."
+                            f" Will retry using fallback model '{fallback_model}' in {delay:.2f}s. Error: {message}"
+                        )
+                    else:
+                        logger.warning(
+                            f"API call failed (attempt {attempt + 1}/{max_retries}): {message}. "
+                            f"Retrying in {delay:.2f}s..."
+                        )
+                    # Exponential backoff with small jitter to avoid thundering herd
+                    jitter = min(1.0, delay * 0.1) * random.random()
+                    await asyncio.sleep(delay + jitter)
                     delay *= backoff_factor
                 else:
                     # Last attempt failed, raise the exception
@@ -396,12 +445,19 @@ class AsyncGenAIClient:
         # Calculate dynamic timeout based on content size and task complexity
         timeout_seconds = self._calculate_dynamic_timeout(prompt, task)
 
+        # Optional fallback model for overload scenarios
+        fallback_model = os.getenv(
+            "GEMINI_FALLBACK_MODEL", "models/gemini-2.5-flash-latest"
+        )
+        use_fallback_next = False
+
         for attempt in range(max_retries):
             try:
+                effective_model = fallback_model if use_fallback_next else model
                 # Make the API call with dynamic timeout
                 stream = await asyncio.wait_for(
                     self.client.aio.models.generate_content_stream(
-                        model=model, contents=prompt, config=config
+                        model=effective_model, contents=prompt, config=config
                     ),
                     timeout=timeout_seconds,
                 )
@@ -427,12 +483,23 @@ class AsyncGenAIClient:
             except Exception as e:
                 last_exception = e
                 if attempt < max_retries - 1:
-                    # Log the error and retry
-                    logger.warning(
-                        f"API stream call failed (attempt {attempt + 1}/{max_retries}): {str(e)}. "
-                        f"Retrying in {delay:.2f}s..."
+                    message = str(e)
+                    overloaded = any(
+                        s in message for s in ["503", "UNAVAILABLE", "overloaded"]
                     )
-                    await asyncio.sleep(delay)
+                    if overloaded:
+                        use_fallback_next = True
+                        logger.warning(
+                            f"API stream call failed with service unavailable/overload (attempt {attempt + 1}/{max_retries})."
+                            f" Will retry using fallback model '{fallback_model}' in {delay:.2f}s. Error: {message}"
+                        )
+                    else:
+                        logger.warning(
+                            f"API stream call failed (attempt {attempt + 1}/{max_retries}): {message}. "
+                            f"Retrying in {delay:.2f}s..."
+                        )
+                    jitter = min(1.0, delay * 0.1) * random.random()
+                    await asyncio.sleep(delay + jitter)
                     delay *= backoff_factor
                 else:
                     # Last attempt failed, raise the exception
