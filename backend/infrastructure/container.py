@@ -6,13 +6,13 @@ create and manage service instances.
 """
 
 import logging
-from typing import Callable, Optional, Dict, Any
+import os
+from typing import Callable, Optional, Any
 
 from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal
 from backend.infrastructure.persistence.unit_of_work import UnitOfWork
-from backend.models import User
 from backend.services.stakeholder.agent_factory import StakeholderAgentFactory
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class Container:
         self._services = {}
         self._current_user = None
 
-    def set_current_user(self, user: User):
+    def set_current_user(self, user: Any):
         """
         Set the current user for the container.
 
@@ -44,7 +44,7 @@ class Container:
         """
         self._current_user = user
 
-    def get_current_user(self) -> Optional[User]:
+    def get_current_user(self) -> Optional[Any]:
         """
         Get the current user.
 
@@ -199,14 +199,31 @@ class Container:
                 from backend.services.stakeholder_analysis_service import (
                     StakeholderAnalysisService,
                 )
+                from backend.services.stakeholder_analysis_v2.facade import (
+                    StakeholderAnalysisFacade,
+                )
 
                 # Get LLM service dependency (enhanced Gemini by default)
                 llm_service = self.get_llm_service("enhanced_gemini")
 
-                # Create stakeholder analysis service
-                stakeholder_service = StakeholderAnalysisService(llm_service)
-                self.register_service(service_name, stakeholder_service)
-                logger.info("Created and registered stakeholder analysis service")
+                use_v2 = os.getenv("STAKEHOLDER_ANALYSIS_V2", "false").lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+                if use_v2:
+                    service_inst = StakeholderAnalysisFacade(llm_service)
+                    logger.info(
+                        "Using StakeholderAnalysis V2 facade (feature flag enabled)"
+                    )
+                else:
+                    service_inst = StakeholderAnalysisService(llm_service)
+                    logger.info(
+                        "Using StakeholderAnalysis V1 service (feature flag disabled)"
+                    )
+
+                self.register_service(service_name, service_inst)
             except Exception as e:
                 logger.error(f"Failed to create stakeholder analysis service: {e}")
                 raise
@@ -227,21 +244,38 @@ class Container:
                 from backend.services.processing.persona_formation_service import (
                     PersonaFormationService,
                 )
+                from backend.services.processing.persona_formation_v2.facade import (
+                    PersonaFormationFacade,
+                )
 
                 # Get LLM service dependency (enhanced Gemini by default)
                 llm_service = self.get_llm_service("enhanced_gemini")
 
-                # Create simple config (can be enhanced later)
-                class SimpleConfig:
-                    class Validation:
-                        min_confidence = 0.3
+                use_v2 = os.getenv("PERSONA_FORMATION_V2", "false").lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+                if use_v2:
+                    service_inst = PersonaFormationFacade(llm_service)
+                    logger.info(
+                        "Using PersonaFormation V2 facade (feature flag enabled)"
+                    )
+                else:
+                    # Create simple config (can be enhanced later)
+                    class SimpleConfig:
+                        class Validation:
+                            min_confidence = 0.3
 
-                    validation = Validation()
+                        validation = Validation()
 
-                # Create persona formation service
-                persona_service = PersonaFormationService(SimpleConfig(), llm_service)
-                self.register_service(service_name, persona_service)
-                logger.info("Created and registered persona formation service")
+                    service_inst = PersonaFormationService(SimpleConfig(), llm_service)
+                    logger.info(
+                        "Using PersonaFormation V1 service (feature flag disabled)"
+                    )
+
+                self.register_service(service_name, service_inst)
             except Exception as e:
                 logger.error(f"Failed to create persona formation service: {e}")
                 raise

@@ -674,6 +674,15 @@ class AsyncGenAIClient:
                 is_json_task = task != TaskType.TEXT_GENERATION
 
             # Parse JSON if needed
+            # Treat certain tasks as non-JSON even if unknown to the enum
+            if isinstance(task, str) and task.lower() in (
+                "text_generation",
+                "conversation_routine",
+                "conversation_routines",
+                "conversation_context_extraction",
+                "conversation_suggestions",
+            ):
+                is_json_task = False
             if is_json_task:
                 # Check if JSON is truncated
                 if not text_response.strip().endswith(
@@ -724,6 +733,36 @@ class AsyncGenAIClient:
                         return result
                     except Exception as e2:
                         logger.error(f"Failed to parse JSON even after repair: {e2}")
+                        # For PRD generation, fall back to returning raw text so callers can extract
+                        try:
+                            is_prd = (task == TaskType.PRD_GENERATION) or (
+                                isinstance(task, str) and str(task) == "prd_generation"
+                            )
+                        except Exception:
+                            is_prd = False
+                        if is_prd:
+                            logger.warning(
+                                "Falling back to raw text for prd_generation after JSON parse failure"
+                            )
+                            return {"text": text_response}
+                        # Conversational routines and generic text-generation tasks should not hard-fail on JSON parsing
+                        try:
+                            task_name = (
+                                task.value if isinstance(task, TaskType) else str(task)
+                            )
+                        except Exception:
+                            task_name = str(task)
+                        if str(task_name).lower() in (
+                            "text_generation",
+                            "conversation_routine",
+                            "conversation_routines",
+                            "conversation_context_extraction",
+                            "conversation_suggestions",
+                        ):
+                            logger.warning(
+                                "Falling back to raw text for conversational routine/text_generation after JSON parse failure"
+                            )
+                            return {"text": text_response}
                         raise LLMResponseParseError(
                             f"Failed to parse JSON response: {str(e)} -> {str(e2)}"
                         )

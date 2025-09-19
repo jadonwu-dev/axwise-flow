@@ -6,7 +6,7 @@ Implements the 2025 Conversation Routines framework for customer research
 import logging
 import json
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic_ai import Agent
 from pydantic_ai.tools import Tool
 
@@ -42,6 +42,52 @@ class ConversationRoutineService:
         self.llm_service = GeminiService(llm_config)
         self.stakeholder_detector = StakeholderDetector()
         self.agent = self._create_agent()
+
+    def _extract_json_candidate(self, text: str) -> Optional[str]:
+        """Best-effort extraction of a JSON object from free-form text.
+        - Prefer fenced ```json ... ``` blocks
+        - Else, find the longest balanced {...} region
+        """
+        if not text:
+            return None
+        # 1) Fenced code block
+        fence = "```"
+        if fence in text:
+            start = text.find("```json")
+            if start != -1:
+                start = start + len("```json")
+                end = text.find("```", start)
+                if end != -1:
+                    candidate = text[start:end].strip()
+                    return candidate if candidate else None
+            # generic fenced block
+            start = text.find(fence)
+            if start != -1:
+                start = start + len(fence)
+                end = text.find(fence, start)
+                if end != -1:
+                    candidate = text[start:end].strip()
+                    return candidate if candidate else None
+        # 2) Longest balanced braces
+        start_idx = text.find("{")
+        if start_idx == -1:
+            return None
+        depth = 0
+        best = None
+        for i in range(start_idx, len(text)):
+            ch = text[i]
+            if ch == "{":
+                depth += 1
+                if best is None:
+                    best = [i, i]
+            elif ch == "}":
+                depth -= 1
+                if best is not None:
+                    best[1] = i
+                if depth == 0 and best is not None:
+                    s, e = best
+                    return text[s : e + 1]
+        return None
 
     def _create_agent(self) -> Agent:
         """Create PydanticAI agent with conversation routine prompt and tools"""
@@ -151,18 +197,21 @@ class ConversationRoutineService:
                 )
                 response = response_data.get("text", "")
 
-                # Parse JSON response
-                cleaned = response.strip()
-                if cleaned.startswith("```json"):
-                    json_match = re.search(
-                        r"```json\s*\n(.*?)\n```", cleaned, re.DOTALL
-                    )
-                    if json_match:
-                        cleaned = json_match.group(1).strip()
-
-                context_data = json.loads(cleaned)
-                logger.info(f"📋 Extracted context: {context_data}")
-                return context_data
+                # Parse JSON response with tolerant extraction
+                candidate = self._extract_json_candidate(response)
+                if candidate:
+                    try:
+                        context_data = json.loads(candidate)
+                        logger.info(f"📋 Extracted context: {context_data}")
+                        return context_data
+                    except Exception as pe:
+                        logger.warning(
+                            f"Failed to parse extracted JSON from response text: {pe}"
+                        )
+                logger.warning(
+                    "Failed to parse JSON from response text; returning null-context"
+                )
+                return {"business_idea": None, "target_customer": None, "problem": None}
 
             except Exception as e:
                 logger.error(f"🔴 Context extraction failed: {e}")
@@ -274,16 +323,21 @@ class ConversationRoutineService:
             )
             response = response_data.get("text", "")
 
-            # Parse JSON response
-            cleaned = response.strip()
-            if cleaned.startswith("```json"):
-                json_match = re.search(r"```json\s*\n(.*?)\n```", cleaned, re.DOTALL)
-                if json_match:
-                    cleaned = json_match.group(1).strip()
-
-            context_data = json.loads(cleaned)
-            logger.info(f"📋 Extracted context: {context_data}")
-            return context_data
+            # Parse JSON response with tolerant extraction
+            candidate = self._extract_json_candidate(response)
+            if candidate:
+                try:
+                    context_data = json.loads(candidate)
+                    logger.info(f"📋 Extracted context: {context_data}")
+                    return context_data
+                except Exception as pe:
+                    logger.warning(
+                        f"Failed to parse extracted JSON from response string: {pe}"
+                    )
+            logger.warning(
+                "Failed to parse JSON from response string; returning null-context"
+            )
+            return {"business_idea": None, "target_customer": None, "problem": None}
 
         except Exception as e:
             logger.error(f"🔴 Context extraction failed: {e}")

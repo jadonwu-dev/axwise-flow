@@ -11,7 +11,6 @@ from backend.database import get_db
 from backend.services.external.auth_middleware import get_current_user
 from backend.models import User
 from backend.services.processing.prd_generation_service import PRDGenerationService
-from backend.services.results_service import ResultsService
 from backend.services.llm import LLMServiceFactory
 
 logger = logging.getLogger(__name__)
@@ -22,13 +21,19 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+
 @router.get("/{result_id}")
 async def generate_prd(
     result_id: int,
-    prd_type: str = Query("both", description="Type of PRD to generate: 'operational', 'technical', or 'both'"),
-    force_regenerate: bool = Query(False, description="Whether to force regeneration of the PRD"),
+    prd_type: str = Query(
+        "both",
+        description="Type of PRD to generate: 'operational', 'technical', or 'both'",
+    ),
+    force_regenerate: bool = Query(
+        False, description="Whether to force regeneration of the PRD"
+    ),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Generate a PRD from analysis results.
@@ -48,9 +53,26 @@ async def generate_prd(
 
         # Validate prd_type
         if prd_type not in ["operational", "technical", "both"]:
-            raise HTTPException(status_code=400, detail="Invalid PRD type. Must be 'operational', 'technical', or 'both'")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid PRD type. Must be 'operational', 'technical', or 'both'",
+            )
 
-        # Get analysis results
+        # Get analysis results (behind feature flag for modular migration)
+        import os
+
+        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if use_v2:
+            from backend.services.results.facade import (
+                ResultsServiceFacade as ResultsService,
+            )
+        else:
+            from backend.services.results_service import ResultsService
         results_service = ResultsService(db=db, user=user)
         analysis_results = results_service.get_analysis_result(result_id)
 
@@ -78,7 +100,7 @@ async def generate_prd(
             prd_type=prd_type,
             industry=industry,
             result_id=result_id,
-            force_regenerate=force_regenerate
+            force_regenerate=force_regenerate,
         )
 
         # Return PRD data
@@ -86,7 +108,7 @@ async def generate_prd(
             "success": True,
             "result_id": result_id,
             "prd_type": prd_type,
-            "prd_data": prd_data
+            "prd_data": prd_data,
         }
 
     except HTTPException:

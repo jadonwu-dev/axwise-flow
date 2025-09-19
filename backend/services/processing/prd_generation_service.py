@@ -174,6 +174,51 @@ class PRDGenerationService:
                 ),
             }
 
+    def _extract_json_candidate(self, text: str) -> Optional[str]:
+        """Best-effort extraction of a JSON object from free text.
+        - Prefer fenced ```json ... ``` blocks
+        - Else, find the longest balanced {...} region
+        """
+        if not text:
+            return None
+        # 1) Fenced code block
+        fence = "```"
+        if fence in text:
+            # Try ```json
+            start = text.find("```json")
+            if start != -1:
+                start = start + len("```json")
+                end = text.find("```", start)
+                if end != -1:
+                    candidate = text[start:end].strip()
+                    return candidate if candidate else None
+            # Try any fenced block
+            start = text.find(fence)
+            if start != -1:
+                start = start + len(fence)
+                end = text.find(fence, start)
+                if end != -1:
+                    candidate = text[start:end].strip()
+                    return candidate if candidate else None
+        # 2) Longest balanced braces
+        first = text.find("{")
+        last = text.rfind("}")
+        if first != -1 and last != -1 and last > first:
+            segment = text[first : last + 1]
+            # Scan for last index where braces are balanced
+            depth = 0
+            best_idx = -1
+            for i, ch in enumerate(segment):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        best_idx = i
+            if best_idx != -1:
+                return segment[: best_idx + 1]
+        return None
+
     def _parse_llm_response(self, response: Any) -> Dict[str, Any]:
         """
         Parse LLM response into a PRD dictionary.
@@ -191,19 +236,33 @@ class PRDGenerationService:
                 if "prd_type" in response:
                     return response
                 elif "text" in response:
-                    # Try to parse JSON from text
-                    try:
-                        return json.loads(response["text"])
-                    except json.JSONDecodeError:
-                        logger.warning("Failed to parse JSON from response text")
-                        return self._create_fallback_prd(response["text"])
+                    # Try to parse JSON from text with tolerant extraction
+                    candidate = self._extract_json_candidate(response.get("text", ""))
+                    if candidate:
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                "Failed to parse extracted JSON from response text"
+                            )
+                    logger.warning(
+                        "Failed to parse JSON from response text; using fallback"
+                    )
+                    return self._create_fallback_prd(response.get("text", ""))
             elif isinstance(response, str):
-                # Try to parse JSON from string
-                try:
-                    return json.loads(response)
-                except json.JSONDecodeError:
-                    logger.warning("Failed to parse JSON from response string")
-                    return self._create_fallback_prd(response)
+                # Try to parse JSON from string with tolerant extraction
+                candidate = self._extract_json_candidate(response)
+                if candidate:
+                    try:
+                        return json.loads(candidate)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Failed to parse extracted JSON from response string"
+                        )
+                logger.warning(
+                    "Failed to parse JSON from response string; using fallback"
+                )
+                return self._create_fallback_prd(response)
 
             # If we can't parse the response, return a fallback PRD
             logger.warning(f"Unexpected response format: {type(response)}")

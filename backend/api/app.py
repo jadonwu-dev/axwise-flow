@@ -648,8 +648,21 @@ async def get_results(
     Retrieves analysis results.
     """
     try:
-        # Use ResultsService to handle fetching and formatting the results
-        from backend.services.results_service import ResultsService
+        # Use ResultsService facade behind feature flag to allow modular migration
+        import os
+
+        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if use_v2:
+            from backend.services.results.facade import (
+                ResultsServiceFacade as ResultsService,
+            )
+        else:
+            from backend.services.results_service import ResultsService
 
         results_service = ResultsService(db, current_user)
 
@@ -688,8 +701,21 @@ async def get_simplified_personas(
             f"Getting simplified personas for result_id: {result_id}, user: {current_user.user_id}"
         )
 
-        # Use ResultsService to handle fetching and filtering
-        from backend.services.results_service import ResultsService
+        # Use ResultsService facade behind feature flag to allow modular migration
+        import os
+
+        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if use_v2:
+            from backend.services.results.facade import (
+                ResultsServiceFacade as ResultsService,
+            )
+        else:
+            from backend.services.results_service import ResultsService
 
         results_service = ResultsService(db, current_user)
 
@@ -698,7 +724,7 @@ async def get_simplified_personas(
 
         # Import validation functions
         from backend.domain.models.production_persona import PersonaAPIResponse
-        
+
         # Create validated API response
         try:
             validated_response = PersonaAPIResponse(
@@ -707,17 +733,17 @@ async def get_simplified_personas(
                     "result_id": result_id,
                     "design_thinking_optimized": True,
                     "total_personas": len(simplified_personas),
-                    "filtered": True
-                }
+                    "filtered": True,
+                },
             )
-            
+
             return {
                 "status": "success",
                 "result_id": result_id,
                 "personas": validated_response.personas,
                 "total_personas": len(simplified_personas),
                 "design_thinking_optimized": True,
-                "validation": "passed"
+                "validation": "passed",
             }
         except Exception as validation_error:
             logger.error(f"PersonaAPIResponse validation failed: {validation_error}")
@@ -729,7 +755,7 @@ async def get_simplified_personas(
                 "total_personas": len(simplified_personas),
                 "design_thinking_optimized": True,
                 "validation": "failed",
-                "validation_error": str(validation_error)
+                "validation_error": str(validation_error),
             }
 
     except HTTPException:
@@ -994,8 +1020,21 @@ async def list_analyses(
                 },
             )
 
-        # Use ResultsService to handle fetching and formatting the results
-        from backend.services.results_service import ResultsService
+        # Use ResultsService facade behind feature flag to allow modular migration
+        import os
+
+        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if use_v2:
+            from backend.services.results.facade import (
+                ResultsServiceFacade as ResultsService,
+            )
+        else:
+            from backend.services.results_service import ResultsService
 
         results_service = ResultsService(db, current_user)
 
