@@ -6,13 +6,13 @@ create and manage service instances.
 """
 
 import logging
-from typing import Callable, Optional, Dict, Any
+import os
+from typing import Callable, Optional, Any
 
 from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal
 from backend.infrastructure.persistence.unit_of_work import UnitOfWork
-from backend.models import User
 from backend.services.stakeholder.agent_factory import StakeholderAgentFactory
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class Container:
         self._services = {}
         self._current_user = None
 
-    def set_current_user(self, user: User):
+    def set_current_user(self, user: Any):
         """
         Set the current user for the container.
 
@@ -44,7 +44,7 @@ class Container:
         """
         self._current_user = user
 
-    def get_current_user(self) -> Optional[User]:
+    def get_current_user(self) -> Optional[Any]:
         """
         Get the current user.
 
@@ -158,4 +158,126 @@ class Container:
         service_name = "stakeholder_agent_factory"
         if not self.has_service(service_name):
             self.register_service(service_name, StakeholderAgentFactory())
+        return self.get_service(service_name)
+
+    def get_llm_service(self, provider: str = "enhanced_gemini"):
+        """
+        Get or create an LLM service instance.
+
+        Args:
+            provider: LLM provider ("enhanced_gemini" default; also supports "gemini", "openai")
+
+        Returns:
+            LLM service instance
+        """
+        service_name = f"llm_service_{provider}"
+
+        if not self.has_service(service_name):
+            try:
+                from backend.services.llm import LLMServiceFactory
+
+                llm_service = LLMServiceFactory.create(provider)
+                self.register_service(service_name, llm_service)
+                logger.info(f"Created and registered LLM service: {provider}")
+            except Exception as e:
+                logger.error(f"Failed to create LLM service {provider}: {e}")
+                raise
+
+        return self.get_service(service_name)
+
+    def get_stakeholder_analysis_service(self):
+        """
+        Get or create the stakeholder analysis service.
+
+        Returns:
+            StakeholderAnalysisService instance
+        """
+        service_name = "stakeholder_analysis_service"
+
+        if not self.has_service(service_name):
+            try:
+                from backend.services.stakeholder_analysis_service import (
+                    StakeholderAnalysisService,
+                )
+                from backend.services.stakeholder_analysis_v2.facade import (
+                    StakeholderAnalysisFacade,
+                )
+
+                # Get LLM service dependency (enhanced Gemini by default)
+                llm_service = self.get_llm_service("enhanced_gemini")
+
+                use_v2 = os.getenv("STAKEHOLDER_ANALYSIS_V2", "false").lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+                if use_v2:
+                    service_inst = StakeholderAnalysisFacade(llm_service)
+                    logger.info(
+                        "Using StakeholderAnalysis V2 facade (feature flag enabled)"
+                    )
+                else:
+                    service_inst = StakeholderAnalysisService(llm_service)
+                    logger.info(
+                        "Using StakeholderAnalysis V1 service (feature flag disabled)"
+                    )
+
+                self.register_service(service_name, service_inst)
+            except Exception as e:
+                logger.error(f"Failed to create stakeholder analysis service: {e}")
+                raise
+
+        return self.get_service(service_name)
+
+    def get_persona_formation_service(self):
+        """
+        Get or create the persona formation service.
+
+        Returns:
+            PersonaFormationService instance
+        """
+        service_name = "persona_formation_service"
+
+        if not self.has_service(service_name):
+            try:
+                from backend.services.processing.persona_formation_service import (
+                    PersonaFormationService,
+                )
+                from backend.services.processing.persona_formation_v2.facade import (
+                    PersonaFormationFacade,
+                )
+
+                # Get LLM service dependency (enhanced Gemini by default)
+                llm_service = self.get_llm_service("enhanced_gemini")
+
+                use_v2 = os.getenv("PERSONA_FORMATION_V2", "false").lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+                if use_v2:
+                    service_inst = PersonaFormationFacade(llm_service)
+                    logger.info(
+                        "Using PersonaFormation V2 facade (feature flag enabled)"
+                    )
+                else:
+                    # Create simple config (can be enhanced later)
+                    class SimpleConfig:
+                        class Validation:
+                            min_confidence = 0.3
+
+                        validation = Validation()
+
+                    service_inst = PersonaFormationService(SimpleConfig(), llm_service)
+                    logger.info(
+                        "Using PersonaFormation V1 service (feature flag disabled)"
+                    )
+
+                self.register_service(service_name, service_inst)
+            except Exception as e:
+                logger.error(f"Failed to create persona formation service: {e}")
+                raise
+
         return self.get_service(service_name)

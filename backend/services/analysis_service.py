@@ -4,10 +4,11 @@ import json
 import logging
 import asyncio
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from pydantic import ValidationError
 
-from backend.models import User, InterviewData, AnalysisResult
+# Import SQLAlchemy models directly from models.py to avoid dynamic import issues
+import backend.models as models_module
 from backend.services.llm import LLMServiceFactory
 from backend.services.nlp import get_nlp_processor
 from backend.core.processing_pipeline import process_data
@@ -29,7 +30,7 @@ class AnalysisService:
     Encapsulates business logic related to interview data analysis.
     """
 
-    def __init__(self, db: Session, user: User):
+    def __init__(self, db: Session, user: Any):
         """
         Initialize the AnalysisService with database session and user.
 
@@ -105,10 +106,10 @@ class AnalysisService:
             # Get interview data with user authorization check
             try:
                 interview_data = (
-                    self.db.query(InterviewData)
+                    self.db.query(models_module.InterviewData)
                     .filter(
-                        InterviewData.id == data_id,
-                        InterviewData.user_id == self.user.user_id,
+                        models_module.InterviewData.id == data_id,
+                        models_module.InterviewData.user_id == self.user.user_id,
                     )
                     .first()
                 )
@@ -171,9 +172,7 @@ class AnalysisService:
             logger.error(f"Error initiating analysis: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
-    def _parse_interview_data(
-        self, interview_data: InterviewData, is_free_text: bool
-    ) -> Any:
+    def _parse_interview_data(self, interview_data: Any, is_free_text: bool) -> Any:
         """
         Parse interview data from database record.
 
@@ -273,7 +272,7 @@ class AnalysisService:
         llm_provider: str,
         llm_model: str,
         industry: Optional[str] = None,
-    ) -> AnalysisResult:
+    ) -> Any:
         """
         Create an analysis result record in the database.
 
@@ -374,7 +373,7 @@ class AnalysisService:
         initial_results["metadata"] = metadata
 
         try:
-            analysis_result = AnalysisResult(
+            analysis_result = models_module.AnalysisResult(
                 data_id=data_id,
                 analysis_date=utc_now(),
                 status="processing",
@@ -434,7 +433,7 @@ class AnalysisService:
             async_db = next(get_db())
 
             # Get a fresh reference to the analysis result
-            task_result = async_db.query(AnalysisResult).get(result_id)
+            task_result = async_db.query(models_module.AnalysisResult).get(result_id)
             if not task_result:
                 logger.error(
                     f"AnalysisResult record not found for result_id: {result_id}. Aborting task."
@@ -748,7 +747,9 @@ class AnalysisService:
                     async_db = next(get_db())
 
                 # Ensure task_result is fetched if not already available
-                task_result = async_db.query(AnalysisResult).get(result_id)
+                task_result = async_db.query(models_module.AnalysisResult).get(
+                    result_id
+                )
 
                 if task_result:
                     # Get current progress information

@@ -33,18 +33,18 @@ def sample_attributes():
         "demographics": {
             "value": "34-year-old female with 8 years of experience in UX/UI design",
             "confidence": 0.8,
-            "evidence": []
+            "evidence": [],
         },
         "goals_and_motivations": {
             "value": "Creating intuitive interfaces that solve real user problems",
             "confidence": 0.7,
-            "evidence": []
+            "evidence": [],
         },
         "skills_and_expertise": {
             "value": "Proficient in Figma, user research, and prototyping",
             "confidence": 0.9,
-            "evidence": []
-        }
+            "evidence": [],
+        },
     }
 
 
@@ -63,21 +63,25 @@ def sample_text():
 
 
 @pytest.mark.asyncio
-async def test_link_evidence_to_attributes(service, mock_llm_service, sample_attributes, sample_text):
+async def test_link_evidence_to_attributes(
+    service, mock_llm_service, sample_attributes, sample_text
+):
     """Test linking evidence to attributes."""
     # Mock LLM response with fixed quotes for all attributes
     mock_llm_service.analyze.return_value = [
         "I've been working as a product designer for about 8 years now. I'm 34 years old and I specialize in UX/UI design.",
         "My main goal is to create interfaces that are intuitive and solve real problems for users.",
-        "I'm really proficient in Figma, which is my primary design tool. I also do a lot of user research and prototyping to validate my designs before they go to development."
+        "I'm really proficient in Figma, which is my primary design tool. I also do a lot of user research and prototyping to validate my designs before they go to development.",
     ]
 
     # Patch the _find_quotes_with_regex method to ensure it's not used
-    with patch.object(service, '_find_quotes_with_regex') as mock_find_quotes:
+    with patch.object(service, "_find_quotes_with_regex") as mock_find_quotes:
         mock_find_quotes.return_value = []
 
         # Call the service
-        result = await service.link_evidence_to_attributes(sample_attributes, sample_text)
+        result = await service.link_evidence_to_attributes(
+            sample_attributes, sample_text
+        )
 
         # Verify the result
         assert "demographics" in result
@@ -97,13 +101,15 @@ async def test_link_evidence_to_attributes(service, mock_llm_service, sample_att
 
 
 @pytest.mark.asyncio
-async def test_link_evidence_fallback_to_regex(service, mock_llm_service, sample_attributes, sample_text):
+async def test_link_evidence_fallback_to_regex(
+    service, mock_llm_service, sample_attributes, sample_text
+):
     """Test fallback to regex when LLM fails."""
     # Mock LLM response to fail
     mock_llm_service.analyze.return_value = None
 
     # Patch the _find_quotes_with_regex method to return test quotes
-    with patch.object(service, '_find_quotes_with_regex') as mock_find_quotes:
+    with patch.object(service, "_find_quotes_with_regex") as mock_find_quotes:
         mock_find_quotes.side_effect = lambda trait_value, full_text: {
             "34-year-old female with 8 years of experience in UX/UI design": [
                 "I've been working as a product designer for about 8 years now. I'm 34 years old and I specialize in UX/UI design."
@@ -113,11 +119,13 @@ async def test_link_evidence_fallback_to_regex(service, mock_llm_service, sample
             ],
             "Proficient in Figma, user research, and prototyping": [
                 "I'm really proficient in Figma, which is my primary design tool. I also do a lot of user research and prototyping to validate my designs before they go to development."
-            ]
+            ],
         }.get(trait_value, [])
 
         # Call the service
-        result = await service.link_evidence_to_attributes(sample_attributes, sample_text)
+        result = await service.link_evidence_to_attributes(
+            sample_attributes, sample_text
+        )
 
         # Verify the result
         assert "demographics" in result
@@ -145,7 +153,9 @@ async def test_find_relevant_quotes(service, mock_llm_service, sample_text):
     ]
 
     # Call the method
-    quotes = await service._find_relevant_quotes("demographics", "34-year-old with 8 years of experience", sample_text)
+    quotes = await service._find_relevant_quotes(
+        "demographics", "34-year-old with 8 years of experience", sample_text
+    )
 
     # Verify the result
     assert len(quotes) > 0
@@ -191,3 +201,77 @@ async def test_find_quotes_with_regex(service, sample_text):
     # Verify the result
     assert len(quotes) > 0
     assert any("product designer" in quote.lower() for quote in quotes)
+
+
+def test_v2_scoped_offsets_speaker_and_dedup(mock_llm_service):
+    service = EvidenceLinkingService(mock_llm_service)
+    # Ensure V2 runs regardless of env flag during test
+    service.enable_v2 = True
+
+    attributes = {
+        "demographics": {"value": "34-year-old with 8 years of UX/UI design"},
+        "goals_and_motivations": {"value": "build intuitive interfaces for users"},
+        "skills_and_expertise": {"value": "proficient with Figma and prototyping"},
+        # Force potential duplication: similar to goals
+        "needs_and_expectations": {"value": "intuitive interfaces for users"},
+        # Low-overlap trait should be rejected
+        "attitude_towards_ai": {"value": "skeptical about AI in finance spreadsheets"},
+    }
+
+    scoped_text = (
+        "Alice: I am 34 years old and have 8 years of UX/UI design experience. "
+        "I want to build intuitive interfaces for users. "
+        "I'm proficient with Figma and do a lot of prototyping. "
+        "Also I love hiking."
+    )
+
+    enhanced, evidence_map = service.link_evidence_to_attributes_v2(
+        attributes, scoped_text, scope_meta={"speaker": "Alice", "document_id": "doc-1"}
+    )
+
+    # 1) Offsets and speaker populated
+    all_items = [it for items in evidence_map.values() for it in items]
+    assert all_items, "Expected some evidence items in v2 path"
+    assert all(
+        isinstance(it.get("start_char"), int)
+        and isinstance(it.get("end_char"), int)
+        and it.get("speaker") == "Alice"
+        for it in all_items
+    ), "All evidence items must have start/end offsets and speaker populated"
+
+    # 2) Cross-field deduplication: the sentence about intuitive interfaces should not be reused across both traits
+    def flatten_quotes(map_):
+        return [it["quote"] for items in map_.values() for it in items]
+
+    quotes = flatten_quotes(evidence_map)
+    # Count duplicates across traits
+    from collections import Counter
+
+    counts = Counter(quotes)
+    duplicate_quotes = [q for q, c in counts.items() if c > 1]
+    assert (
+        not duplicate_quotes
+    ), f"Expected no duplicate quotes across traits, found {duplicate_quotes}"
+
+    # 3) Low-overlap rejection: attitude_towards_ai should have no evidence
+    ai_items = evidence_map.get("attitude_towards_ai", [])
+    assert len(ai_items) == 0, "Expected low-overlap trait to yield no evidence in v2"
+
+    # 4) Percentage with non-null offsets and speaker is 100%
+    pct_complete = sum(
+        1
+        for it in all_items
+        if it.get("start_char") is not None
+        and it.get("end_char") is not None
+        and it.get("speaker")
+    ) / max(1, len(all_items))
+    assert pct_complete == 1.0
+
+    # 5) Metrics are available and sensible
+    metrics = getattr(service, "last_metrics_v2", None)
+    assert metrics is not None, "Expected last_metrics_v2 to be populated"
+    assert pytest.approx(metrics.get("offset_completeness", 0.0), rel=1e-6) == 1.0
+    assert (
+        pytest.approx(metrics.get("cross_field_duplicate_ratio", 0.0), rel=1e-6) == 0.0
+    )
+    assert metrics.get("rejection_rate_overlap", 0.0) >= 0.0

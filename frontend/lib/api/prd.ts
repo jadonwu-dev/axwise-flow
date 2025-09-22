@@ -3,7 +3,7 @@
  */
 
 import { apiCore } from './core';
-import { initializeAuth } from './auth';
+import { initializeAuth, getAuthToken } from './auth';
 import { API_ENDPOINTS } from '../apiEndpoints';
 
 /**

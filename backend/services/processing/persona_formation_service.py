@@ -52,6 +52,11 @@ import re
 from .evidence_validator import EvidenceValidator, ValidationResult
 from .keyword_highlighter import ContextAwareKeywordHighlighter
 
+try:
+    from backend.services.processing.persona_formation_v2 import PersonaFormationFacade
+except Exception:
+    from services.processing.persona_formation_v2 import PersonaFormationFacade
+
 
 def apply_domain_keywords_to_persona(
     persona: Dict[str, Any], domain_keywords: List[str], persona_name: str
@@ -728,6 +733,22 @@ class PersonaFormationService:
         logger.info("Using TraitFormattingService for improved trait value formatting")
         logger.info(
             "Using PydanticAI for structured persona outputs (migrated from Instructor)"
+        )
+        # Initialize V2 facade (modular) for opt-in usage via feature flag
+        self._v2_facade = None
+        try:
+            self._v2_facade = PersonaFormationFacade(llm_service)
+            logger.info("Initialized PersonaFormationFacade (V2)")
+        except Exception as e:
+            logger.warning(f"Could not initialize PersonaFormationFacade: {e}")
+
+    def _use_v2(self) -> bool:
+        """Feature flag gate for PERSONA_FORMATION_V2."""
+        return os.getenv("PERSONA_FORMATION_V2", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
         )
 
     def _validate_structured_demographics(self, demographics_data: Any) -> bool:
@@ -1674,6 +1695,15 @@ Generate a complete DirectPersona object with all required traits populated base
         Returns:
             List of persona dictionaries
         """
+        # V2 feature-flagged path
+        if self._use_v2() and self._v2_facade is not None:
+            try:
+                return await self._v2_facade.generate_persona_from_text(
+                    text, context=context
+                )
+            except Exception as e:
+                logger.warning(f"V2 facade failed, falling back to V1: {e}")
+
         try:
             logger.info(f"Generating persona from text of type {type(text)}")
 
@@ -1949,6 +1979,17 @@ Generate a complete DirectPersona object with all required traits populated base
         Returns:
             List of persona dictionaries
         """
+        # V2 feature-flagged path
+        if self._use_v2() and self._v2_facade is not None:
+            try:
+                return await self._v2_facade.form_personas_from_transcript(
+                    transcript, participants, context
+                )
+            except Exception as e:
+                logger.warning(
+                    f"V2 facade (transcript) failed, falling back to V1: {e}"
+                )
+
         # Use the new parallel implementation
         return await self._form_personas_from_transcript_parallel(
             transcript, participants, context
@@ -2084,12 +2125,19 @@ Generate a complete DirectPersona object with all required traits populated base
             for segment in segments:
                 if isinstance(segment, dict):
                     text = segment.get("text", "")
-                    speaker = segment.get("speaker", "Unknown")
+                    speaker = (segment.get("speaker") or "Unknown").strip()
+                    # Exclude researcher/interviewer/moderator lines from stakeholder text
+                    if speaker.lower() in {"researcher", "interviewer", "moderator"}:
+                        continue
                     speakers.add(speaker)
                     stakeholder_text += f"\n{text}"
                 elif hasattr(segment, "text"):
                     text = segment.text
-                    speaker = getattr(segment, "speaker", "Unknown")
+                    speaker = (
+                        getattr(segment, "speaker", "Unknown") or "Unknown"
+                    ).strip()
+                    if speaker.lower() in {"researcher", "interviewer", "moderator"}:
+                        continue
                     speakers.add(speaker)
                     stakeholder_text += f"\n{text}"
 
@@ -2290,6 +2338,196 @@ Generate a complete DirectPersona object with all required traits populated base
                             "technical_influence": 0.5,
                             "budget_influence": 0.5,
                         }
+
+                    # Post-process demographics: extract exact ages from original text and create age_range bucket via LLM
+                    try:
+                        ctx = context or {}
+                        original_text = (
+                            ctx.get("original_text")
+                            or ctx.get("source_text")
+                            or ctx.get("raw_text")
+                        )
+                        if isinstance(original_text, str) and original_text.strip():
+                            import re
+
+                            ages = []
+                            evidence_lines = []
+                            # Look for header-like lines containing explicit ages
+                            for line in original_text.splitlines():
+                                m1 = re.search(
+                                    r"\b(?:age|years? old)\s*[:\-]?\s*(\d{2})\b",
+                                    line,
+                                    re.IGNORECASE,
+                                )
+                                m2 = re.search(
+                                    r"\b(\d{2})\s*(?:years? old)\b", line, re.IGNORECASE
+                                )
+                                age = None
+                                if m1:
+                                    age = m1.group(1)
+                                elif m2:
+                                    age = m2.group(1)
+                                if age:
+                                    try:
+                                        age_int = int(age)
+                                        if 14 <= age_int <= 99:
+                                            ages.append(age_int)
+                                            # Bold highlight the age for evidence quoting
+                                            highlighted = re.sub(
+                                                rf"\b{age}\b",
+                                                f"**{age}**",
+                                                line.strip(),
+                                            )
+                                            evidence_lines.append(highlighted[:220])
+                                    except Exception:
+                                        pass
+                            if ages:
+                                # Ask LLM to produce a concise bucket for this stakeholder
+                                try:
+                                    prompt = (
+                                        "You are summarizing participant ages for a stakeholder persona. "
+                                        "Given the ages: "
+                                        + ", ".join(str(a) for a in ages)
+                                        + ". Respond with a single concise age range label capturing the cluster, "
+                                        "prefer en-dash like '31–35' or 'mid-30s'. Output ONLY the label."
+                                    )
+                                    llm_resp = await self.llm_service.analyze(
+                                        {"task": "text_generation", "text": prompt}
+                                    )
+                                    bucket = (llm_resp or {}).get(
+                                        "text", ""
+                                    ).strip() or None
+                                except Exception:
+                                    bucket = None
+
+                                if bucket:
+                                    # Ensure demographics structure exists and inject age_range AttributedField
+                                    demo = persona_dict.get("demographics")
+                                    if not isinstance(demo, dict):
+                                        persona_dict["demographics"] = {
+                                            "experience_level": None,
+                                            "industry": None,
+                                            "location": None,
+                                            "professional_context": None,
+                                            "roles": None,
+                                            "age_range": None,
+                                            "confidence": float(
+                                                persona_dict.get(
+                                                    "overall_confidence", 0.7
+                                                )
+                                            ),
+                                        }
+                                        demo = persona_dict["demographics"]
+                                    demo["age_range"] = {
+                                        "value": bucket,
+                                        "evidence": evidence_lines[:5],
+                                    }
+                    except Exception as age_e:
+                        logger.warning(
+                            f"[SINGLE_STAKEHOLDER] Age extraction/bucketing skipped due to error: {age_e}"
+                        )
+
+                        # Enhance evidence with V2 linking for stakeholder-specific persona
+                        try:
+                            if getattr(
+                                self.evidence_linking_service, "enable_v2", False
+                            ):
+                                scope_meta = {
+                                    "speaker": None,  # avoid misattribution to category label
+                                    "speaker_role": "Interviewee",
+                                    "stakeholder_category": stakeholder_category,
+                                }
+                                try:
+                                    if (
+                                        context
+                                        and isinstance(context, dict)
+                                        and context.get("document_id")
+                                    ):
+                                        scope_meta["document_id"] = context[
+                                            "document_id"
+                                        ]
+                                except Exception:
+                                    pass
+                                persona_dict, _evmap = (
+                                    self.evidence_linking_service.link_evidence_to_attributes_v2(
+                                        persona_dict,
+                                        scoped_text=stakeholder_text,
+                                        scope_meta=scope_meta,
+                                        protect_key_quotes=True,
+                                    )
+                                )
+                                # Ensure age is populated if missing (pattern-based fallback)
+                                try:
+                                    demo = (
+                                        persona_dict.get("demographics")
+                                        if isinstance(persona_dict, dict)
+                                        else None
+                                    )
+                                    need_age = True
+                                    if isinstance(demo, dict):
+                                        ar = demo.get("age_range")
+                                        if isinstance(ar, dict) and ar.get("value"):
+                                            need_age = False
+                                    if need_age:
+                                        from backend.services.evidence_intelligence.demographic_intelligence import (
+                                            DemographicIntelligence,
+                                        )
+                                        from backend.services.evidence_intelligence.speaker_intelligence import (
+                                            SpeakerProfile,
+                                            SpeakerRole,
+                                        )
+
+                                        di = DemographicIntelligence(llm_service=None)
+                                        sp = SpeakerProfile(
+                                            speaker_id=str(stakeholder_category),
+                                            role=SpeakerRole.INTERVIEWEE,
+                                            unique_identifier=str(stakeholder_category),
+                                        )
+                                        demographics_data = di._fallback_extraction(
+                                            stakeholder_text, sp
+                                        )
+                                        if demographics_data and (
+                                            demographics_data.age_range
+                                            or demographics_data.age
+                                        ):
+                                            age_value = demographics_data.age_range or (
+                                                str(demographics_data.age)
+                                                if demographics_data.age
+                                                else None
+                                            )
+                                            if age_value:
+                                                demo = (
+                                                    dict(demo)
+                                                    if isinstance(demo, dict)
+                                                    else {}
+                                                )
+                                                existing_evd = []
+                                                if isinstance(
+                                                    demo.get("age_range"), dict
+                                                ):
+                                                    existing_evd = (
+                                                        demo["age_range"].get(
+                                                            "evidence", []
+                                                        )
+                                                        or []
+                                                    )
+                                                demo["age_range"] = {
+                                                    "value": age_value,
+                                                    "evidence": existing_evd,
+                                                }
+                                                demo["confidence"] = (
+                                                    demo.get("confidence", 0.7) or 0.7
+                                                )
+                                                persona_dict["demographics"] = demo
+                                except Exception as _age_err:
+                                    logger.debug(
+                                        f"[DEMOGRAPHICS] Age fallback extraction skipped (stakeholder persona): {_age_err}"
+                                    )
+
+                        except Exception as el_err:
+                            logger.warning(
+                                f"[EVIDENCE_LINKING_V2] Skipped for stakeholder {stakeholder_category}: {el_err}"
+                            )
 
                     logger.info(
                         f"[SINGLE_STAKEHOLDER] Successfully generated persona: {persona_dict.get('name', 'Unknown')}"
@@ -3161,6 +3399,92 @@ Please analyze this speaker's content and generate a comprehensive SimplifiedPer
                 logger.info(
                     f"[PYDANTIC_AI] Successfully converted persona model to dictionary for {speaker}"
                 )
+
+                # Enhance evidence with V2 linking using scoped speaker text and metadata
+                try:
+                    if getattr(self.evidence_linking_service, "enable_v2", False):
+                        scope_meta = {"speaker": speaker, "speaker_role": role}
+                        try:
+                            if context and isinstance(context, dict):
+                                if context.get("stakeholder_category"):
+                                    scope_meta["stakeholder_category"] = context[
+                                        "stakeholder_category"
+                                    ]
+                                if context.get("document_id"):
+                                    scope_meta["document_id"] = context["document_id"]
+                        except Exception:
+                            pass
+                        persona_data, _evmap = (
+                            self.evidence_linking_service.link_evidence_to_attributes_v2(
+                                persona_data,
+                                scoped_text=text,
+                                scope_meta=scope_meta,
+                                protect_key_quotes=True,
+                            )
+                        )
+                        # Ensure age is populated if missing (pattern-based fallback)
+                        try:
+                            demo = (
+                                persona_data.get("demographics")
+                                if isinstance(persona_data, dict)
+                                else None
+                            )
+                            need_age = True
+                            if isinstance(demo, dict):
+                                ar = demo.get("age_range")
+                                if isinstance(ar, dict) and ar.get("value"):
+                                    need_age = False
+                            if need_age:
+                                from backend.services.evidence_intelligence.demographic_intelligence import (
+                                    DemographicIntelligence,
+                                )
+                                from backend.services.evidence_intelligence.speaker_intelligence import (
+                                    SpeakerProfile,
+                                    SpeakerRole,
+                                )
+
+                                di = DemographicIntelligence(llm_service=None)
+                                sp = SpeakerProfile(
+                                    speaker_id=str(speaker),
+                                    role=SpeakerRole.INTERVIEWEE,
+                                    unique_identifier=str(speaker),
+                                )
+                                demographics_data = di._fallback_extraction(text, sp)
+                                if demographics_data and (
+                                    demographics_data.age_range or demographics_data.age
+                                ):
+                                    age_value = demographics_data.age_range or (
+                                        str(demographics_data.age)
+                                        if demographics_data.age
+                                        else None
+                                    )
+                                    if age_value:
+                                        demo = (
+                                            dict(demo) if isinstance(demo, dict) else {}
+                                        )
+                                        existing_evd = []
+                                        if isinstance(demo.get("age_range"), dict):
+                                            existing_evd = (
+                                                demo["age_range"].get("evidence", [])
+                                                or []
+                                            )
+                                        demo["age_range"] = {
+                                            "value": age_value,
+                                            "evidence": existing_evd,
+                                        }
+                                        demo["confidence"] = (
+                                            demo.get("confidence", 0.7) or 0.7
+                                        )
+                                        persona_data["demographics"] = demo
+                        except Exception as _age_err:
+                            logger.debug(
+                                f"[DEMOGRAPHICS] Age fallback extraction skipped: {_age_err}"
+                            )
+
+                except Exception as el_err:
+                    logger.warning(
+                        f"[EVIDENCE_LINKING_V2] Skipped during persona build for {speaker}: {el_err}"
+                    )
 
                 # DEBUG: Log the actual PersonaTrait field values to understand why they're empty
                 logger.info(
