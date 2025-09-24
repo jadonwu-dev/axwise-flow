@@ -257,47 +257,12 @@ class StakeholderDetector:
         return min(base_influence, 1.0)
 
     def _normalize_stakeholder_type(self, label: str) -> str:
-        """Map free-form labels/roles to allowed stakeholder_type literals.
-        Allowed values: primary_customer, secondary_user, decision_maker, influencer.
+        """Pass-through free-form stakeholder type/title.
+        Falls back to 'primary_customer' only if empty.
         """
         if not label:
             return "primary_customer"
-        l = str(label).lower()
-        if any(
-            k in l
-            for k in [
-                "owner",
-                "manager",
-                "director",
-                "head",
-                "lead",
-                "cxo",
-                "chief",
-                "vp",
-                "decision",
-            ]
-        ):
-            return "decision_maker"
-        if any(k in l for k in ["influenc", "advisor", "consultant", "evangelist"]):
-            return "influencer"
-        if any(
-            k in l
-            for k in [
-                "developer",
-                "engineer",
-                "analyst",
-                "qa",
-                "tester",
-                "designer",
-                "admin",
-                "operator",
-                "support",
-            ]
-        ):
-            return "secondary_user"
-        if any(k in l for k in ["customer", "user", "end user", "buyer", "client"]):
-            return "primary_customer"
-        return "primary_customer"
+        return str(label).strip()
 
     def _to_schema_stakeholder(self, item: Any) -> DetectedStakeholder:
         """Convert a loose dict or DetectedStakeholder-like object to schema DetectedStakeholder."""
@@ -307,12 +272,27 @@ class StakeholderDetector:
             raise ValueError("Unsupported stakeholder item type")
 
         sid = item.get("stakeholder_id") or item.get("id") or "unknown"
-        stype = self._normalize_stakeholder_type(
-            item.get("stakeholder_type") or item.get("type") or ""
-        )
-        conf = item.get("confidence_score") or item.get("confidence") or 0.5
-        demo = item.get("demographic_profile") or item.get("demographic_info") or None
+        # Prefer specific role/title/display label from insights/demographics
         insights = item.get("individual_insights") or {}
+        demo = item.get("demographic_profile") or item.get("demographic_info") or None
+        preferred_label = None
+        if isinstance(insights, dict):
+            preferred_label = (
+                insights.get("display_label")
+                or insights.get("role")
+                or insights.get("title")
+            )
+        if not preferred_label and isinstance(demo, dict):
+            preferred_label = (
+                demo.get("role")
+                or demo.get("title")
+                or demo.get("stakeholder_category")
+            )
+        raw_type = (
+            item.get("stakeholder_type") or item.get("type") or preferred_label or ""
+        )
+        stype = self._normalize_stakeholder_type(raw_type)
+        conf = item.get("confidence_score") or item.get("confidence") or 0.5
         influence = item.get("influence_metrics") or {}
         evidence = item.get("authentic_evidence") or None
 

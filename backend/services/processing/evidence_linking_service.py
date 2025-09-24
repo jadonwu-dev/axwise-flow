@@ -64,7 +64,8 @@ class EvidenceLinkingService:
         """
         self.llm_service = llm_service
         # Feature flag to enable scoped, deterministic attribution with offsets/speaker
-        self.enable_v2 = os.getenv("EVIDENCE_LINKING_V2", "false").lower() in (
+        # Default ON to prevent regressions (can be disabled via env)
+        self.enable_v2 = os.getenv("EVIDENCE_LINKING_V2", "true").lower() in (
             "1",
             "true",
             "yes",
@@ -623,10 +624,18 @@ class EvidenceLinkingService:
         return False
 
     def _looks_like_question(self, sent: str) -> bool:
-        """Heuristic: reject researcher-style questions as evidence (ends with '?')."""
+        """Heuristic: reject researcher-style questions as evidence.
+        Criteria:
+        - Ends with '?'
+        - Or starts with common prompt markers like 'Q:' or 'Question:' (case-insensitive)
+        """
         if not sent:
             return False
-        return sent.strip().endswith("?")
+        s = sent.strip()
+        ls = s.lower()
+        if ls.startswith("q:") or ls.startswith("question:"):
+            return True
+        return s.endswith("?")
 
     def _select_candidate_spans(
         self,

@@ -45,7 +45,8 @@ class PersonaFormationFacade:
         self.assembler = PersonaAssembler()
         self.validator = PersonaValidation()
         self.evidence_linker = EvidenceLinkingService(llm_service)
-        self.enable_evidence_v2 = os.getenv("EVIDENCE_LINKING_V2", "false").lower() in (
+        # Default ON to align with benchmark behavior (396)
+        self.enable_evidence_v2 = os.getenv("EVIDENCE_LINKING_V2", "true").lower() in (
             "1",
             "true",
             "yes",
