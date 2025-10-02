@@ -18,4 +18,4 @@ class AnalysisResultRow:
     llm_provider: Optional[str]
     llm_model: Optional[str]
     results: Optional[Any]
-
+    stakeholder_intelligence: Optional[Any]

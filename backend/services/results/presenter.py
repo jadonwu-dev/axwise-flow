@@ -115,7 +115,9 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
         flattened["personas"] = enriched_personas
 
     # Stakeholder intelligence (UI-safe)
-    stakeholder_intelligence_src = results_dict.get("stakeholder_intelligence")
+    stakeholder_intelligence_src = getattr(
+        row, "stakeholder_intelligence", None
+    ) or results_dict.get("stakeholder_intelligence")
     si = (
         create_ui_safe_stakeholder_intelligence(stakeholder_intelligence_src)
         if stakeholder_intelligence_src

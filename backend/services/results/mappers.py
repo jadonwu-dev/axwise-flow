@@ -19,5 +19,5 @@ def to_analysis_result_row(row: Any) -> AnalysisResultRow:
         llm_provider=getattr(row, "llm_provider", None),
         llm_model=getattr(row, "llm_model", None),
         results=getattr(row, "results", None),
+        stakeholder_intelligence=getattr(row, "stakeholder_intelligence", None),
     )
-
