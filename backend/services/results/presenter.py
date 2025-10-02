@@ -15,6 +15,7 @@ from backend.services.results.formatters import (
     get_filename_for_data_id,
     filter_researcher_evidence_for_ssot,
     inject_age_ranges_from_source,
+    adjust_theme_frequencies_for_prevalence,
 )
 
 
@@ -77,6 +78,19 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
             "negative": 0.33,
         },
     )
+
+    # Fix mis-scaled theme frequencies that look like normalized weights (sum≈1)
+    try:
+        if isinstance(flattened.get("themes"), list):
+            flattened["themes"] = adjust_theme_frequencies_for_prevalence(
+                flattened["themes"]
+            )
+        if isinstance(flattened.get("enhanced_themes"), list):
+            flattened["enhanced_themes"] = adjust_theme_frequencies_for_prevalence(
+                flattened["enhanced_themes"]
+            )
+    except Exception:
+        pass
 
     # Fallback extraction for sentimentStatements if missing/empty
     ss = flattened.get("sentimentStatements") or {
