@@ -5,10 +5,13 @@ personas, and sessions. During the scaffolding phase, the facade delegates
 behavior to the legacy ResultsService; these classes exist to seed the
 modular structure and will be wired in Phase 2.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
+
+from backend.models import AnalysisResult, InterviewData
 
 
 class AnalysisResultRepository:
@@ -18,7 +21,18 @@ class AnalysisResultRepository:
     # Placeholder APIs to be implemented in Phase 2
     def get_by_id(self, result_id: int, user_id: str) -> Optional[Any]:  # noqa: ANN401
         """Return AnalysisResult row for the given id if owned by the user."""
-        raise NotImplementedError
+        try:
+            return (
+                self.db.query(AnalysisResult)
+                .join(InterviewData, AnalysisResult.data_id == InterviewData.id)
+                .filter(
+                    AnalysisResult.result_id == result_id,
+                    InterviewData.user_id == user_id,
+                )
+                .first()
+            )
+        except Exception:
+            return None
 
     def list_for_user(
         self,
@@ -44,4 +58,3 @@ class SessionRepository:
         self.db = db
 
     # Add research session queries as migration progresses
-

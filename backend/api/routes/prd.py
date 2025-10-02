@@ -58,22 +58,12 @@ async def generate_prd(
                 detail="Invalid PRD type. Must be 'operational', 'technical', or 'both'",
             )
 
-        # Get analysis results (behind feature flag for modular migration)
-        import os
+        # Resolve ResultsService via DI container (central flag handling)
+        from backend.api.dependencies import get_container
 
-        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        if use_v2:
-            from backend.services.results.facade import (
-                ResultsServiceFacade as ResultsService,
-            )
-        else:
-            from backend.services.results_service import ResultsService
-        results_service = ResultsService(db=db, user=user)
+        container = get_container()
+        factory = container.get_results_service()
+        results_service = factory(db, user)
         analysis_results = results_service.get_analysis_result(result_id)
 
         # Check if analysis is complete

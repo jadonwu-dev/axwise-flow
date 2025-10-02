@@ -757,23 +757,12 @@ async def get_results(
     Retrieves analysis results.
     """
     try:
-        # Use ResultsService facade behind feature flag to allow modular migration
-        import os
+        # Resolve ResultsService via DI container (central flag handling)
+        from backend.api.dependencies import get_container
 
-        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        if use_v2:
-            from backend.services.results.facade import (
-                ResultsServiceFacade as ResultsService,
-            )
-        else:
-            from backend.services.results_service import ResultsService
-
-        results_service = ResultsService(db, current_user)
+        container = get_container()
+        factory = container.get_results_service()
+        results_service = factory(db, current_user)
 
         # Get formatted results
         result = results_service.get_analysis_result(result_id)
@@ -810,23 +799,12 @@ async def get_simplified_personas(
             f"Getting simplified personas for result_id: {result_id}, user: {current_user.user_id}"
         )
 
-        # Use ResultsService facade behind feature flag to allow modular migration
-        import os
+        # Resolve ResultsService via DI container (central flag handling)
+        from backend.api.dependencies import get_container
 
-        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        if use_v2:
-            from backend.services.results.facade import (
-                ResultsServiceFacade as ResultsService,
-            )
-        else:
-            from backend.services.results_service import ResultsService
-
-        results_service = ResultsService(db, current_user)
+        container = get_container()
+        factory = container.get_results_service()
+        results_service = factory(db, current_user)
 
         # Get filtered design thinking personas
         simplified_personas = results_service.get_design_thinking_personas(result_id)
@@ -1129,23 +1107,12 @@ async def list_analyses(
                 },
             )
 
-        # Use ResultsService facade behind feature flag to allow modular migration
-        import os
+        # Resolve ResultsService via DI container (central flag handling)
+        from backend.api.dependencies import get_container
 
-        use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        if use_v2:
-            from backend.services.results.facade import (
-                ResultsServiceFacade as ResultsService,
-            )
-        else:
-            from backend.services.results_service import ResultsService
-
-        results_service = ResultsService(db, current_user)
+        container = get_container()
+        factory = container.get_results_service()
+        results_service = factory(db, current_user)
 
         # Get all analyses for the current user
         analyses = results_service.get_all_analyses(

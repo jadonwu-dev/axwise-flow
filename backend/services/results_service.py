@@ -338,93 +338,10 @@ class ResultsService:
                         f"Found {len(results_dict['personas'])} personas in results JSON"
                     )
 
-                    # Helper: compute influence metrics when missing or defaults
-                    def _compute_influence_metrics_for_persona(
-                        persona_dict: Dict[str, Any],
-                    ) -> Dict[str, float]:
-                        try:
-                            # Gather text for simple heuristic analysis (safe, no LLM)
-                            name = (persona_dict.get("name") or "").lower()
-                            description = (
-                                persona_dict.get("description") or ""
-                            ).lower()
-                            archetype = (persona_dict.get("archetype") or "").lower()
-                            demo_val = ""
-                            demo = persona_dict.get("demographics")
-                            if isinstance(demo, dict):
-                                demo_val = (demo.get("value") or "").lower()
-                            combined = f"{name} {description} {archetype} {demo_val}"
-
-                            # Defaults
-                            decision_power = 0.5
-                            technical_influence = 0.5
-                            budget_influence = 0.5
-
-                            # Keyword-based adjustments (subset of backend formation logic)
-                            decision_markers = [
-                                "manager",
-                                "director",
-                                "ceo",
-                                "owner",
-                                "executive",
-                                "leader",
-                                "decision maker",
-                                "authority",
-                                "supervisor",
-                                "head of",
-                                "chief",
-                            ]
-                            tech_markers = [
-                                "architect",
-                                "engineer",
-                                "technical",
-                                "it",
-                                "developer",
-                                "designer",
-                                "specialist",
-                                "technician",
-                            ]
-                            budget_markers = [
-                                "budget",
-                                "purchasing",
-                                "procurement",
-                                "finance",
-                                "cfo",
-                                "cost",
-                                "spending",
-                            ]
-                            influencer_markers = ["influencer", "advisor", "consultant"]
-
-                            if any(k in combined for k in decision_markers):
-                                decision_power = max(decision_power, 0.85)
-                                budget_influence = max(budget_influence, 0.8)
-                            if any(k in combined for k in tech_markers):
-                                technical_influence = max(technical_influence, 0.85)
-                                decision_power = max(decision_power, 0.6)
-                            if any(k in combined for k in budget_markers):
-                                budget_influence = max(budget_influence, 0.85)
-                                decision_power = max(decision_power, 0.7)
-                            if any(k in combined for k in influencer_markers):
-                                decision_power = max(decision_power, 0.6)
-
-                            # Clamp to [0,1]
-                            def clamp(x: float) -> float:
-                                try:
-                                    return max(0.0, min(1.0, float(x)))
-                                except Exception:
-                                    return 0.5
-
-                            return {
-                                "decision_power": clamp(decision_power),
-                                "technical_influence": clamp(technical_influence),
-                                "budget_influence": clamp(budget_influence),
-                            }
-                        except Exception as _:
-                            return {
-                                "decision_power": 0.5,
-                                "technical_influence": 0.5,
-                                "budget_influence": 0.5,
-                            }
+                    # Helper moved to results/formatters to aid decoupling
+                    from backend.services.results.formatters import (
+                        compute_influence_metrics_for_persona as _compute_influence_metrics_for_persona,
+                    )
 
                     # Process each persona from JSON with validation
                     for p_data in results_dict["personas"]:
@@ -509,33 +426,11 @@ class ResultsService:
                                 transformed_persona.get("stakeholder_intelligence")
                                 or {}
                             )
-                            im = (
-                                si.get("influence_metrics")
-                                if isinstance(si, dict)
-                                else None
+                            from backend.services.results.formatters import (
+                                should_compute_influence_metrics,
                             )
-                            needs_compute = True
-                            if isinstance(im, dict):
-                                try:
-                                    dp = float(im.get("decision_power", 0.5))
-                                    ti = float(im.get("technical_influence", 0.5))
-                                    bi = float(im.get("budget_influence", 0.5))
-                                    # If any value is not a number or all equal to 0.5, recompute
-                                    if any(
-                                        map(
-                                            lambda v: not isinstance(v, float),
-                                            [dp, ti, bi],
-                                        )
-                                    ) or (
-                                        abs(dp - 0.5) < 1e-6
-                                        and abs(ti - 0.5) < 1e-6
-                                        and abs(bi - 0.5) < 1e-6
-                                    ):
-                                        needs_compute = True
-                                    else:
-                                        needs_compute = False
-                                except Exception:
-                                    needs_compute = True
+
+                            needs_compute = should_compute_influence_metrics(si)
                             if needs_compute:
                                 computed = _compute_influence_metrics_for_persona(
                                     transformed_persona
@@ -628,19 +523,11 @@ class ResultsService:
                 # Attach source with priority: transcript > original_text > dataId
                 source_payload: Dict[str, Any] = {}
                 try:
-                    transcript = results_dict.get("transcript")
-                    if isinstance(transcript, list) and all(
-                        isinstance(x, dict) for x in transcript
-                    ):
-                        source_payload["transcript"] = transcript
-                    else:
-                        original_text = results_dict.get(
-                            "original_text"
-                        ) or results_dict.get("source_text")
-                        if isinstance(original_text, str) and original_text.strip():
-                            source_payload["original_text"] = original_text
-                        elif analysis_result.data_id:
-                            source_payload["dataId"] = analysis_result.data_id
+                    from backend.services.results.formatters import build_source_payload
+
+                    source_payload = build_source_payload(
+                        results_dict, analysis_result.data_id
+                    )
                 except Exception as e:
                     logger.warning(f"Could not attach source payload: {e}")
 
@@ -740,40 +627,33 @@ class ResultsService:
                     validation_enforcement = False
 
                 # Create formatted response (flattened structure to match frontend expectations)
-                # Create formatted response (flattened structure to match frontend expectations)
+                from backend.services.results.formatters import (
+                    assemble_flattened_results,
+                    get_filename_for_data_id,
+                    create_ui_safe_stakeholder_intelligence,
+                )
+
+                flattened = assemble_flattened_results(
+                    results_dict,
+                    persona_list,
+                    sentiment_overview_default=DEFAULT_SENTIMENT_OVERVIEW,
+                )
                 formatted_results = {
                     "status": "completed",
                     "result_id": analysis_result.result_id,
-                    "id": str(
-                        analysis_result.result_id
-                    ),  # Add id field for frontend compatibility
+                    "id": str(analysis_result.result_id),  # frontend compatibility
                     "analysis_date": analysis_result.analysis_date,
-                    "createdAt": format_iso_utc(
-                        analysis_result.analysis_date
-                    ),  # Add createdAt field for frontend compatibility
-                    "fileName": self._get_filename_for_result(analysis_result),
-                    "fileSize": None,  # We don't store this currently
+                    "createdAt": format_iso_utc(analysis_result.analysis_date),
+                    "fileName": get_filename_for_data_id(
+                        self.db, analysis_result.data_id
+                    ),
+                    "fileSize": None,
                     "llmProvider": analysis_result.llm_provider,
                     "llmModel": analysis_result.llm_model,
-                    # Flatten the results structure to match frontend expectations
-                    "themes": results_dict.get("themes", []),
-                    "enhanced_themes": results_dict.get(
-                        "enhanced_themes", []
-                    ),  # Include enhanced themes
-                    "patterns": results_dict.get("patterns", []),
-                    "sentiment": results_dict.get("sentiment", []),
-                    "sentimentOverview": results_dict.get(
-                        "sentimentOverview", DEFAULT_SENTIMENT_OVERVIEW
-                    ),
-                    "sentimentStatements": results_dict.get(
-                        "sentimentStatements",
-                        {"positive": [], "neutral": [], "negative": []},
-                    ),
-                    "insights": results_dict.get("insights", []),
-                    "personas": persona_list,  # Use personas from the results JSON
+                    **flattened,
                     # OPTION C: Provide stakeholder metadata for UI visualization while hiding sensitive details
                     "stakeholder_intelligence": (
-                        self._create_ui_safe_stakeholder_intelligence(
+                        create_ui_safe_stakeholder_intelligence(
                             analysis_result.stakeholder_intelligence
                         )
                         if analysis_result.stakeholder_intelligence
@@ -811,9 +691,12 @@ class ResultsService:
                         "No sentiment statements found, extracting from themes and patterns"
                     )
 
-                    sentimentStatements = self._extract_sentiment_statements_from_data(
-                        formatted_results["themes"],
-                        formatted_results["patterns"],
+                    from backend.services.results.formatters import (
+                        extract_sentiment_statements_from_data,
+                    )
+
+                    sentimentStatements = extract_sentiment_statements_from_data(
+                        formatted_results["themes"], formatted_results["patterns"]
                     )
 
                     formatted_results["sentimentStatements"] = sentimentStatements
@@ -829,7 +712,11 @@ class ResultsService:
                     if isinstance(si, dict):
                         detected = si.get("detected_stakeholders")
                         if not detected:
-                            derived = self._derive_detected_stakeholders_from_personas(
+                            from backend.services.results.formatters import (
+                                derive_detected_stakeholders_from_personas,
+                            )
+
+                            derived = derive_detected_stakeholders_from_personas(
                                 persona_list
                             )
                             si["detected_stakeholders"] = derived
@@ -998,11 +885,13 @@ class ResultsService:
             Formatted result for API response
         """
         # Format data to match frontend schema
+        from backend.services.results.formatters import get_filename_for_data_id
+
         formatted_result = {
             "id": str(result.result_id),
             "status": result.status,
             "createdAt": format_iso_utc(result.analysis_date),
-            "fileName": self._get_filename_for_result(result),
+            "fileName": get_filename_for_data_id(self.db, result.data_id),
             "fileSize": None,  # We don't store this currently
             "themes": [],
             "enhanced_themes": [],  # Initialize empty enhanced themes list

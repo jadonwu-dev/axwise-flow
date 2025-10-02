@@ -281,3 +281,38 @@ class Container:
                 raise
 
         return self.get_service(service_name)
+
+    def get_results_service(self, service_name: str = "results_service"):
+        """
+        Get or create the Results service factory.
+
+        Returns:
+            Callable[[Session, Any], Any]: A factory that takes (db, user) and returns a service instance
+        """
+        if not self.has_service(service_name):
+            from backend.services.results_service import (
+                ResultsService as LegacyResultsService,
+            )
+            from backend.services.results.facade import ResultsServiceFacade as Facade
+
+            use_v2 = os.getenv("RESULTS_SERVICE_V2", "false").lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
+
+            # Store a factory; ResultsService requires (db, user) per request
+            factory = (
+                (lambda db, user: Facade(db, user))
+                if use_v2
+                else (lambda db, user: LegacyResultsService(db, user))
+            )
+
+            self.register_service(service_name, factory)
+            logger.info(
+                "Using ResultsService V2 facade (feature flag enabled)"
+                if use_v2
+                else "Using ResultsService V1 legacy (feature flag disabled)"
+            )
+        return self.get_service(service_name)

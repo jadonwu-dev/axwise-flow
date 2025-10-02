@@ -42,7 +42,7 @@ export function useAnalysis(
     queryKey: ['analysis', resultId],
     queryFn: () => {
       if (!resultId) throw new Error('No result ID available')
-      return apiClient.getResults(resultId)
+      return apiClient.getAnalysisById(String(resultId))
     },
     enabled: !!resultId,
     refetchInterval: (data) => {
