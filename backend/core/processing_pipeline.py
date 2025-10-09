@@ -4,6 +4,7 @@ Processing pipeline for interview data analysis.
 
 import logging
 import asyncio
+import os
 import json  # Import json for logging
 from typing import Dict, Any, List
 
@@ -229,13 +230,21 @@ async def process_data(
                 # FIXED: Preserve stakeholder intelligence for database persistence
                 # Create stakeholder intelligence summary from enhanced personas
                 if enhancement_result and enhancement_result.enhanced_personas:
-                    stakeholder_summary = _create_stakeholder_intelligence_summary(
-                        enhancement_result.enhanced_personas
+                    enable_ms = (
+                        os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true"
                     )
-                    results["stakeholder_intelligence"] = stakeholder_summary
-                    logger.info(
-                        f"[STAKEHOLDER_DEBUG] ✅ Preserved stakeholder intelligence in results for database persistence"
-                    )
+                    if enable_ms:
+                        stakeholder_summary = _create_stakeholder_intelligence_summary(
+                            enhancement_result.enhanced_personas
+                        )
+                        results["stakeholder_intelligence"] = stakeholder_summary
+                        logger.info(
+                            f"[STAKEHOLDER_DEBUG] ✅ Preserved stakeholder intelligence in results for database persistence"
+                        )
+                    else:
+                        logger.info(
+                            "[STAKEHOLDER_DEBUG] Multi-stakeholder disabled by flag; skipping stakeholder_intelligence summary"
+                        )
                 else:
                     logger.info(
                         "✅ Stakeholder intelligence integrated into personas - no separate stakeholder entities"

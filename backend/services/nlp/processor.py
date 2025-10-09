@@ -3,6 +3,7 @@
 import logging
 import asyncio
 import json
+import os
 import re
 import copy
 import importlib.util
@@ -1498,7 +1499,10 @@ class NLPProcessor:
                         f"👥 [PIPELINE_DEBUG] Stakeholder detection result: {stakeholder_segments is not None}"
                     )
 
-                    if stakeholder_segments:
+                    enable_ms = (
+                        os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true"
+                    )
+                    if stakeholder_segments and enable_ms:
                         logger.info(
                             f"👥 [PIPELINE_DEBUG] [STAKEHOLDER_PERSONA] Detected {len(stakeholder_segments)} stakeholder categories"
                         )

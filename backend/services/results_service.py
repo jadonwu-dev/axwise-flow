@@ -455,6 +455,9 @@ class ResultsService:
                 except Exception:
                     pass
 
+                enable_ms = (
+                    os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true"
+                )
                 formatted_results = {
                     "status": "completed",
                     "result_id": analysis_result.result_id,
@@ -468,17 +471,13 @@ class ResultsService:
                     "llmProvider": analysis_result.llm_provider,
                     "llmModel": analysis_result.llm_model,
                     **flattened,
-                    # OPTION C: Provide stakeholder metadata for UI visualization while hiding sensitive details
-                    "stakeholder_intelligence": (
+                }
+                if enable_ms and analysis_result.stakeholder_intelligence:
+                    formatted_results["stakeholder_intelligence"] = (
                         create_ui_safe_stakeholder_intelligence(
                             analysis_result.stakeholder_intelligence
                         )
-                        if analysis_result.stakeholder_intelligence
-                        else {
-                            "debug": f"stakeholder_intelligence is falsy: {analysis_result.stakeholder_intelligence}"
-                        }
-                    ),
-                }
+                    )
 
                 # Extend formatted_results with SSoT and validation fields
                 try:
@@ -523,20 +522,21 @@ class ResultsService:
                         + f"negative={len(sentimentStatements['negative'])}"
                     )
 
-                # Ensure stakeholder_intelligence.detected_stakeholders is populated
+                # Ensure stakeholder_intelligence.detected_stakeholders is populated (only if enabled)
                 try:
-                    si = formatted_results.get("stakeholder_intelligence")
-                    if isinstance(si, dict):
-                        detected = si.get("detected_stakeholders")
-                        if not detected:
-                            from backend.services.results.formatters import (
-                                derive_detected_stakeholders_from_personas,
-                            )
+                    if os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true":
+                        si = formatted_results.get("stakeholder_intelligence")
+                        if isinstance(si, dict):
+                            detected = si.get("detected_stakeholders")
+                            if not detected:
+                                from backend.services.results.formatters import (
+                                    derive_detected_stakeholders_from_personas,
+                                )
 
-                            derived = derive_detected_stakeholders_from_personas(
-                                persona_list
-                            )
-                            si["detected_stakeholders"] = derived
+                                derived = derive_detected_stakeholders_from_personas(
+                                    persona_list
+                                )
+                                si["detected_stakeholders"] = derived
                 except Exception as e:
                     logger.warning(
                         f"Failed to derive detected_stakeholders from personas: {e}"

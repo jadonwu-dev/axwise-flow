@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+import os
 from sqlalchemy.orm import Session
 
 from backend.services.results.dto import AnalysisResultRow
@@ -132,17 +133,20 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
     stakeholder_intelligence_src = getattr(
         row, "stakeholder_intelligence", None
     ) or results_dict.get("stakeholder_intelligence")
-    si = (
-        create_ui_safe_stakeholder_intelligence(stakeholder_intelligence_src)
-        if stakeholder_intelligence_src
-        else None
-    )
-    if si is None and isinstance(flattened.get("personas"), list):
-        si = {
-            "detected_stakeholders": derive_detected_stakeholders_from_personas(
-                flattened["personas"]
-            )
-        }
+    enable_ms = os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true"
+    si = None
+    if enable_ms:
+        si = (
+            create_ui_safe_stakeholder_intelligence(stakeholder_intelligence_src)
+            if stakeholder_intelligence_src
+            else None
+        )
+        if si is None and isinstance(flattened.get("personas"), list):
+            si = {
+                "detected_stakeholders": derive_detected_stakeholders_from_personas(
+                    flattened["personas"]
+                )
+            }
 
     # Compute validation summary using PersonaEvidenceValidator
     validation_summary = None
@@ -215,7 +219,9 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
         **flattened,
         "source": source_payload,
     }
-    if si is not None:
+    if si is not None and (
+        os.getenv("ENABLE_MULTI_STAKEHOLDER", "false").lower() == "true"
+    ):
         payload["stakeholder_intelligence"] = si
     if personas_ssot:
         payload["personas_ssot"] = personas_ssot
