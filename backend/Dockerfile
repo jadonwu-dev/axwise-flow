@@ -21,6 +21,8 @@ WORKDIR /app
 # Copy requirements first for better caching (context is backend/)
 COPY requirements.txt /app/requirements.txt
 
+# Show requirements for debugging in build logs
+RUN echo '--- BEGIN requirements.txt ---' && cat /app/requirements.txt && echo '--- END requirements.txt ---'
 # Install Python dependencies
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
