@@ -377,6 +377,15 @@ Ready for simulation bridge and interview analysis`;
     }
   }, [unifiedState.currentSession?.session_id, unifiedState.messages.length, loadSessionId]); // Depend on session ID, message count, and loadSessionId
 
+  // Ensure ChatState.sessionId follows the loaded/current session
+  React.useEffect(() => {
+    const loadedId = unifiedState.currentSession?.session_id;
+    if (loadedId && state.sessionId !== loadedId) {
+      console.log('🔗 Syncing ChatState.sessionId with unified session:', loadedId);
+      actions.setSessionId(loadedId);
+    }
+  }, [unifiedState.currentSession?.session_id]);
+
   // Handle new messages for mobile optimization
   React.useEffect(() => {
     if (state.messages.length > 0) {

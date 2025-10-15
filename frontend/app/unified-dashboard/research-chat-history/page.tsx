@@ -58,6 +58,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { RESEARCH_CONFIG } from '@/lib/config/research-config';
 import { getResearchSessions, type ResearchSession } from '@/lib/api/research';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -822,7 +823,14 @@ export default function ResearchChatHistory() {
         <div className="flex gap-3 mt-4">
           <Button
             onClick={() => {
-              localStorage.removeItem('current_research_session');
+              try {
+                // Use centralized storage key to reset the active session pointer
+                localStorage.removeItem(RESEARCH_CONFIG.storageKeys.currentSession);
+              } catch (e) {
+                // Fallback: also clear legacy keys if present
+                localStorage.removeItem('current_research_session');
+                localStorage.removeItem('axwise_current_session');
+              }
               window.location.href = '/unified-dashboard/research-chat';
             }}
           >

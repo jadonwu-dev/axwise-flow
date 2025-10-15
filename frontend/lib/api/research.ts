@@ -906,8 +906,9 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
 
       // Store the conversation both locally and on backend
       if (typeof window !== 'undefined') {
-        const currentSession = LocalResearchStorage.getCurrentSession();
-        const messages = currentSession?.messages || [];
+        // IMPORTANT: always operate on the concrete session by ID to avoid cross-session contamination
+        const existingSession = LocalResearchStorage.getSession(sessionId);
+        const messages = existingSession?.messages ? [...existingSession.messages] : [];
 
         // Add user message
         const userMessage: Message = {
@@ -928,19 +929,19 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
         };
         messages.push(assistantMessage);
 
-        // Update or create session
+        // Update or create session strictly by sessionId
         const session: ResearchSession = {
-          id: Date.now(),
+          id: existingSession?.id || Date.now(),
           session_id: sessionId,
           user_id: anonymousUserId,
-          business_idea: result.context?.business_idea || result.metadata?.extracted_context?.business_idea || currentSession?.business_idea,
-          target_customer: result.context?.target_customer || result.metadata?.extracted_context?.target_customer || currentSession?.target_customer,
-          problem: result.context?.problem || result.metadata?.extracted_context?.problem || currentSession?.problem,
-          industry: result.metadata?.extracted_context?.industry || currentSession?.industry || 'general',
-          stage: result.metadata?.extracted_context?.stage || currentSession?.stage || 'initial',
+          business_idea: result.context?.business_idea || result.metadata?.extracted_context?.business_idea || existingSession?.business_idea,
+          target_customer: result.context?.target_customer || result.metadata?.extracted_context?.target_customer || existingSession?.target_customer,
+          problem: result.context?.problem || result.metadata?.extracted_context?.problem || existingSession?.problem,
+          industry: result.metadata?.extracted_context?.industry || existingSession?.industry || 'general',
+          stage: result.metadata?.extracted_context?.stage || existingSession?.stage || 'initial',
           status: 'active',
-          questions_generated: !!result.questions || currentSession?.questions_generated || false,
-          created_at: currentSession?.created_at || new Date().toISOString(),
+          questions_generated: !!result.questions || existingSession?.questions_generated || false,
+          created_at: existingSession?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           message_count: messages.length,
           messages,
