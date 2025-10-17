@@ -18,6 +18,9 @@ class ConversationContext(BaseModel):
         None, description="Primary target customer or user group"
     )
     problem: Optional[str] = Field(None, description="Core problem being solved")
+    location: Optional[str] = Field(
+        None, description="Target location/market (country/city/region)"
+    )
     exchange_count: int = Field(0, description="Number of conversation exchanges")
     user_fatigue_signals: List[str] = Field(
         default_factory=list, description="Signals of user fatigue"
@@ -193,28 +196,28 @@ async def extract_context_from_messages(
     if not messages:
         return context
 
-    # Get conversation text
-    conversation_text = "\n".join([f"{msg.role}: {msg.content}" for msg in messages])
+    # Build USER-only conversation text to avoid inferring from assistant summaries
+    user_only_text = "\n".join(
+        [f"user: {msg.content}" for msg in messages if msg.role == "user"]
+    )
 
     # Use LLM to extract context if available
     if llm_service:
         try:
             extraction_prompt = f"""
-Extract business context from this conversation. Return ONLY a JSON object with these fields:
-- business_idea: Brief description of the business/product (or null if not clear)
-- target_customer: Who the customers are (or null if not mentioned)
-- problem: What specific problem is being solved (or null if not mentioned)
+Extract business context ONLY from USER messages below. Ignore assistant content entirely. Return ONLY a JSON object with these fields:
+- business_idea: Brief description explicitly stated by the user (or null if not clear)
+- target_customer: Who the customers are, as explicitly stated by the user (or null if not mentioned)
+- problem: Specific problem the user explicitly stated (or null if not mentioned)
+- location: Country/city/region explicitly stated by the user (or null if not mentioned)
 
-For the problem field, look for:
-- Pain points mentioned by the user
-- Challenges or difficulties described
-- Issues that need solving
-- Problems the business aims to address
+STRICT RULES:
+- Do NOT infer or guess from assistant text or implications
+- If not explicitly stated by the USER, return null for that field
+- Keep values concise and literal
 
-Be specific about the problem - avoid generic statements.
-
-Conversation:
-{conversation_text}
+USER Messages:
+{user_only_text}
 
 Return only valid JSON, no other text:"""
 
@@ -237,16 +240,17 @@ Return only valid JSON, no other text:"""
                 context.business_idea = extracted_data.get("business_idea")
                 context.target_customer = extracted_data.get("target_customer")
                 context.problem = extracted_data.get("problem")
+                context.location = extracted_data.get("location")
 
                 # Debug logging
                 import logging
 
                 logger = logging.getLogger(__name__)
                 logger.info(
-                    f"🔍 Context extraction result: business_idea='{context.business_idea}', target_customer='{context.target_customer}', problem='{context.problem}'"
+                    f"🔍 Context extraction result: business_idea='{context.business_idea}', target_customer='{context.target_customer}', problem='{context.problem}', location='{context.location}'"
                 )
 
-        except Exception as e:
+        except Exception:
             # Fallback: just count exchanges
             pass
 

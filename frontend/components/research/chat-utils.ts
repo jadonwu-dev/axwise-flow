@@ -166,6 +166,19 @@ export const extractSuggestions = (
     console.log('🔧 Found V3 Simple contextual suggestions:', suggestions);
   }
 
+  // Defensive: if backend returned completion actions but no questionnaire exists in this result, remove them
+  const hasNonEmptyComprehensive = !!(data?.questions && (
+    ((data.questions.primaryStakeholders?.length || 0) + (data.questions.secondaryStakeholders?.length || 0)) > 0
+  ) && ((data.questions.timeEstimate?.totalQuestions || 0) > 0));
+  if (!hasNonEmptyComprehensive && suggestions.length > 0) {
+    const completionSet = new Set(["Export questions", "Start research", "Modify questions"]);
+    const filtered = suggestions.filter(s => !completionSet.has(s));
+    if (filtered.length !== suggestions.length) {
+      console.log('🔧 Filtering premature completion suggestions (no questionnaire present)');
+      suggestions = filtered;
+    }
+  }
+
   // If no suggestions from API, generate contextual fallback suggestions
   // Note: Generate suggestions even when questions are present, unless it's the final question set
   if (suggestions.length === 0 && !hasCompleteQuestions) {
@@ -215,7 +228,7 @@ export const hasCompleteQuestions = (questions: any): boolean => {
  */
 export const createInitialMessage = (): Message => ({
   id: '1',
-  content: "Hi! I'm your customer research assistant. I'll help you create targeted research questions for your business idea. Let's start - what's your business idea?",
+  content: "Welcome to AxWise.\n\nI'm your AI research partner, here to help you de-risk and validate your next business initiative.\n\nMy core function is to find your stakeholders from end-users to internal teams and generate targeted questionnaires to uncover critical insights.\n\nTo begin, please describe the product, feature, or problem you are looking to scope and specify your target market (e.g., B2B companies in Germany sturggling with getting visibility in LLM search).",
   role: 'assistant',
   timestamp: new Date(),
 });

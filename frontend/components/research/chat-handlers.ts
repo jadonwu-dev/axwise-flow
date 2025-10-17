@@ -299,6 +299,22 @@ const processGeneratedQuestions = async (
     estimatedMinutes: comprehensiveQuestions.timeEstimate.estimatedMinutes
   });
 
+  // If empty questionnaire (0 stakeholders or 0 questions), guide the user instead of rendering empty component
+  if (
+    (comprehensiveQuestions.primaryStakeholders.length + comprehensiveQuestions.secondaryStakeholders.length) === 0 ||
+    comprehensiveQuestions.timeEstimate.totalQuestions === 0
+  ) {
+    const guidance: Message = {
+      id: `${Date.now()}_guidance`,
+      content: 'To generate a precise questionnaire, please tell me: 1) who is your target customer, and 2) what specific problem they face.',
+      role: 'assistant',
+      timestamp: new Date()
+    };
+    actions.setMessages(prev => [...prev, guidance]);
+    updateContext({ questionsGenerated: false });
+    return;
+  }
+
   // Add comprehensive questions component
   const messageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}_comprehensive_questions`;
   const comprehensiveQuestionsMessage: Message = {
@@ -557,7 +573,7 @@ export const loadSession = async (
       actions.setMessages([
         {
           id: '1',
-          content: "Hi! I'm your customer research assistant. I can see you have a previous session. Let's continue from where you left off.",
+          content: "Hi! I'm your AxWise research assistant. I can see you have a previous session. If you want to continue, great — or start fresh by sharing your idea or feature (include your target location/market). I’ll map stakeholders, generate questions, enable synthetic interviews, and later analyze real interviews for insights.",
           role: 'assistant',
           timestamp: new Date(),
         }

@@ -89,21 +89,28 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
             "on",
         )
         if hydrate_ev2 and isinstance(flattened.get("personas"), list):
-            original_text = source_payload.get("original_text") if isinstance(source_payload, dict) else None
+            original_text = (
+                source_payload.get("original_text")
+                if isinstance(source_payload, dict)
+                else None
+            )
             if isinstance(original_text, str) and original_text.strip():
                 # Minimal no-op LLM for constructor compatibility
                 class _NoOpLLM:
                     async def analyze(self, *_args, **_kwargs):
                         return {}
+
                 try:
                     from backend.services.processing.evidence_linking_service import (
                         EvidenceLinkingService,
                     )
+
                     ev = EvidenceLinkingService(_NoOpLLM())
                     scope_meta = {
                         "speaker": "Interviewee",
                         "speaker_role": "Interviewee",
-                        "document_id": source_payload.get("document_id") or "original_text",
+                        "document_id": source_payload.get("document_id")
+                        or "original_text",
                     }
                     hydrated = []
                     for p in flattened.get("personas", []):
@@ -113,7 +120,10 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
                         if not p.get("_evidence_linking_v2"):
                             try:
                                 enhanced, evmap = ev.link_evidence_to_attributes_v2(
-                                    p, scoped_text=original_text, scope_meta=scope_meta, protect_key_quotes=True
+                                    p,
+                                    scoped_text=original_text,
+                                    scope_meta=scope_meta,
+                                    protect_key_quotes=True,
                                 )
                                 p = enhanced if isinstance(enhanced, dict) else p
                                 p["_evidence_linking_v2"] = {"evidence_map": evmap}
@@ -149,6 +159,18 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
     except Exception:
         pass
 
+    # Canonicalize themes: prefer single 'themes' section; promote enhanced if base missing
+    try:
+        themes = flattened.get("themes")
+        enhanced = flattened.get("enhanced_themes")
+        if isinstance(enhanced, list):
+            if not isinstance(themes, list) or not themes:
+                flattened["themes"] = enhanced
+            # Remove redundant enhanced_themes from payload
+            flattened.pop("enhanced_themes", None)
+    except Exception:
+        pass
+
     # Fallback extraction for sentimentStatements if missing/empty
     ss = flattened.get("sentimentStatements") or {
         "positive": [],
@@ -162,6 +184,124 @@ def present_formatted_results(db: Session, row: AnalysisResultRow) -> Dict[str, 
         flattened["sentimentStatements"] = ss
 
     # Optionally derive influence metrics per persona (nest under stakeholder_intelligence)
+    # Strip legacy trait-level evidence arrays (unverifiable) regardless of EV2 presence
+    try:
+        cleaned_personas = []
+        for p in flattened.get("personas", []):
+            if not isinstance(p, dict):
+                cleaned_personas.append(p)
+                continue
+            p2 = dict(p)
+            for trait in (
+                "key_quotes",
+                "goals_and_motivations",
+                "challenges_and_frustrations",
+                "demographics",
+            ):
+                tv = p2.get(trait)
+                if isinstance(tv, dict) and "evidence" in tv:
+                    tv2 = dict(tv)
+                    tv2.pop("evidence", None)
+                    p2[trait] = tv2
+            # Also drop any top-level legacy 'evidence' field if present
+            if isinstance(p2.get("evidence"), list):
+                p2.pop("evidence", None)
+            cleaned_personas.append(p2)
+        flattened["personas"] = cleaned_personas
+    except Exception:
+        pass
+    # Rehydrate trait-level evidence arrays from EV2 for display (objects with quote/speaker/doc/offsets)
+    try:
+        hydrated_personas = []
+        for p in flattened.get("personas", []):
+            if not isinstance(p, dict):
+                hydrated_personas.append(p)
+                continue
+            p2 = dict(p)
+            ev2 = p2.get("_evidence_linking_v2") or {}
+            ev_map = ev2.get("evidence_map") or {}
+            # Backfill missing document_id inside ev_map items (safety)
+            try:
+                if isinstance(ev_map, dict):
+                    for _items in ev_map.values():
+                        for it in _items or []:
+                            if not it.get("document_id"):
+                                it["document_id"] = (
+                                    source_payload.get("document_id") or "original_text"
+                                )
+            except Exception:
+                pass
+            if isinstance(ev_map, dict) and ev_map:
+                for trait in (
+                    "goals_and_motivations",
+                    "challenges_and_frustrations",
+                    "demographics",
+                    "key_quotes",
+                ):
+                    items = ev_map.get(trait) or []
+                    if items and isinstance(p2.get(trait), dict):
+                        tv = dict(p2[trait])
+                        # attach rich EV2 items for UI (it supports string or {quote,speaker,...})
+                        tv["evidence"] = items
+                        p2[trait] = tv
+            hydrated_personas.append(p2)
+        flattened["personas"] = hydrated_personas
+    except Exception:
+        pass
+
+    # Strict persona EV2 gating: drop or flag personas lacking complete EV2 items
+    try:
+        strict_gate = os.getenv("STRICT_PERSONA_EV2_GATING", "true").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if strict_gate:
+            gated: list = []
+            rejected: list = []
+
+            def _is_complete_item(it: dict) -> bool:
+                return (
+                    isinstance(it.get("start_char"), int)
+                    and isinstance(it.get("end_char"), int)
+                    and isinstance((it.get("speaker") or "").strip(), str)
+                )
+
+            for p in flattened.get("personas", []):
+                if not isinstance(p, dict):
+                    continue
+                ev2 = p.get("_evidence_linking_v2") or {}
+                ev_map = ev2.get("evidence_map") or {}
+                # Evaluate core traits only
+                core = [
+                    (ev_map.get("goals_and_motivations") or []),
+                    (ev_map.get("challenges_and_frustrations") or []),
+                    (ev_map.get("demographics") or []),
+                ]
+                has_any = any(len(lst) > 0 for lst in core)
+                all_items_valid = all(
+                    _is_complete_item(it) for lst in core for it in lst
+                )
+                if has_any and all_items_valid:
+                    gated.append(p)
+                else:
+                    # Mark and drop
+                    try:
+                        p2 = dict(p)
+                        p2["quality_status"] = "unverified_ev2"
+                        rejected.append(p2)
+                    except Exception:
+                        rejected.append(p)
+            if gated:
+                flattened["personas"] = gated
+            # expose debug metadata for observability
+            flattened.setdefault("_debug", {})["ev2_rejected_personas"] = [
+                (p.get("name") if isinstance(p, dict) else str(p)) for p in rejected
+            ]
+    except Exception:
+        pass
+
     if isinstance(flattened.get("personas"), list):
         enriched_personas = []
         for p in flattened["personas"]:

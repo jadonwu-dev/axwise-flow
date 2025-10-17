@@ -895,13 +895,19 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
 
       const result = await response.json();
 
+      // Evaluate whether questionnaire is non-empty (V3)
+      const hasNonEmptyQuestions = !!(result?.questions && (
+        ((result.questions.primaryStakeholders?.length || 0) + (result.questions.secondaryStakeholders?.length || 0)) > 0
+      ) && ((result.questions.timeEstimate?.totalQuestions || 0) > 0));
+
       // Debug logging for suggestions
       console.log('🔧 Raw API response suggestions:', result.suggestions);
       console.log('🔧 Raw API response structure:', {
         content: result.content?.substring(0, 50) + '...',
         suggestions: result.suggestions,
         metadata: result.metadata,
-        context: result.context
+        context: result.context,
+        hasNonEmptyQuestions
       });
 
       // Store the conversation both locally and on backend
@@ -940,7 +946,7 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
           industry: result.metadata?.extracted_context?.industry || existingSession?.industry || 'general',
           stage: result.metadata?.extracted_context?.stage || existingSession?.stage || 'initial',
           status: 'active',
-          questions_generated: !!result.questions || existingSession?.questions_generated || false,
+          questions_generated: hasNonEmptyQuestions || existingSession?.questions_generated || false,
           created_at: existingSession?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           message_count: messages.length,
@@ -949,7 +955,7 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
         };
 
         // If questions were generated, ensure they're properly saved as a questionnaire component
-        if (result.questions && result.should_generate_questions) {
+        if (hasNonEmptyQuestions && result.should_generate_questions) {
           console.log('💾 Ensuring questionnaire is properly saved in conversation routines...');
 
           // Ensure messages array exists
@@ -1013,7 +1019,7 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
             business_idea: result.context?.business_idea,
             target_customer: result.context?.target_customer,
             problem: result.context?.problem,
-            questions_generated: result.should_generate_questions || !!result.questions
+            questions_generated: result.should_generate_questions || hasNonEmptyQuestions
           }
         },
         questions: result.questions,

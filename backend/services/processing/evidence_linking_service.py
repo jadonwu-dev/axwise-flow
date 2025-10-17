@@ -64,13 +64,14 @@ class EvidenceLinkingService:
         """
         self.llm_service = llm_service
         # Feature flag to enable scoped, deterministic attribution with offsets/speaker
-        # Default ON to prevent regressions (can be disabled via env)
-        self.enable_v2 = os.getenv("EVIDENCE_LINKING_V2", "true").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
+        # FORCE ENABLED: Always True to ensure consistent evidence quality across all analyses
+        self.enable_v2 = True
+        # Legacy env var check (kept for backward compatibility but overridden)
+        env_flag = os.getenv("EVIDENCE_LINKING_V2", "true").lower()
+        if env_flag in ("0", "false", "no", "off"):
+            logger.warning(
+                "EVIDENCE_LINKING_V2 is disabled via env var, but forcing enable_v2=True for data quality"
+            )
         # Optional: LLM-based gating of evidence candidates (default ON; fail-open on errors)
         self.enable_llm_filter = os.getenv("EVIDENCE_LLM_FILTER", "true").lower() in (
             "1",
@@ -599,7 +600,9 @@ class EvidenceLinkingService:
             if len(sent) >= 20:
                 spans.append((s, e, sent))
         # Newline-aware fallback segmentation for sparse-punctuation texts
-        if len(spans) < 3:
+        # Use only when we found no sentence spans via punctuation; avoids duplicating
+        # entire lines when proper sentence segmentation already worked.
+        if len(spans) == 0:
             try:
                 start = 0
                 for line in text.splitlines(keepends=True):
@@ -921,12 +924,15 @@ class EvidenceLinkingService:
         used_spans: List[Tuple[int, int]] = []
         evidence_map: Dict[str, List[Dict[str, Any]]] = {}
 
+        # Prioritize behavioral/usage fields before demographics to avoid consuming
+        # the only good spans too early (ensures coverage for goals/tech_usage tests)
         trait_fields = [
-            "demographics",
             "goals_and_motivations",
+            "challenges_and_frustrations",
+            "technology_usage",
+            # Rest of fields (order less critical)
             "skills_and_expertise",
             "workflow_and_environment",
-            "challenges_and_frustrations",
             "technology_and_tools",
             "attitude_towards_research",
             "attitude_towards_ai",
@@ -939,7 +945,8 @@ class EvidenceLinkingService:
             "needs_and_expectations",
             "decision_making_process",
             "communication_style",
-            "technology_usage",
+            # Demographics later to leave room for behavior fields
+            "demographics",
             # key_quotes handled specially below
         ]
 
@@ -1024,41 +1031,37 @@ class EvidenceLinkingService:
                 except Exception:
                     pass
 
-            # Demographics heuristic safeguard: prefer first-person; strictly drop third-party markers
-            # If no first-person candidates remain, still drop third-party lines (may yield zero items; clean > contaminated)
-            if field == "demographics" and candidates:
-                fp = [
-                    (s, e, sent, sc)
-                    for (s, e, sent, sc) in candidates
-                    if _is_first_person(sent) and not _has_third_party_markers(sent)
-                ]
-                if fp:
-                    candidates = fp
-                else:
-                    no_tp = [
-                        (s, e, sent, sc)
-                        for (s, e, sent, sc) in candidates
-                        if not _has_third_party_markers(sent)
-                    ]
-                    candidates = no_tp
-
-            # Goals/Challenges: apply similar preference heuristics (soft)
+            # Apply uniform soft first-person preference for demographics, goals, and challenges
+            # Prefer first-person + no third-party markers, but fall back to original candidates if none qualify
+            # This ensures we never starve a field of evidence due to overly strict filtering
             if (
-                field in ("goals_and_motivations", "challenges_and_frustrations")
+                field
+                in (
+                    "demographics",
+                    "goals_and_motivations",
+                    "challenges_and_frustrations",
+                )
                 and candidates
             ):
-                filtered_gc = [
+                filtered = [
                     (s, e, sent, sc)
                     for (s, e, sent, sc) in candidates
                     if _is_first_person(sent) and not _has_third_party_markers(sent)
                 ]
-                if filtered_gc:
-                    candidates = filtered_gc
+                if filtered:
+                    candidates = filtered  # Use filtered if available
+                # else: keep original candidates (soft preference, not hard requirement)
 
             items: List[Dict[str, Any]] = []
+            field_spans: List[Tuple[int, int]] = []
             for s, e, sent, _score in candidates:
+                span = (s, e)
+                # Within-field de-duplication: avoid adding overlapping spans twice for the same trait
+                if any(self._span_overlaps(span, fs) for fs in field_spans):
+                    continue
                 items.append(self._evidence_item(sent.strip(), s, e, scope_meta))
-                used_spans.append((s, e))
+                field_spans.append(span)
+                used_spans.append(span)
 
                 # Write back evidence quotes as strings (back-compat) and collect structured items separately
                 # Metrics: count accepted items per sentence

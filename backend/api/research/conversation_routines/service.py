@@ -5,7 +5,7 @@ Implements the 2025 Conversation Routines framework for customer research
 
 import logging
 import json
-import re
+import asyncio
 from typing import Dict, Any, List, Optional
 from pydantic_ai import Agent
 from pydantic_ai.tools import Tool
@@ -113,7 +113,7 @@ class ConversationRoutineService:
                 )
 
                 # Log full business context for debugging
-                logger.info(f"📋 Full business context:")
+                logger.info("📋 Full business context:")
                 logger.info(f"   Business idea: {business_idea}")
                 logger.info(f"   Target customer: {target_customer}")
                 logger.info(f"   Problem: {problem}")
@@ -154,7 +154,12 @@ class ConversationRoutineService:
 
             except Exception as e:
                 logger.error(f"🔴 Stakeholder question generation failed: {e}")
-                return {"error": str(e), "success": False}
+                # Return V3-empty structure to avoid frontend format errors
+                return {
+                    "primaryStakeholders": [],
+                    "secondaryStakeholders": [],
+                    "timeEstimate": {"totalQuestions": 0, "estimatedMinutes": 20},
+                }
 
         @Tool
         async def extract_conversation_context(
@@ -226,6 +231,71 @@ class ConversationRoutineService:
 
         return agent
 
+    async def generate_opening_suggestions(
+        self,
+        audiences: Optional[List[str]] = None,
+        regions: Optional[List[str]] = None,
+        industries: Optional[List[str]] = None,
+        min_words: int = 14,
+        max_words: int = 22,
+    ) -> List[str]:
+        """Generate 3 natural, comprehensive first-turn suggestions (LLM-rotated), with optional preferences."""
+        try:
+            # Build preference hints
+            pref_lines: List[str] = []
+            if industries:
+                pref_lines.append(
+                    f"- Prioritize these industries when possible: {', '.join(industries)}"
+                )
+            if regions:
+                pref_lines.append(
+                    f"- Prefer these regions/markets when possible: {', '.join(regions)}"
+                )
+            if audiences:
+                pref_lines.append(
+                    f"- Favor these audiences/roles: {', '.join(audiences)}"
+                )
+
+            prefs_block = ("\n" + "\n".join(pref_lines) + "\n") if pref_lines else "\n"
+
+            prompt = f"""
+Generate 3 concise, natural one-sentence suggestions for a first-turn business research chat.
+Each must be a complete, human-friendly statement that includes: idea/product + target market/location + target customer + problem/pain.
+- Do NOT use labels like "Market:", "Customer:", "Problem:".
+- Keep {min_words}–{max_words} words each.
+- Vary industries and regions across the 3 items.{prefs_block}
+Examples:
+- Venture studios using AI to speed up discovery in Germany and DACH for venture partners burdened by weeks of manual research
+- Research automation for B2B SaaS in the UK and DACH for product teams struggling with stakeholder mapping
+- Questionnaire generator for EU fintech founders and PMs to accelerate interview planning
+
+Return ONLY a JSON array of 3 strings.
+JSON array:
+"""
+            response_data = await self.llm_service.analyze(
+                text=prompt,
+                task="text_generation",
+                data={"temperature": 0.0, "max_tokens": 180},
+            )
+
+            import re
+            import json
+
+            response_text = response_data.get("text", "")
+            json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
+            if json_match:
+                arr = json.loads(json_match.group())
+                return [str(x) for x in arr][:3]
+        except Exception as e:
+            logger.warning(f"Opening suggestions generation failed: {e}")
+
+        # Fallback natural suggestions
+        return [
+            "Venture studios using AI to speed up discovery in Germany and DACH for venture partners burdened by weeks of manual research",
+            "Research automation for B2B SaaS in the UK and DACH for product teams struggling with stakeholder mapping",
+            "Questionnaire generator for EU fintech founders and PMs to accelerate interview planning",
+        ]
+
     async def _generate_stakeholder_questions_tool(
         self, business_idea: str, target_customer: str, problem: str
     ) -> Dict[str, Any]:
@@ -244,25 +314,41 @@ class ConversationRoutineService:
             )
 
             # Log full business context for debugging
-            logger.info(f"📋 Full business context:")
+            logger.info("📋 Full business context:")
             logger.info(f"   Business idea: {business_idea}")
             logger.info(f"   Target customer: {target_customer}")
             logger.info(f"   Problem: {problem}")
 
-            # Use existing stakeholder detector
+            # Use existing stakeholder detector with timeout to prevent indefinite hangs
             context_analysis = {
                 "business_idea": business_idea,
                 "target_customer": target_customer,
                 "problem": problem,
             }
-            stakeholder_data = await self.stakeholder_detector.generate_dynamic_stakeholders_with_unique_questions(
-                self.llm_service,
-                context_analysis=context_analysis,
-                messages=[],  # Empty for now
-                business_idea=business_idea,
-                target_customer=target_customer,
-                problem=problem,
-            )
+
+            try:
+                # Add 120-second timeout to prevent indefinite hangs
+                # This allows ~20-30 seconds per LLM call for 3-6 sequential calls
+                stakeholder_data = await asyncio.wait_for(
+                    self.stakeholder_detector.generate_dynamic_stakeholders_with_unique_questions(
+                        self.llm_service,
+                        context_analysis=context_analysis,
+                        messages=[],  # Empty for now
+                        business_idea=business_idea,
+                        target_customer=target_customer,
+                        problem=problem,
+                    ),
+                    timeout=120.0,  # 2 minutes timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("⏱️ Stakeholder generation timed out after 120 seconds")
+                return {
+                    "error": "Question generation timed out. Please try again with a simpler business description.",
+                    "success": False,
+                    "primaryStakeholders": [],
+                    "secondaryStakeholders": [],
+                    "timeEstimate": None,
+                }
 
             # Calculate time estimates
             time_estimates = (
@@ -285,7 +371,12 @@ class ConversationRoutineService:
 
         except Exception as e:
             logger.error(f"🔴 Stakeholder question generation failed: {e}")
-            return {"error": str(e), "success": False}
+            # Return V3-empty structure to avoid frontend format errors
+            return {
+                "primaryStakeholders": [],
+                "secondaryStakeholders": [],
+                "timeEstimate": {"totalQuestions": 0, "estimatedMinutes": 20},
+            }
 
     async def _extract_conversation_context_tool(
         self, messages: List[Dict[str, str]]
@@ -366,7 +457,7 @@ class ConversationRoutineService:
 
             # Debug logging
             logger.info(
-                f"🔍 Context extracted: business_idea={context.business_idea}, target_customer={context.target_customer}, problem={context.problem}"
+                f"🔍 Context extracted: business_idea={context.business_idea}, target_customer={context.target_customer}, problem={context.problem}, location={getattr(context, 'location', None)}"
             )
             logger.info(
                 f"🔍 Exchange count: {context.exchange_count}, completeness: {context.get_completeness_score()}"
@@ -507,6 +598,60 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
 
             # Questions variables are now initialized in the try block above
 
+            # Intercept premature validation prompts from the LLM when required fields are missing
+            try:
+                rc_lower = (response_content or "").lower()
+                missing_target = (
+                    not context.target_customer
+                    or len(context.target_customer.strip()) < 5
+                )
+                missing_problem = (
+                    not context.problem or len(context.problem.strip()) < 8
+                )
+                attempted_validation = any(
+                    phrase in rc_lower
+                    for phrase in [
+                        "is this correct",
+                        "let me confirm",
+                        "does this accurately",
+                        "i want to make sure i have this right",
+                        "should i proceed",
+                    ]
+                )
+                missing_location = (
+                    not getattr(context, "location", None)
+                    or not str(getattr(context, "location", "")).strip()
+                )
+                if (
+                    missing_target or missing_problem or missing_location
+                ) and attempted_validation:
+                    # Decide which field to ask for: target > problem > location
+                    ask_for = (
+                        "target_customer"
+                        if missing_target
+                        else ("problem" if missing_problem else "location")
+                    )
+                    # Ask the LLM to rewrite as ONE concise question for the chosen missing field
+                    repair_prompt = f"""
+You responded with a validation step before all required fields were present.
+Missing fields: {{'target_customer' if missing_target else ''}} {{'problem' if missing_problem else ''}} {{'location' if missing_location else ''}}.
+Write EXACTLY ONE short question to elicit the missing field: { '{ask_for}' }.
+- No preface, no summary, no validation prompts
+- 1 sentence, <= 20 words
+Current business idea (if any): {context.business_idea or 'N/A'}
+Question:
+"""
+                    repair = await self.llm_service.analyze(
+                        text=repair_prompt,
+                        task="text_generation",
+                        data={"temperature": 0.2, "max_tokens": 60},
+                    )
+                    response_content = (
+                        (repair.get("text", "") or "").strip().split("\n")[0]
+                    )
+            except Exception:
+                pass
+
             # Check for validation confirmation signals (user_input_lower and user_wants_to_expand already defined above)
             validation_confirmations = [
                 "yes",
@@ -553,6 +698,7 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                     "generate questionnaire",
                     "generate questions",
                     "create questions",
+                    "start research",
                 ]
             )
 
@@ -561,6 +707,7 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                 is_validation_confirmation
                 and context.should_transition_to_questions()
                 and not user_wants_to_expand
+                and bool(getattr(context, "location", None))
             )
 
             logger.info(
@@ -602,6 +749,37 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                     logger.info(
                         f"🎯 Generated questions result: {type(generated_questions)} - {list(generated_questions.keys()) if generated_questions else 'None'}"
                     )
+
+                    # Validate V3 Enhanced format to avoid frontend processing errors
+                    if not (
+                        isinstance(generated_questions, dict)
+                        and (
+                            "primaryStakeholders" in generated_questions
+                            or "secondaryStakeholders" in generated_questions
+                        )
+                    ):
+                        logger.warning(
+                            "❌ Generated questions not in V3 Enhanced format; suppressing questions to avoid frontend error"
+                        )
+                        generated_questions = None
+
+                    # Suppress empty questionnaires (0 stakeholders or 0 total questions)
+                    if isinstance(generated_questions, dict):
+                        total_q = generated_questions.get("timeEstimate", {}).get(
+                            "totalQuestions", 0
+                        )
+                        prim_len = len(
+                            generated_questions.get("primaryStakeholders", []) or []
+                        )
+                        sec_len = len(
+                            generated_questions.get("secondaryStakeholders", []) or []
+                        )
+                        if (prim_len + sec_len) == 0 or total_q == 0:
+                            logger.warning(
+                                "⚠️ Empty questionnaire generated; treating as not generated"
+                            )
+                            generated_questions = None
+                            questions_generated = False
                 else:
                     logger.warning(
                         f"❌ Missing required context - business_idea: {bool(extracted_context.get('business_idea'))}, target_customer: {bool(extracted_context.get('target_customer'))}, problem: {bool(extracted_context.get('problem'))}"
@@ -611,11 +789,58 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                 if is_validation_confirmation and generated_questions:
                     response_content = "Perfect! I've generated your custom research questions based on our conversation."
                 elif is_validation_confirmation and not generated_questions:
-                    response_content = "Perfect! I'm generating your comprehensive research questions now..."
+                    # Generate ONE concise follow-up question for the most critical missing field (prefer target customer)
+                    missing_target = (
+                        not context.target_customer
+                        or len(context.target_customer.strip()) < 5
+                    )
+                    missing_problem = (
+                        not context.problem or len(context.problem.strip()) < 8
+                    )
+                    missing_location = (
+                        not getattr(context, "location", None)
+                        or not str(getattr(context, "location", "")).strip()
+                    )
+                    try:
+                        # Decide which field to ask for: target > problem > location
+                        ask_for = (
+                            "target_customer"
+                            if missing_target
+                            else ("problem" if missing_problem else "location")
+                        )
+                        followup_prompt = f"""
+Write EXACTLY ONE short question to collect the missing field: {ask_for}.
+Missing fields: {{'target_customer' if missing_target else ''}} {{'problem' if missing_problem else ''}} {{'location' if missing_location else ''}}.
+Rules:
+- Prefer target customer if missing
+- No preface or summary
+- 1 sentence, <= 20 words
+Business idea: {context.business_idea or 'N/A'}
+Question:
+"""
+                        fu = await self.llm_service.analyze(
+                            text=followup_prompt,
+                            task="text_generation",
+                            data={"temperature": 0.2, "max_tokens": 60},
+                        )
+                        response_content = (
+                            (fu.get("text", "") or "").strip().split("\n")[0]
+                        )
+                    except Exception:
+                        # Minimal non-canned fallback
+                        if missing_target:
+                            response_content = "Who specifically is your target customer? If you can, also add their main problem."
+                        elif missing_problem:
+                            response_content = (
+                                "What specific problem does your target customer face?"
+                            )
+                        else:
+                            response_content = "What is your initial target location/market (country, city or region)?"
                 elif user_wants_questions and generated_questions:
                     response_content = "Here are your custom research questions based on our conversation."
                 elif user_wants_questions and not generated_questions:
-                    response_content = "I'm generating your research questions now..."
+                    # Ask concise targeted follow-up instead of generic message
+                    response_content = "Who specifically is your target customer?"
                 elif should_force_generation and generated_questions:
                     response_content = "I have enough context about your business idea. Let me generate targeted research questions to help validate this solution."
                 elif should_force_generation and not generated_questions:
@@ -626,7 +851,11 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
 
             # Generate suggestions based on context
             suggestions = await self._generate_suggestions(
-                context, response_content, conversation_history, user_wants_to_expand
+                context,
+                response_content,
+                conversation_history,
+                user_wants_to_expand,
+                questions_generated,
             )
             logger.info(f"🎯 Generated suggestions: {suggestions}")
 
@@ -673,14 +902,64 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
         response_content: str,
         conversation_history: List[Dict[str, str]],
         user_wants_to_expand: bool = False,
+        has_questions: bool = False,
     ) -> List[str]:
         """Generate contextual quick reply suggestions"""
 
-        # If questions were generated, show completion suggestions
-        if (
-            "research questions" in response_content.lower()
-            or "questionnaire" in response_content.lower()
-        ):
+        # Align suggestions with the assistant's immediate question when applicable
+        rc_lower = (response_content or "").lower()
+        try:
+            # If assistant explicitly asked for target customer, offer target-customer suggestions
+            if any(
+                kw in rc_lower
+                for kw in [
+                    "target customer",
+                    "who is your target customer",
+                    "who specifically is your target customer",
+                ]
+            ):
+                return await self._generate_expansion_suggestions(
+                    context, conversation_history
+                )
+
+            # If assistant asked about the problem, suggest problem-expansion responses
+            if any(
+                kw in rc_lower
+                for kw in [
+                    "what specific problem",
+                    "what problem does",
+                    "the main problem",
+                    "what is the main problem",
+                ]
+            ):
+                return await self._generate_expansion_suggestions(
+                    context, conversation_history
+                )
+
+            # If assistant asked for location/market, nudge with location presets
+            if any(
+                kw in rc_lower
+                for kw in [
+                    "target location",
+                    "target market",
+                    "which country",
+                    "which city",
+                    "location/market",
+                    "location (country",
+                    "market (country",
+                    "what is your initial target location",
+                ]
+            ):
+                return [
+                    "Venture studios using AI to speed up discovery in Germany and DACH for venture partners burdened by weeks of manual research",
+                    "Research automation for B2B SaaS in the UK and DACH for product teams struggling with stakeholder mapping",
+                    "Questionnaire generator for EU fintech founders and PMs to accelerate interview planning",
+                ]
+        except Exception:
+            pass
+
+        # If questions were generated, show completion suggestions (robust to phrasing)
+        if has_questions:
             return ["Export questions", "Start research", "Modify questions"]
 
         # If user wants to expand, generate expansion-focused suggestions
@@ -691,7 +970,18 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
             )
 
         # If ready for questions and user is NOT expanding, show validation suggestions
+        # BUT if location is missing, nudge for location instead of validation
         if context.should_transition_to_questions():
+            missing_location = (
+                not getattr(context, "location", None)
+                or not str(getattr(context, "location", "")).strip()
+            )
+            if missing_location:
+                return [
+                    "Location: Germany",
+                    "Market: DACH region",
+                    "City: Berlin",
+                ]
             return [
                 "Yes, that's correct",
                 "Let me add more details",
@@ -745,6 +1035,7 @@ JSON array:"""
                 and not context.problem
             ):
                 # User has business + customer, help expand on the problem
+                # Make suggestions more actionable by prefixing with action verbs
                 prompt = f"""
 Generate 3 specific user responses that would help expand on the problem for this business and customer:
 
@@ -754,17 +1045,24 @@ Recent conversation: {conversation_context}
 
 Generate responses the USER could say to describe specific problems their customers face. Focus on pain points, frustrations, or unmet needs.
 
-Examples for laundromat + grannies:
-- "The 20-minute drive is inconvenient"
-- "Physical difficulty doing laundry"
-- "Lack of in-home washing machines"
+IMPORTANT: Start each response with an action phrase to make it clear these are clickable options:
+- "They struggle with..."
+- "They face..."
+- "They need help with..."
+- "The main problem is..."
 
-Return only a JSON array of 3 strings, each 4-8 words max. Make them specific user responses about problems.
+Examples for laundromat + grannies:
+- "They struggle with the 20-minute drive"
+- "They face physical difficulty doing laundry"
+- "They lack in-home washing machines"
+
+Return only a JSON array of 3 strings, each 5-10 words max. Make them specific user responses about problems that start with action phrases.
 
 JSON array:"""
 
             elif context.business_idea and not context.target_customer:
                 # User has business idea, help expand on target customer
+                # Make suggestions more actionable
                 prompt = f"""
 Generate 3 specific user responses that would help expand on the target customer for this business:
 
@@ -773,17 +1071,20 @@ Recent conversation: {conversation_context}
 
 Generate responses the USER could say to describe their target customers more specifically. Focus on demographics, location, behavior, or specific segments.
 
-Examples for a laundromat business:
-- "Busy professionals without time"
-- "Students in university dormitories"
-- "Elderly people with mobility issues"
+IMPORTANT: Start each response with "It's for..." or "Targeting..." to make it clear these are clickable options.
 
-Return only a JSON array of 3 strings, each 4-8 words max. Make them specific user responses about customers.
+Examples for a laundromat business:
+- "It's for busy professionals without time"
+- "Targeting students in university dormitories"
+- "It's for elderly people with mobility issues"
+
+Return only a JSON array of 3 strings, each 5-10 words max. Make them specific user responses about customers that start with action phrases.
 
 JSON array:"""
 
             else:
                 # General expansion based on conversation context
+                # Make suggestions more actionable
                 prompt = f"""
 Generate 3 specific user responses that would help expand on this business idea:
 
@@ -792,12 +1093,14 @@ Recent conversation: {conversation_context}
 
 Generate responses the USER could say to provide more valuable business details. Focus on what's missing or could be elaborated.
 
+IMPORTANT: Start each response with action phrases like "It targets...", "The problem is...", "We'll use..." to make it clear these are clickable options.
+
 Examples:
 - "It targets small business owners"
 - "The main problem is high costs"
 - "We'll use a mobile app approach"
 
-Return only a JSON array of 3 strings, each 4-8 words max. Make them specific user responses.
+Return only a JSON array of 3 strings, each 5-10 words max. Make them specific user responses with action phrases.
 
 JSON array:"""
 
@@ -832,7 +1135,7 @@ JSON array:"""
     ) -> List[str]:
         """Generate contextual quick reply suggestions based on conversation state"""
         logger.info(
-            f"🔍 Generating contextual suggestions - business_idea: '{context.business_idea}', target_customer: '{context.target_customer}', problem: '{context.problem}'"
+            f"🔍 Generating contextual suggestions - business_idea: '{context.business_idea}', target_customer: '{context.target_customer}', problem: '{context.problem}', location: '{getattr(context, 'location', None)}'"
         )
         try:
             # Always generate LLM-based contextual suggestions
@@ -942,7 +1245,6 @@ Examples of GOOD specific problems:
 Return ONLY a valid JSON array of 3 strings. Each string should be 5-12 words describing a specific problem.
 
 JSON array:"""
-
                 response_data = await self.llm_service.analyze(
                     text=prompt,
                     task="text_generation",
@@ -954,6 +1256,86 @@ JSON array:"""
 
                 import json
                 import re
+
+                response_text = response_data.get("text", "")
+                logger.info(f"🔍 Problem suggestions raw response: {response_text}")
+
+                # Try multiple JSON extraction methods
+                suggestions = []
+
+                # Method 1: Direct JSON array extraction
+                json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
+                if json_match:
+                    try:
+                        suggestions = json.loads(json_match.group())
+                        logger.info(
+                            f"✅ Generated problem suggestions (method 1): {suggestions}"
+                        )
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ JSON parsing failed (method 1): {e}")
+
+                # Method 2: Extract from markdown code blocks
+                if not suggestions:
+                    code_block_match = re.search(
+                        r"```(?:json)?\s*(\[.*?\])\s*```", response_text, re.DOTALL
+                    )
+                    if code_block_match:
+                        try:
+                            suggestions = json.loads(code_block_match.group(1))
+                            logger.info(
+                                f"✅ Generated problem suggestions (method 2): {suggestions}"
+                            )
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"⚠️ JSON parsing failed (method 2): {e}")
+
+                # Method 3: Fallback to manual extraction
+                if not suggestions:
+                    logger.warning(
+                        "⚠️ JSON extraction failed, using fallback problem suggestions"
+                    )
+                    suggestions = [
+                        f"Challenges with {context.target_customer} needs",
+                        f"Pain points in {context.business_idea} area",
+                        f"Problems {context.target_customer} currently face",
+                    ]
+
+                return suggestions[:3]
+
+            elif (
+                context.business_idea
+                and context.target_customer
+                and context.problem
+                and not getattr(context, "location", None)
+            ):
+                logger.info(
+                    "🎯 All core info present, no location, generating location suggestions"
+                )
+                prompt = """
+Generate 3 short location/market options relevant to this business and customer.
+Format them as short user responses (2-5 words), like examples:
+- "Location: Germany"
+- "Market: DACH region"
+- "City: Berlin"
+
+Return ONLY a JSON array of 3 strings.
+JSON array:"""
+                response_data = await self.llm_service.analyze(
+                    text=prompt,
+                    task="text_generation",
+                    data={"temperature": 0.2, "max_tokens": 120},
+                )
+                import json
+                import re
+
+                response_text = response_data.get("text", "")
+                json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
+                if json_match:
+                    try:
+                        suggestions = json.loads(json_match.group())
+                        return suggestions[:3]
+                    except json.JSONDecodeError:
+                        pass
+                return ["Location: Germany", "Market: DACH region", "City: Berlin"]
 
                 response_text = response_data.get("text", "")
                 logger.info(f"🔍 Problem suggestions raw response: {response_text}")

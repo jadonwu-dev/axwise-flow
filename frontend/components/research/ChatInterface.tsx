@@ -71,6 +71,35 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
       }]);
     }
   }, [loadSessionId, state.messages.length, unifiedState.messages.length, actions, unifiedActions]);
+
+  // Prefetch rotating LLM suggestions on first load (turn 0)
+  useEffect(() => {
+    const shouldPrefetch = !loadSessionId && state.messages.length === 1 && state.currentSuggestions.length === 0 && !state.isLoading;
+    if (!shouldPrefetch) return;
+
+    const controller = new AbortController();
+    const fallback = [
+      'Venture studios using AI to speed up discovery in Germany and DACH for venture partners burdened by weeks of manual research',
+      'Research automation for B2B SaaS in the UK and DACH for product teams struggling with stakeholder mapping',
+      'Questionnaire generator for EU fintech founders and PMs to accelerate interview planning'
+    ];
+
+    (async () => {
+      try {
+        const res = await fetch('/api/research/conversation-routines/suggestions', { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const suggestions = Array.isArray(data?.suggestions) && data.suggestions.length > 0 ? data.suggestions.slice(0,3) : fallback;
+        actions.setCurrentSuggestions(suggestions);
+      } catch (e) {
+        console.warn('[Suggestions] Prefetch failed, using fallback', e);
+        actions.setCurrentSuggestions(fallback);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [loadSessionId, state.messages.length, state.currentSuggestions.length, state.isLoading, actions]);
+
   const { messagesEndRef } = useScrollManagement(state.messages);
   const { copyMessage } = useClipboard();
   const formattedElapsedTime = useLoadingTimer(state.isLoading);
@@ -150,7 +179,7 @@ Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString
 **Primary Stakeholders:** ${primaryStakeholders.length}
 **Secondary Stakeholders:** ${secondaryStakeholders.length}
 **Total Questions:** ${timeEstimate.totalQuestions || 0}
-**Estimated Time:** ${timeEstimate.estimatedMinutesDisplay || timeEstimate.estimatedMinutes || '0-0'} minutes per conversation
+**Estimated Time:** ${((timeEstimate as any).estimatedMinutesDisplay || (timeEstimate as any).estimatedMinutes || '0-0')} minutes per conversation
 
 ---
 
@@ -548,7 +577,7 @@ Ready for simulation bridge and interview analysis`;
                 <RotateCcw className="h-4 w-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Clear</span>
               </Button>
-              {currentQuestions && (
+              {currentQuestions && ((currentQuestions as any)?.generated || (currentQuestions as any)?.timeEstimate?.totalQuestions > 0) && (
                 <Button variant="outline" size="sm" onClick={() => exportComprehensiveQuestions('txt')}>
                   <Download className="h-4 w-4 mr-1 lg:mr-2" />
                   <span className="hidden sm:inline">Export</span>
@@ -605,7 +634,7 @@ Ready for simulation bridge and interview analysis`;
                           }
                           timeEstimate={normalizeTimeEstimate(
                             message.metadata?.comprehensiveQuestions?.timeEstimate
-                          )}
+                          ) as any}
                           businessContext={message.metadata?.businessContext}
                           onExport={() => exportComprehensiveQuestions('txt')}
                           onContinue={continueToAnalysis}
@@ -825,7 +854,7 @@ Ready for simulation bridge and interview analysis`;
                                 <ComprehensiveQuestionsComponent
                                   primaryStakeholders={parsedData.primaryStakeholders}
                                   secondaryStakeholders={parsedData.secondaryStakeholders}
-                                  timeEstimate={timeEstimate}
+                                  timeEstimate={timeEstimate as any}
                                   businessContext={unifiedState.businessContext.businessIdea}
                                   onExport={() => exportComprehensiveQuestions('txt')}
                                   onDashboard={() => window.location.href = '/unified-dashboard/research'}
@@ -941,7 +970,7 @@ Ready for simulation bridge and interview analysis`;
                 onChange={(e) => actions.setInput(e.target.value)}
                 onKeyDown={handleKeyDownLocal}
                 onFocus={ensureInputVisible}
-                placeholder="Describe your business idea or ask for help..."
+                placeholder="Describe the product, feature, or problem and specify your target market (e.g., B2B companies in Germany)..."
                 disabled={state.isLoading}
                 className="flex-1 text-sm lg:text-base min-h-[44px] resize-none chat-input"
                 style={{
