@@ -16,6 +16,7 @@ Notes:
 - EvidenceItem shape: {quote, start_char?, end_char?, speaker?, document_id?}
 - When mapping demographics from a single trait blob, we put it under professional_context.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -23,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from backend.domain.models.persona_schema import EvidenceItem
 
 # Helper utilities
+
 
 def _to_evidence_items(evd: Any) -> List[Dict[str, Any]]:
     """Normalize various evidence representations to List[EvidenceItem-like dicts].
@@ -110,6 +112,7 @@ def _combine_demographics_fields(demo: Dict[str, Any]) -> str:
 
 # Public adapters
 
+
 def to_ssot_persona(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert a legacy persona dictionary into SSoT shape.
 
@@ -147,7 +150,9 @@ def to_ssot_persona(data: Dict[str, Any]) -> Dict[str, Any]:
                 key: (
                     {
                         "value": (demo.get(key) or {}).get("value"),
-                        "evidence": _to_evidence_items((demo.get(key) or {}).get("evidence")),
+                        "evidence": _to_evidence_items(
+                            (demo.get(key) or {}).get("evidence")
+                        ),
                     }
                     if isinstance(demo.get(key), dict)
                     else None
@@ -195,6 +200,49 @@ def to_ssot_persona(data: Dict[str, Any]) -> Dict[str, Any]:
         "challenges_and_frustrations": challenges_ssot,
         "key_quotes": quotes_ssot,
     }
+    # Apply default speaker/document_id to evidence items when missing using EV2 scope meta
+    ev2_meta = (data.get("_evidence_linking_v2") or {}).get("scope_meta") or {}
+    default_speaker = (
+        ev2_meta.get("speaker") or ev2_meta.get("speaker_role") or name or "Participant"
+    )
+    default_doc = ev2_meta.get("document_id") or "original_text"
+
+    def _apply_defaults(items: Optional[List[Dict[str, Any]]]):
+        if not items:
+            return
+        for it in items:
+            if isinstance(it, dict):
+                it.setdefault("speaker", default_speaker)
+                it.setdefault("document_id", default_doc)
+
+    # Core traits
+    for k in [
+        "goals_and_motivations",
+        "challenges_and_frustrations",
+        "key_quotes",
+    ]:
+        af = persona_ssot.get(k)
+        if isinstance(af, dict):
+            ev = af.get("evidence") or []
+            _apply_defaults(ev)
+            af["evidence"] = ev
+
+    # Demographics subfields
+    demo_dict = persona_ssot.get("demographics")
+    if isinstance(demo_dict, dict):
+        for sub in [
+            "experience_level",
+            "industry",
+            "location",
+            "professional_context",
+            "roles",
+            "age_range",
+        ]:
+            af = demo_dict.get(sub)
+            if isinstance(af, dict):
+                ev = af.get("evidence") or []
+                _apply_defaults(ev)
+                af["evidence"] = ev
 
     return persona_ssot
 
@@ -210,7 +258,9 @@ def from_ssot_to_frontend(data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(data, dict):
         return {}
 
-    def as_frontend_trait(af: Optional[Dict[str, Any]], default_conf: float = 0.7) -> Optional[Dict[str, Any]]:
+    def as_frontend_trait(
+        af: Optional[Dict[str, Any]], default_conf: float = 0.7
+    ) -> Optional[Dict[str, Any]]:
         if not isinstance(af, dict):
             return None
         value = (af.get("value") or "").strip()
@@ -228,7 +278,11 @@ def from_ssot_to_frontend(data: Dict[str, Any]) -> Dict[str, Any]:
     demographics = data.get("demographics")
     if isinstance(demographics, dict):
         demo_value = _combine_demographics_fields(demographics)
-        demo_trait = {"value": demo_value, "confidence": float(demographics.get("confidence", 0.7)), "evidence": []}
+        demo_trait = {
+            "value": demo_value,
+            "confidence": float(demographics.get("confidence", 0.7)),
+            "evidence": [],
+        }
     else:
         demo_trait = None
 
@@ -238,9 +292,10 @@ def from_ssot_to_frontend(data: Dict[str, Any]) -> Dict[str, Any]:
         "archetype": data.get("archetype") or "",
         "demographics": demo_trait,
         "goals_and_motivations": as_frontend_trait(data.get("goals_and_motivations")),
-        "challenges_and_frustrations": as_frontend_trait(data.get("challenges_and_frustrations")),
+        "challenges_and_frustrations": as_frontend_trait(
+            data.get("challenges_and_frustrations")
+        ),
         "key_quotes": as_frontend_trait(data.get("key_quotes")),
     }
 
     return out
-

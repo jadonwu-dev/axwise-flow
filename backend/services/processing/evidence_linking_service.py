@@ -837,11 +837,13 @@ class EvidenceLinkingService:
         if not q:
             q = quote  # fallback to original if we stripped everything by mistake
 
+        # Ensure non-null speaker using scope precedence: explicit speaker, then role, then generic
+        spk = meta.get("speaker") or meta.get("speaker_role") or "Participant"
         return {
             "quote": q,
             "start_char": ls,
             "end_char": le,
-            "speaker": meta.get("speaker"),
+            "speaker": spk,
             "speaker_role": meta.get("speaker_role"),
             "document_id": doc_id,
         }
@@ -1237,7 +1239,7 @@ class EvidenceLinkingService:
             # Ensure a minimum number of evidence items per field via controlled reuse if needed
             try:
                 desired_min = 4 if field == "demographics" else 3
-                if len(filtered_items) < desired_min:
+                if field == "demographics" and len(filtered_items) < desired_min:
                     # Re-run candidate selection ignoring cross-trait collisions to avoid starving this field
                     more_cands = self._select_candidate_spans(
                         trait_value, scoped_text, [], limit=limit, metrics=None

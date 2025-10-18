@@ -302,12 +302,15 @@ class PersonaEvidenceValidator:
     def check_speaker_consistency(
         persona_ssot: Dict[str, Any], transcript: Optional[StructuredTranscript]
     ) -> Dict[str, Any]:
-        """When transcript speakers are available, ensure evidence speaker fields align (if provided)."""
+        """When transcript speakers are available, ensure evidence speaker fields align (if provided).
+        Also count missing speakers so the summary can reflect unverifiable items.
+        """
         if not transcript:
-            return {"speaker_mismatches": []}
+            return {"speaker_mismatches": [], "missing_speaker_total": 0}
         speakers = {seg.get("speaker") for seg in transcript if seg.get("speaker")}
 
         mismatches: List[Dict[str, Any]] = []
+        missing = 0
         for field in [
             "goals_and_motivations",
             "challenges_and_frustrations",
@@ -317,19 +320,19 @@ class PersonaEvidenceValidator:
             if not isinstance(trait, dict):
                 continue
             for ev in trait.get("evidence", []) or []:
-                if (
-                    isinstance(ev, dict)
-                    and ev.get("speaker")
-                    and ev["speaker"] not in speakers
-                ):
-                    mismatches.append(
-                        {
-                            "field": field,
-                            "quote": ev.get("quote"),
-                            "speaker": ev.get("speaker"),
-                        }
-                    )
-        return {"speaker_mismatches": mismatches}
+                if isinstance(ev, dict):
+                    sp = (ev.get("speaker") or "").strip()
+                    if not sp:
+                        missing += 1
+                    elif sp not in speakers:
+                        mismatches.append(
+                            {
+                                "field": field,
+                                "quote": ev.get("quote"),
+                                "speaker": sp,
+                            }
+                        )
+        return {"speaker_mismatches": mismatches, "missing_speaker_total": missing}
 
     @staticmethod
     def summarize(
@@ -364,7 +367,10 @@ class PersonaEvidenceValidator:
             return "SOFT_FAIL"
         if summary.get("duplication", {}).get("cross_trait_reuse"):
             return "SOFT_FAIL"
-        if summary.get("speaker_check", {}).get("speaker_mismatches"):
+        sc = summary.get("speaker_check", {}) or {}
+        if sc.get("speaker_mismatches"):
+            return "SOFT_FAIL"
+        if (sc.get("missing_speaker_total") or 0) > 0:
             return "SOFT_FAIL"
         return "PASS"
 
