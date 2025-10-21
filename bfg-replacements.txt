@@ -1,0 +1,17 @@
+***REMOVED***
+<replacement>==><replacement>
+
+regex:(?i)GEMINI_API_KEY\s*[:=]\s*[^\s'"\n]+==>GEMINI_API_KEY=***REMOVED***
+regex:(?i)OPENAI_API_KEY\s*[:=]\s*[^\s'"\n]+==>OPENAI_API_KEY=***REMOVED***
+regex:(?i)ANTHROPIC_API_KEY\s*[:=]\s*[^\s'"\n]+==>ANTHROPIC_API_KEY=***REMOVED***
+regex:(?i)HUGGINGFACE_TOKEN\s*[:=]\s*[^\s'"\n]+==>HUGGINGFACE_TOKEN=***REMOVED***
+regex:(?i)GOOGLE_(API|CLIENT|SECRET)_KEY\s*[:=]\s*[^\s'"\n]+==>GOOGLE_...=***REMOVED***
+regex:(?i)AWS_(ACCESS|SECRET)_KEY[A-Z_]*\s*[:=]\s*[^\s'"\n]+==>AWS_...=***REMOVED***
+regex:(?i)CLERK_[A-Z0-9_]+\s*[:=]\s*[^\s'"\n]+==>CLERK_...=***REMOVED***
+regex:(?i)DATABASE_URL\s*[:=]\s*[^\s]+==>DATABASE_URL=***REDACTED***
+regex:(?i)DB_PASSWORD\s*[:=]\s*[^\s'"\n]+==>DB_PASSWORD=***REMOVED***
+regex:(?i)POSTGRES_PASSWORD\s*[:=]\s*[^\s'"\n]+==>POSTGRES_PASSWORD=***REMOVED***
+regex:(?i)NEXT_PUBLIC_[A-Z0-9_]+\s*[:=]\s*[^\s'"\n]+==>NEXT_PUBLIC_...=***REMOVED***
+
+
+regex:(?i)STRIPE_(PUBLISHABLE|SECRET|WEBHOOK)_KEY\s*[:=]\s*[^\s'"\n]+==>STRIPE_...=***REMOVED***

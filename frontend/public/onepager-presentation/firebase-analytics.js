@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeFirebase() {
   // Your web app's Firebase configuration
   const firebaseConfig = {
-    apiKey: "AIzaREDACTED",
+    apiKey: "YOUR_FIREBASE_API_KEY",
     authDomain: "axwise-73425.firebaseapp.com",
     projectId: "axwise-73425",
     storageBucket: "axwise-73425.appspot.com",

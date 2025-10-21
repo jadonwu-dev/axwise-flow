@@ -1,102 +1,95 @@
-# Design Thinking Agent AI - Backend
+# AxWise Flow OSS — Backend
 
-This is the backend service for the Design Thinking Agent AI application. It provides API endpoints for persona generation, interview analysis, and other design thinking tools.
+FastAPI backend that powers interview analysis, evidence-linked personas, insights, and an API-first workflow.
+
+This is the code used by OSS mode when you run the project; it exposes `/health` and `/docs` locally.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.11
-- Virtual environment (venv_py311)
+- Python 3.11+
+- PostgreSQL 12+
+- Gemini API Key ([create one](https://aistudio.google.com/app/api-keys))
 
-### Installation
-
-1. Create and activate the virtual environment:
+### Install
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install dependencies:
-
-```bash
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables:
+### Configure environment (OSS)
 
-Create a `.env` file in the backend directory with the following variables:
-
-```
-DATABASE_URL=***REDACTED***  # For Mac
-# DATABASE_URL=***REDACTED***  # For Windows
-GEMINI_API_KEY=***REMOVED***
-```
-
-### Running the Server
-
+Preferred: use `backend/.env.oss` managed from repo root via `scripts/oss/run_backend_oss.sh`.
+Minimum variables:
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+DATABASE_URL=***REDACTED***
+GEMINI_API_KEY=***REMOVED***
+OSS_MODE=true
 ```
+
+### Run
+
+Recommended (from repo root):
+```bash
+scripts/oss/run_backend_oss.sh
+```
+
+Or directly from backend:
+```bash
+uvicorn backend.api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Health: http://localhost:8000/health
+Docs:   http://localhost:8000/docs
 
 ## Project Structure
 
-- `main.py`: FastAPI application entry point
-- `routes/`: API route definitions
-- `services/`: Business logic services
-  - `llm/`: LLM service implementations
-  - `processing/`: Data processing services
-- `schemas.py`: Pydantic models for request/response validation
-- `database.py`: Database connection and models
-- `utils/`: Utility functions
+- `api/`              — FastAPI app (entry is `backend.api.app:app`)
+- `services/`         — Business/domain services
+- `infrastructure/`   — Config, LLM providers, persistence, settings
+- `models/`           — Pydantic/DB models
+- `migrations/`, `alembic/` — Database migrations
+- `run_migrations.py` — Helper to run Alembic migrations
+- `requirements.txt`  — Pinned Python dependencies
 
-## Key Components
+## Key Capabilities
 
-### Persona Formation Pipeline
+- Interview analysis and synthesis
+- Evidence-linked personas
+- Insights/themes, patterns, sentiment
+- Multi-LLM support (Gemini by default)
 
-The persona formation pipeline consists of three main components:
+See `backend/docs/` for deeper design notes.
+## Backend Tech Stack
 
-1. **TranscriptStructuringService**: Converts raw text into structured JSON representing speaker turns.
-2. **AttributeExtractor**: Extracts persona attributes from structured text using LLM.
-3. **PersonaBuilder**: Builds persona objects from attributes.
+- FastAPI — modern Python web framework
+- SQLAlchemy 2.x — ORM and SQL toolkit
+- PostgreSQL + psycopg2-binary — primary database
+- Alembic — database migrations
+- Pydantic v2 — data validation and settings models
+- Uvicorn — ASGI server
+- google-genai — Gemini LLM integration (default provider)
+- instructor — structured LLM outputs
 
-#### Recent Enhancements
 
-The PersonaBuilder has been enhanced to support simplified attribute structures, making it more flexible and robust:
+## API
 
-- **Simplified Attribute Format**: Trait fields can now be provided as direct string values rather than nested dictionaries.
-- **Key Quotes Handling**: The `key_quotes` field can be provided as a list of strings, which are used as evidence.
-- **Overall Confidence Score**: The `overall_confidence_score` field is used to set the confidence for all traits.
-- **Robust Error Handling**: Non-string values are safely converted to strings, and missing fields get default values.
+Browse and try the endpoints in the interactive docs when running locally:
 
-For more details, see the [PersonaBuilder documentation](docs/persona_builder.md).
+- OpenAPI: `GET /docs`
+- Health:   `GET /health`
 
-## API Endpoints
-
-### Persona Generation
-
-- `POST /api/personas/generate`: Generate personas from interview text
-- `GET /api/personas`: Get all personas
-- `GET /api/personas/{persona_id}`: Get a specific persona
-
-### Interview Analysis
-
-- `POST /api/interviews/analyze`: Analyze interview text
-- `GET /api/interviews`: Get all interviews
-- `GET /api/interviews/{interview_id}`: Get a specific interview
+All available endpoints and schemas are documented in the OpenAPI spec.
 
 ## Testing
 
-Run the tests with:
-
 ```bash
-# Unit tests
-python -m pytest tests/
-
-# Manual tests
-python test_persona_builder_manual.py
-python test_persona_pipeline_integration.py
+pytest
+# or
+pytest -q backend/tests
 ```
 
 ## Contributing
@@ -108,4 +101,4 @@ python test_persona_pipeline_integration.py
 
 ## License
 
-This project is proprietary and confidential.
+This backend is part of AxWise Flow OSS and is licensed under the Apache License 2.0. See the repository root `LICENSE` file.
