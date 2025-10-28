@@ -1,0 +1,14 @@
+venv_py311/
+venv_py-flow-oss/
+
+__pycache__/
+
+.next/
+
+node_modules/
+frontend/node_modules/
+
+.turbo/
+.vercel/
+.env.local
+.env.*.local

@@ -1564,12 +1564,32 @@ Generate a complete DirectPersona object with all required traits populated base
         Returns:
             List of persona dictionaries
         """
+        # Enforce MAX_PERSONAS across all persona formation paths
+        def _limit_personas_list(personas_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            try:
+                from os import getenv
+                max_p = int(getenv("MAX_PERSONAS", "5"))
+            except Exception:
+                max_p = 5
+            if not isinstance(personas_list, list):
+                return personas_list
+            try:
+                personas_list = sorted(
+                    personas_list,
+                    key=lambda p: float((p or {}).get("overall_confidence", 0) or 0.0),
+                    reverse=True,
+                )
+            except Exception:
+                pass
+            return personas_list[:max_p]
+
         # V2 feature-flagged path
         if self._use_v2() and self._v2_facade is not None:
             try:
-                return await self._v2_facade.form_personas_from_transcript(
+                personas = await self._v2_facade.form_personas_from_transcript(
                     transcript, participants, context
                 )
+                return _limit_personas_list(personas)
             except Exception as e:
                 logger.warning(
                     f"V2 facade (transcript) failed, falling back to V1: {e}"
@@ -1584,12 +1604,20 @@ Generate a complete DirectPersona object with all required traits populated base
             logger = logging.getLogger(__name__)
             logger.error(f"[TRANSCRIPT_DELEGATE] Import failed: {_imp_err}")
             # Fall back to in-file implementation
-            return await self._form_personas_from_transcript_parallel(
+            personas = await self._form_personas_from_transcript_parallel(
                 transcript, participants, context
             )
-        return await _tx.form_personas_from_transcript_parallel(
+            try:
+                return _limit_personas_list(personas)
+            except Exception:
+                return personas
+        personas = await _tx.form_personas_from_transcript_parallel(
             self, transcript, participants, context
         )
+        try:
+            return _limit_personas_list(personas)
+        except Exception:
+            return personas
 
     async def form_personas_by_stakeholder(
         self,

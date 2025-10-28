@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
@@ -24,50 +23,8 @@ export async function GET(request: NextRequest) {
       nodeEnv: process.env.NODE_ENV
     });
 
-    let authToken: string;
-
-    if (isProduction || enableClerkValidation) {
-      // Production or Clerk validation enabled: require proper authentication
-      const { userId, getToken } = await auth();
-
-      if (!userId) {
-        console.log('History API: No authenticated user');
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-
-      // Get the auth token from Clerk with retry logic
-      let token;
-      try {
-        token = await getToken({ skipCache: true });
-
-        // If token is still null, try one more time
-        if (!token) {
-          console.warn('History API: First token attempt failed, retrying...');
-          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
-          token = await getToken({ skipCache: true });
-        }
-      } catch (tokenError) {
-        console.error('History API: Token retrieval error:', tokenError);
-      }
-
-      if (!token) {
-        console.log('History API: No auth token available after retry');
-        return NextResponse.json(
-          { error: 'Authentication token not available' },
-          { status: 401 }
-        );
-      }
-
-      authToken = token;
-      console.log('History API: Using Clerk JWT token for authenticated user:', userId);
-    } else {
-      // Development mode: use development token for the main user
-      authToken = 'dev_test_token_DEV_TOKEN_REDACTED';
-      console.log('History API: Using development token for DEV_TOKEN_REDACTED (development mode only)');
-    }
+    // OSS mode: always use development token
+    const authToken: string = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';

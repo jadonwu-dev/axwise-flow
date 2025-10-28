@@ -67,7 +67,7 @@ export function PersonasTabContent({
   const hasStakeholderFeatures = personas?.some(persona => persona.stakeholder_intelligence);
 
   // Single interview - use consistent authentication pattern like other tabs
-  if (!isMultiStakeholder) {
+  if (true /* force single-view */ || !isMultiStakeholder) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-6">

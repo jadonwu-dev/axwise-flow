@@ -17,7 +17,6 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.12.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@hookform/resolvers": "^4.1.3",

@@ -13,7 +13,6 @@ import os
 from backend.database import get_db
 
 from backend.models import User
-from backend.services.external.clerk_service import ClerkService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -25,35 +24,17 @@ security = HTTPBearer(
     auto_error=True,
 )
 
-# Initialize Clerk service
-CLERK_...=***REMOVED***
 
-# Enable/disable Clerk JWT validation based on environment
+# OSS mode: Clerk validation disabled regardless of environment
 ENABLE_CLERK_...=***REMOVED***
-    os.getenv("ENABLE_CLERK_VALIDATION", "false").lower() == "true"
-)
-
-# Check if we're in production environment
 IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
-
-logger.info(
-    f"Auth middleware initialized - Clerk validation: {ENABLE_CLERK_VALIDATION}, Production: {IS_PRODUCTION}"
-)
+logger.info("Auth middleware initialized - Clerk validation disabled (OSS mode)")
 
 # Development token prefix for easier identification - only used in development
 DEV_TOKEN_PREFIX = "dev_test_token_"
 
-# Environment detection
-IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
-
-# Force validation in production regardless of ENABLE_CLERK_VALIDATION setting
-if IS_PRODUCTION:
-    ENABLE_CLERK_...=***REMOVED***
-    logger.info("Production environment detected: Forcing Clerk JWT validation")
-else:
-    logger.warning(
-        f"Development environment detected: Clerk validation is {'enabled' if ENABLE_CLERK_VALIDATION else 'disabled'}"
-    )
+# OSS mode note
+logger.warning("OSS mode: Clerk validation is disabled regardless of environment")
 
 
 async def get_current_user(
@@ -87,73 +68,17 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # In production, always validate tokens with Clerk
-    if IS_PRODUCTION:
-        # Validate JWT token with Clerk
-        is_valid, payload = clerk_service.validate_token(token)
-
-        if not is_valid or not payload:
-            logger.warning(
-                "Authentication failed: Invalid token in production environment"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Extract user ID from JWT claim
-        user_id = payload.get("sub")
-
-        if not user_id:
-            logger.warning("Authentication failed: Token missing subject claim")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing user identifier",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    # Handle development token case - only in development
-    elif (
-        token.startswith(DEV_TOKEN_PREFIX) or token == "DEV_TOKEN_REDACTED"
-    ) and not ENABLE_CLERK_VALIDATION:
-        # Extract user_id from the development token or use default
-        if token == "DEV_TOKEN_REDACTED":
-            user_id = "testuser123"
-            logger.info(f"Development token used with default user_id: {user_id}")
-        else:
-            user_id = token[len(DEV_TOKEN_PREFIX) :]
-            logger.info(f"Development token used with user_id: {user_id}")
-    # IMPORTANT: Use email-based user ID for development if not using dev token
-    elif not ENABLE_CLERK_VALIDATION:
-        # For development, use email-based user ID (default to vitalijs@axwise.de)
-        # This allows webhook to work properly with actual email addresses
-        dev_email = "vitalijs@axwise.de"  # Default development email
-        user_id = dev_email.replace("@", "_").replace(".", "_")
-        logger.info(
-            f"Development mode: Using email-based user_id: {user_id} for email: {dev_email}"
-        )
+    # OSS mode: derive user_id from dev token or fallback
+    if token.startswith(DEV_TOKEN_PREFIX):
+        user_id = token[len(DEV_TOKEN_PREFIX):] or "testuser123"
+        logger.info(f"Development token used with user_id: {user_id}")
+    elif token == "DEV_TOKEN_REDACTED":
+        user_id = "testuser123"
+        logger.info(f"Legacy dev token used; user_id: {user_id}")
     else:
-        # Validate JWT token with Clerk
-        is_valid, payload = clerk_service.validate_token(token)
-
-        if not is_valid or not payload:
-            logger.warning("Authentication failed: Invalid token")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Extract user ID from JWT claim
-        user_id = payload.get("sub")
-
-        if not user_id:
-            logger.warning("Authentication failed: Token missing subject claim")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing user identifier",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        # Accept any token and use a stable default
+        user_id = "testuser123"
+        logger.info("OSS mode: Using default user_id since no dev token prefix detected")
 
     logger.info(
         f"🔍 Authentication successful for user_id: {user_id}, ENABLE_CLERK_...=***REMOVED*** IS_PRODUCTION: {IS_PRODUCTION}"
@@ -164,94 +89,24 @@ async def get_current_user(
         user = db.query(User).filter(User.user_id == user_id).first()
 
         if not user:
-            # If using Clerk validation and we have a real JWT, try to get user info
-            if ENABLE_CLERK_VALIDATION:
-                user_info = clerk_service.get_user_info(user_id)
-                user_email = (
-                    user_info.get("email_addresses", [{}])[0].get("email_address")
-                    if user_info
-                    else None
-                )
-
-                # Check if there's an existing user with the same email (for subscription transfer)
-                existing_user_with_subscription = None
-                if user_email:
-                    existing_users = (
-                        db.query(User).filter(User.email == user_email).all()
-                    )
-                    # Look for users with subscriptions
-                    for existing_user in existing_users:
-                        if (
-                            existing_user.stripe_customer_id
-                            or existing_user.subscription_status
-                            or (
-                                existing_user.usage_data
-                                and existing_user.usage_data.get(
-                                    "subscription", {}
-                                ).get("tier")
-                                != "free"
-                            )
-                        ):
-                            existing_user_with_subscription = existing_user
-                            break
-
-                # Create a new user record with Clerk data
-                new_user = User(
-                    user_id=user_id,
-                    email=user_email,
-                    first_name=user_info.get("first_name") if user_info else None,
-                    last_name=user_info.get("last_name") if user_info else None,
-                    usage_data={
-                        "subscription": {"tier": "free", "status": "active"},
-                        "usage": {},
-                    },
-                )
-
-                # Transfer subscription from existing user if found
-                if existing_user_with_subscription:
-                    logger.info(
-                        f"Transferring subscription from {existing_user_with_subscription.user_id} to {user_id}"
-                    )
-                    new_user.stripe_customer_id = (
-                        existing_user_with_subscription.stripe_customer_id
-                    )
-                    new_user.subscription_status = (
-                        existing_user_with_subscription.subscription_status
-                    )
-                    new_user.subscription_id = (
-                        existing_user_with_subscription.subscription_id
-                    )
-                    if existing_user_with_subscription.usage_data:
-                        new_user.usage_data = (
-                            existing_user_with_subscription.usage_data.copy()
-                        )
-
-                    # Clear subscription from old user
-                    existing_user_with_subscription.stripe_customer_id = None
-                    existing_user_with_subscription.subscription_status = None
-                    existing_user_with_subscription.subscription_id = None
+            # OSS mode: create a simple user record
+            if "_" in user_id and not user_id.startswith("testuser"):
+                email = user_id.replace("_", "@", 1).replace("_", ".", 1)
+                first_name = email.split("@")[0].title()
             else:
-                # For non-validated tokens, create a user record with proper email
-                # Convert user_id back to email format if it's email-based
-                if "_" in user_id and not user_id.startswith("testuser"):
-                    # This is likely an email-based user_id, convert back to email
-                    email = user_id.replace("_", "@", 1).replace("_", ".", 1)
-                    first_name = email.split("@")[0].title()
-                else:
-                    # Fallback for other user IDs
-                    email = f"{user_id}@example.com"
-                    first_name = "Test"
+                email = f"{user_id}@example.com"
+                first_name = "Test"
 
-                new_user = User(
-                    user_id=user_id,
-                    email=email,
-                    first_name=first_name,
-                    last_name="Dev",
-                    usage_data={
-                        "subscription": {"tier": "free", "status": "active"},
-                        "usage": {},
-                    },
-                )
+            new_user = User(
+                user_id=user_id,
+                email=email,
+                first_name=first_name,
+                last_name="Dev",
+                usage_data={
+                    "subscription": {"tier": "free", "status": "active"},
+                    "usage": {},
+                },
+            )
 
             db.add(new_user)
             db.commit()

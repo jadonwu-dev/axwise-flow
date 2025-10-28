@@ -176,13 +176,19 @@ class ResearchSessionService:
 
     def get_user_sessions(self, user_id: str, limit: int = 50) -> List[ResearchSession]:
         """Get all sessions for a user."""
-        return (
-            self.db.query(ResearchSession)
-            .filter(ResearchSession.user_id == user_id)
-            .order_by(desc(ResearchSession.updated_at))
-            .limit(limit)
-            .all()
-        )
+        try:
+            return (
+                self.db.query(ResearchSession)
+                .filter(ResearchSession.user_id == user_id)
+                .order_by(desc(ResearchSession.updated_at))
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            # Rollback the transaction to clean up failed state
+            self.db.rollback()
+            logger.error(f"Error retrieving user sessions: {str(e)}")
+            raise
 
     def get_all_sessions(self, limit: int = 50) -> List[ResearchSession]:
         """Get all sessions (for development/testing purposes)."""

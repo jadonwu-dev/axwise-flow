@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 async function getAuthToken() {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
-  if (isProduction || enableClerkValidation) {
-    const { getToken } = await auth();
-    const token = await getToken({ skipCache: true });
-    if (!token) throw new Error('No token');
-    return token;
-  }
-  return '';
+  return process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 }
 
 export async function GET(_request: NextRequest, context: { params: { sessionId: string } }) {

@@ -9,7 +9,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from backend.models import User
-from backend.services.external.clerk_service import ClerkService
+try:
+    from backend.services.external.clerk_service import ClerkService
+except Exception:
+    # OSS mode: Clerk may be removed; provide a minimal stub
+    class ClerkService:
+        def get_user(self, user_id: str):
+            return None
 
 logger = logging.getLogger(__name__)
 

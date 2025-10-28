@@ -36,7 +36,6 @@ import { Network } from 'lucide-react';
 import { LoadingSpinner } from '@/components/loading-spinner'; // Import LoadingSpinner
 import { ExportButton } from './ExportButton';
 import type { DetailedAnalysisResult } from '@/types/api'; // Remove PrioritizedInsight import
-import { useUser } from '@clerk/nextjs';
 import { StakeholderDynamicsDisplay } from './StakeholderDynamicsDisplay';
 // import { useAnalysisStore } from '@/store/useAnalysisStore'; // Remove store import if only used for priority insights
 
@@ -66,7 +65,11 @@ export default function VisualizationTabsRefactored({
 }: VisualizationTabsProps): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useUser();
+
+  // OSS mode compatibility: provide mock user for development
+  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+  const user = enableClerkValidation ? null : { primaryEmailAddress: { emailAddress: 'oss-user@localhost' } };
+
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
   const [activeTab, setActiveTab] = useState<TabValue>(
     activeTabFromUrl || initialTab as TabValue || 'themes'

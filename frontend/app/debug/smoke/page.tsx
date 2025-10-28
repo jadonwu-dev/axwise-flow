@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 
 type Check = {
   name: string;
@@ -96,30 +95,17 @@ export default function SmokeTestPage() {
       <h1>Smoke Test: Research Sessions Proxy & Questionnaire</h1>
       <p>Use query param <code>?session=&lt;session_id&gt;</code> to test a specific session (e.g., local_…)</p>
 
-      <SignedOut>
-        <div style={{ margin: "16px 0", padding: 12, border: "1px solid #f0c36d", background: "#fff8e1" }}>
-          <strong>Not signed in.</strong> The proxy requires an authenticated Clerk session.
-          <div style={{ marginTop: 8 }}>
-            <SignInButton mode="modal">
-              <button style={{ padding: "8px 12px", border: "1px solid #ccc", borderRadius: 6 }}>Sign in</button>
-            </SignInButton>
-          </div>
-        </div>
-      </SignedOut>
-
-      <SignedIn>
-        <div style={{ marginTop: 16 }}>
-          {checks.map((c, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, borderBottom: "1px solid #eee" }}>
-              <span style={{ width: 14 }}>{c.status === "PASS" ? "✅" : c.status === "FAIL" ? "❌" : "⏳"}</span>
-              <div>
-                <div><strong>{c.name}</strong></div>
-                {c.info ? <div style={{ color: "#666" }}>{c.info}</div> : null}
-              </div>
+      <div style={{ marginTop: 16 }}>
+        {checks.map((c, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, borderBottom: "1px solid #eee" }}>
+            <span style={{ width: 14 }}>{c.status === "PASS" ? "✅" : c.status === "FAIL" ? "❌" : "⏳"}</span>
+            <div>
+              <div><strong>{c.name}</strong></div>
+              {c.info ? <div style={{ color: "#666" }}>{c.info}</div> : null}
             </div>
-          ))}
-        </div>
-      </SignedIn>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,24 +1,11 @@
 'use client';
 
 import React from 'react';
-import { useAuth } from '@clerk/nextjs';
 
 // Simple placeholder for admin security dashboard
 // This would be replaced with actual security monitoring in production
 
 export default function SecurityDashboard(): JSX.Element {
-  const { userId } = useAuth();
-
-  if (!userId) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Security Dashboard</h1>
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          You must be logged in to access this page.
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">

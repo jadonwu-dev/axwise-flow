@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
 
 async function getToken(): Promise<string> {
-  try {
-    // Get the current user's auth token from Clerk
-    const authResult = await auth();
-    const token = await authResult.getToken();
-
-    if (!token) {
-      throw new Error('No authentication token available');
-    }
-
-    return token;
-  } catch (error) {
-    console.error('Error getting Clerk token:', error);
-    throw new Error('Authentication failed');
-  }
+  // OSS mode: return development token
+  return process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 }
 
 export async function GET(

@@ -4,37 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 async function getToken(): Promise<string> {
-  // Import auth from Clerk
-  const { auth } = await import('@clerk/nextjs/server');
-
-  try {
-    // Get the authentication context
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-
-    // Get the JWT token from Clerk
-    const token = await getToken();
-
-    if (!token) {
-      throw new Error('Failed to get authentication token');
-    }
-
-    return token;
-  } catch (error) {
-    console.error('Authentication error:', error);
-
-    // In development mode, fall back to development token
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Falling back to development token');
-      return 'DEV_TOKEN_REDACTED';
-    }
-
-    // In production, throw the error
-    throw new Error('Authentication required');
-  }
+  // OSS mode: return development token
+  return process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 }
 
 export async function POST(request: NextRequest) {

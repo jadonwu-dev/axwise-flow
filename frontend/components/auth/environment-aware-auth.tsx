@@ -1,6 +1,5 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -47,58 +46,26 @@ interface EnvironmentAwareAuthProps {
 }
 
 export function EnvironmentAwareAuth({ children }: EnvironmentAwareAuthProps) {
-  const { getToken, userId, isSignedIn } = useAuth();
   const [firebaseSignedIn, setFirebaseSignedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto sign-in to Firebase when Clerk user is available (production only)
+  // OSS mode: no Clerk; provide mock auth state
+  const userId = 'oss-mode-user';
+  const isSignedIn = true;
+
   useEffect(() => {
-    if (isFirebaseEnabled && isSignedIn && userId && !firebaseSignedIn && !isLoading) {
-      signIntoFirebase();
+    if (isFirebaseEnabled) {
+      console.log('Firebase integration is enabled by env, but Clerk is removed in OSS mode. Skipping sign-in.');
     }
-  }, [isSignedIn, userId, firebaseSignedIn, isLoading]);
+  }, []);
 
   const signIntoFirebase = async () => {
-    if (!isFirebaseEnabled || !auth) {
-      console.log('Firebase integration disabled or not initialized');
-      return;
-    }
-
+    // In OSS mode, we cannot obtain a Firebase token from Clerk
     setIsLoading(true);
-    setError(null);
-
-    try {
-      // Get Firebase token from Clerk using the official integration template
-      const token = await getToken({ template: 'integration_firebase' });
-      
-      if (!token) {
-        throw new Error('Failed to get Firebase token from Clerk');
-      }
-
-      // Sign in to Firebase with the custom token
-      const userCredentials = await signInWithCustomToken(auth, token);
-      console.log('Successfully signed into Firebase:', userCredentials.user);
-      setFirebaseSignedIn(true);
-    } catch (err) {
-      console.error('Error signing into Firebase:', err);
-      setError(err instanceof Error ? err.message : 'Failed to sign into Firebase');
-    } finally {
-      setIsLoading(false);
-    }
+    setError('Firebase integration requires Clerk; disabled in OSS mode');
+    setIsLoading(false);
   };
-
-  // Handle if user is not signed in with Clerk
-  if (!userId) {
-    return (
-      <div className="p-4 text-center">
-        <p>You need to sign in with Clerk to access this content.</p>
-        <a href="/sign-in" className="text-primary hover:underline">
-          Go to Sign In
-        </a>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">

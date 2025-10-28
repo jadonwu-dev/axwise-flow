@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
@@ -9,31 +8,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Check environment
-    const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
-
-    let userId: string | null = null;
-    let token: string | null = null;
-
-    if (isProduction || enableClerkValidation) {
-      // Get authentication from Clerk
-      const authResult = await auth();
-      userId = authResult.userId;
-      token = await authResult.getToken();
-
-      if (!userId) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-    } else {
-      // Development mode: use development user
-      userId = 'DEV_TOKEN_REDACTED';
-      token = 'dev_test_token_DEV_TOKEN_REDACTED';
-      console.log('🔄 [ANALYSES] Using development mode authentication');
-    }
+    // OSS mode: always use development token
+    const token: string = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';

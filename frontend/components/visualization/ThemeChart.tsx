@@ -52,10 +52,9 @@ export function ThemeChart({ themes, stakeholderIntelligence }: ThemeChartProps)
     });
   };
 
-  // Combine regular themes with consensus themes
+  // Combine regular themes only (disable multi-stakeholder consensus injection for now)
   const getAllThemes = (): AnalyzedTheme[] => {
-    const consensusThemes = getConsensusThemes();
-    return [...themes, ...consensusThemes];
+    return themes;
   };
 
   // Filter themes based on search term

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -8,39 +7,8 @@ export async function POST(request: NextRequest) {
     console.log('Proxying conversation routines chat request to backend');
     console.log('API_BASE_URL:', API_BASE_URL);
 
-    // Get authentication token
-    let authToken = '';
-    const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
-
-    if (isProduction || enableClerkValidation) {
-      // Get the session token from Clerk
-      try {
-        const authResult = await auth();
-        const token = await authResult.getToken();
-
-        if (!token) {
-          console.log('Conversation Routines API: No session token found');
-          return NextResponse.json(
-            { error: 'Authentication token required' },
-            { status: 401 }
-          );
-        }
-
-        authToken = token;
-        console.log('Conversation Routines API: Using Clerk JWT token');
-      } catch (tokenError) {
-        console.error('Conversation Routines API: Error getting Clerk token:', tokenError);
-        return NextResponse.json(
-          { error: 'Authentication error' },
-          { status: 401 }
-        );
-      }
-    } else {
-      // Development mode - use development token
-      authToken = 'DEV_TOKEN_REDACTED';
-      console.log('Conversation Routines API: Using development token');
-    }
+    // OSS mode - use development token
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Get the request body
     const body = await request.json();

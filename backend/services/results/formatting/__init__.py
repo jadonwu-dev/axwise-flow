@@ -13,7 +13,7 @@ from .influence import (
     compute_influence_metrics_for_persona,
     should_compute_influence_metrics,
 )
-from .themes import adjust_theme_frequencies_for_prevalence
+from .themes import adjust_theme_frequencies_for_prevalence, hydrate_theme_statement_documents
 
 __all__ = [
     "extract_sentiment_statements_from_data",
@@ -26,4 +26,5 @@ __all__ = [
     "compute_influence_metrics_for_persona",
     "should_compute_influence_metrics",
     "adjust_theme_frequencies_for_prevalence",
+    "hydrate_theme_statement_documents",
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List
+import os
 
 
 def derive_detected_stakeholders_from_personas(
@@ -54,7 +55,16 @@ def derive_detected_stakeholders_from_personas(
                 "influence_metrics": intel.get("influence_metrics", {}),
             }
         )
-    return out
+    # Enforce MAX_STAKEHOLDERS limit with confidence-based ordering
+    try:
+        max_h = int(os.getenv("MAX_STAKEHOLDERS", "4"))
+    except Exception:
+        max_h = 4
+    try:
+        out_sorted = sorted(out, key=lambda d: float((d or {}).get("confidence_score", 0) or 0.0), reverse=True)
+    except Exception:
+        out_sorted = out
+    return out_sorted[:max_h]
 
 
 from typing import Any, Dict, List
@@ -98,6 +108,21 @@ def create_ui_safe_stakeholder_intelligence(stakeholder_intelligence):
                                     ),
                                 }
                             )
+            # Enforce MAX_STAKEHOLDERS limit with confidence-based ordering
+            try:
+                max_h = int(os.getenv("MAX_STAKEHOLDERS", "4"))
+            except Exception:
+                max_h = 4
+            try:
+                detected_stakeholders = sorted(
+                    detected_stakeholders,
+                    key=lambda d: float((d or {}).get("confidence_score", 0) or 0.0),
+                    reverse=True,
+                )
+            except Exception:
+                pass
+            detected_stakeholders = detected_stakeholders[:max_h]
+
             ui = {
                 "detected_stakeholders": detected_stakeholders,
                 "total_stakeholders": len(detected_stakeholders),

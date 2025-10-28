@@ -12,7 +12,6 @@ import { generatePRD } from '@/lib/api/prd';
 import type { DetailedAnalysisResult, UploadResponse, AnalysisResponse, PRDResponse } from '@/types/api';
  // Rem-addd UploadResponse, AnalysisResponse
 import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
 
 /**
  * Upload Action
@@ -56,25 +55,8 @@ export async function uploadAction(formData: FormData): Promise<{ success: true;
       // FileReader is a browser-only API and cannot be used in server actions
     }
 
-    // Get auth token using Clerk's server-side auth
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      return {
-        success: false,
-        error: 'Not authenticated - no user ID'
-      };
-    }
-
-    const authToken = await getToken();
-
-    if (!authToken) {
-      return {
-        success: false,
-        error: 'Not authenticated - no token'
-      };
-    }
-
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
 
@@ -461,24 +443,8 @@ export async function analyzeAction(
   llmProvider: 'openai' | 'gemini' = 'gemini'
 ): Promise<{ success: true; analysisResponse: AnalysisResponse } | { success: false; error: string }> {
   try {
-    // Get auth token using Clerk's server-side auth
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      return {
-        success: false,
-        error: 'Not authenticated - no user ID'
-      };
-    }
-
-    const authToken = await getToken();
-
-    if (!authToken) {
-      return {
-        success: false,
-        error: 'Not authenticated - no token'
-      };
-    }
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Call backend directly instead of going through frontend API route
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -549,21 +515,8 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
   console.log(`[getServerSideAnalysis] Received analysisId: ${analysisId}`); // DEBUG LOG
 
   try {
-    // Get auth token using Clerk's server-side auth
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      console.error('[getServerSideAnalysis] No user ID available for server fetch');
-      return null;
-    }
-
-    const authToken = await getToken();
-
-    if (!authToken) {
-      console.error('[getServerSideAnalysis] No auth token available for server fetch');
-      return null;
-    }
-
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
 
@@ -584,21 +537,8 @@ export async function getServerSideAnalysis(analysisId: string): Promise<Detaile
  */
 export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResult | null> {
   try {
-    // Use Clerk's server-side auth instead of cookies
-    const { userId, getToken } = await auth();
-
-    let authToken: string | null = null;
-
-    if (userId) {
-      authToken = await getToken();
-    }
-
-    // Fallback to development token if Clerk auth fails
-    if (!authToken) {
-      console.log('[getLatestCompletedAnalysis] Using development token fallback');
-      authToken = 'DEV_TOKEN_REDACTED'; // Development token that matches backend expectations
-    }
-
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
 
@@ -662,30 +602,8 @@ export async function getLatestCompletedAnalysis(): Promise<DetailedAnalysisResu
  */
 export async function fetchAnalysisHistory(page: number = 1, pageSize: number = 10) {
   try {
-    // Get auth token using Clerk's server-side auth
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      return {
-        success: false,
-        error: 'Not authenticated - no user ID',
-        items: [],
-        totalItems: 0,
-        currentPage: page
-      };
-    }
-
-    const authToken = await getToken();
-
-    if (!authToken) {
-      return {
-        success: false,
-        error: 'Not authenticated - no token',
-        items: [],
-        totalItems: 0,
-        currentPage: page
-      };
-    }
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Set the token on the API client
     apiClient.setAuthToken(authToken);
@@ -724,20 +642,8 @@ export async function getServerSidePRD(analysisId: string, forceRegenerate: bool
   try {
     console.log(`[getServerSidePRD] Generating PRD for analysis ID: ${analysisId}, forceRegenerate: ${forceRegenerate}`);
 
-    // Get auth token using Clerk's server-side auth
-    const { userId, getToken } = await auth();
-
-    if (!userId) {
-      console.error('[getServerSidePRD] No user ID available');
-      return null;
-    }
-
-    const authToken = await getToken();
-
-    if (!authToken) {
-      console.error('[getServerSidePRD] No auth token available');
-      return null;
-    }
+    // Use development token (Clerk removed)
+    const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
     // Set the token on the API client
     apiClient.setAuthToken(authToken);

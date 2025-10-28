@@ -1083,6 +1083,77 @@ class NLPProcessor:
                     }
                 ]
 
+            # Enrich themes with statements_detailed by attributing quotes to source interviews
+            try:
+                def _normalize_txt(s: str) -> str:
+                    try:
+                        return " ".join((s or "").lower().strip().split())
+                    except Exception:
+                        return s or ""
+
+                # Build simple per-interview text index with synthetic doc_ids when missing
+                doc_index: list[tuple[str, str]] = []  # (document_id, text_lower)
+                if isinstance(data, dict) and isinstance(data.get("interviews"), list):
+                    for i, iv in enumerate(data["interviews"]):
+                        try:
+                            did = (
+                                iv.get("document_id")
+                                or iv.get("id")
+                                or f"interview_{i+1}"
+                            )
+                            parts: list[str] = []
+                            if isinstance(iv.get("responses"), list):
+                                for r in iv["responses"]:
+                                    ans = r.get("answer") or r.get("response") or ""
+                                    if isinstance(ans, str) and ans.strip():
+                                        parts.append(ans)
+                            elif isinstance(iv.get("text"), str):
+                                parts.append(iv["text"])
+                            if parts:
+                                doc_index.append((str(did), _normalize_txt("\n\n".join(parts))))
+                        except Exception:
+                            continue
+                else:
+                    # Single-document fallback using combined_text
+                    doc_index.append(("original_text", _normalize_txt(combined_text)))
+
+                def _infer_doc_id_for_quote(q: str) -> str:
+                    qn = _normalize_txt(q)
+                    if not qn:
+                        return "original_text"
+                    for did, txt in doc_index:
+                        # Simple containment match; could be extended with fuzzy matching
+                        if qn in txt or (len(qn) > 30 and qn[:30] in txt):
+                            return did
+                    return "original_text"
+
+                # Apply attribution to enhanced themes
+                for t in enhanced_themes:
+                    if not isinstance(t, dict):
+                        continue
+                    stmts = (
+                        t.get("statements")
+                        or t.get("examples")
+                        or t.get("example_quotes")
+                        or t.get("evidence")
+                    )
+                    if not isinstance(stmts, list) or not stmts:
+                        continue
+                    detailed = []
+                    for s in stmts:
+                        if isinstance(s, dict):
+                            q = s.get("quote") or s.get("text")
+                        else:
+                            q = s
+                        if not isinstance(q, str) or not q.strip():
+                            continue
+                        did = _infer_doc_id_for_quote(q)
+                        detailed.append({"quote": q, "document_id": did})
+                    if detailed:
+                        t["statements_detailed"] = detailed
+            except Exception as _e:
+                logger.warning(f"[THEME_DOC_ATTR] Failed to attribute theme statements to documents: {_e}")
+
             # Combine results with enhanced themes as the primary themes
             results = {
                 "themes": enhanced_themes,  # Use enhanced themes as the primary themes

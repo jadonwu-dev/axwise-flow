@@ -5,7 +5,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Loader2, Upload } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
-import { useAuth } from '@clerk/nextjs';
 import { apiClient } from '@/lib/apiClient';
 import AnalysisProgress from '@/components/AnalysisProgress';
 import AnalysisOptions from './AnalysisOptions';
@@ -17,7 +16,6 @@ import { UploadResponse, AnalysisResponse } from '@/types/api';
  */
 const UploadTab = (): JSX.Element => { // Add return type
   const { showToast } = useToast();
-  const { isSignedIn, getToken } = useAuth();
 
   // Upload and analysis state
   const [file, setFile] = useState<File | null>(null);
@@ -29,28 +27,14 @@ const UploadTab = (): JSX.Element => { // Add return type
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [llmProvider, setLlmProvider] = useState<'openai' | 'gemini'>('gemini');
 
-  // Initialize authentication
+  // Initialize authentication (OSS mode: use development token)
   useEffect(() => {
-    const initAuth = async () => {
-      if (isSignedIn) {
-        try {
-          const token = await getToken();
-          if (token) {
-            setAuthToken(token);
-            apiClient.setAuthToken(token);
-
-            // Store token in cookie for server actions
-            document.cookie = `auth_token=${token}; path=/; secure; samesite=strict`;
-          }
-        } catch (error) {
-          console.error('Failed to get auth token:', error);
-          showToast('Authentication failed. Please sign in again.', { variant: 'error' });
-        }
-      }
-    };
-
-    initAuth();
-  }, [isSignedIn, getToken, showToast]);
+    const token = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
+    setAuthToken(token);
+    apiClient.setAuthToken(token);
+    // Store token in cookie for server actions
+    document.cookie = `auth_token=${token}; path=/; samesite=lax`;
+  }, [showToast]);
 
   // Handle file selection from the FileUpload component
   const handleFileChange = (selectedFile: File, isText: boolean): void => { // Add return type
@@ -66,8 +50,8 @@ const UploadTab = (): JSX.Element => { // Add return type
       return;
     }
 
-    if (!isSignedIn || !authToken) {
-      showToast('Please sign in to upload files', { variant: 'error' });
+    if (!authToken) {
+      showToast('Missing auth token', { variant: 'error' });
       return;
     }
 
@@ -100,8 +84,8 @@ const UploadTab = (): JSX.Element => { // Add return type
       return;
     }
 
-    if (!isSignedIn || !authToken) {
-      showToast('Please sign in to start analysis', { variant: 'error' });
+    if (!authToken) {
+      showToast('Missing auth token', { variant: 'error' });
       return;
     }
 
@@ -152,7 +136,7 @@ const UploadTab = (): JSX.Element => { // Add return type
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
             <Button
               onClick={handleUpload}
-              disabled={!file || loading || !isSignedIn || !authToken}
+              disabled={!file || loading || !authToken}
               className="flex-1"
             >
               {loading && !uploadResponse ? (
@@ -160,8 +144,6 @@ const UploadTab = (): JSX.Element => { // Add return type
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Uploading...
                 </>
-              ) : !isSignedIn ? (
-                'Sign in to Upload'
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
@@ -172,7 +154,7 @@ const UploadTab = (): JSX.Element => { // Add return type
 
             <Button
               onClick={handleStartAnalysis}
-              disabled={!uploadResponse || loading || !isSignedIn || !authToken}
+              disabled={!uploadResponse || loading || !authToken}
               variant="secondary"
               className="flex-1"
             >
@@ -181,8 +163,6 @@ const UploadTab = (): JSX.Element => { // Add return type
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Starting Analysis...
                 </>
-              ) : !isSignedIn ? (
-                'Sign in to Analyze'
               ) : (
                 'Start Analysis'
               )}

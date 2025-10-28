@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSubscriptionInfo, resetSubscription } from '@/lib/api/subscription';
 import { useToast } from '@/components/providers/toast-provider';
-import { useUser } from '@clerk/nextjs';
 import { RefreshCw } from 'lucide-react';
 
 interface SubscriptionInfo {
@@ -31,12 +30,10 @@ export function SubscriptionStatus() {
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
   const { showToast } = useToast();
-  const { user } = useUser();
-
-  // Check if we're in development mode and user is admin
+  // OSS mode: no Clerk user available
+  // Check if we're in development mode to show debug tools
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  const isAdmin = user?.primaryEmailAddress?.emailAddress === 'vitalijs@axwise.de';
-  const showDebugTools = isDevelopment && isAdmin;
+  const showDebugTools = isDevelopment;
 
   const fetchSubscriptionInfo = async () => {
     try {

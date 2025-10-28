@@ -1,6 +1,5 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { ReactNode, useEffect, createContext } from 'react';
 
@@ -18,28 +17,16 @@ interface DashboardAuthProviderProps {
   children: ReactNode;
 }
 
-export const DashboardAuthProvider = ({ children }: DashboardAuthProviderProps): JSX.Element => { // Add return type
-  const { userId, isLoaded } = useAuth();
-  const router = useRouter();
-  
-  // Handle authentication redirection
-  useEffect(() => {
-    if (isLoaded && !userId) {
-      router.push('/sign-in');
-    }
-  }, [isLoaded, userId, router]);
-  
-  // If still loading auth, show minimal loading UI
-  if (!isLoaded) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
-  }
-  
+export const DashboardAuthProvider = ({ children }: DashboardAuthProviderProps): JSX.Element => {
+  // OSS mode: always authenticated with a static user ID
+  const userId = 'oss-mode-user';
+
   return (
-    <DashboardAuthContext.Provider value={{ 
-      userId: userId || null, 
-      isAuthenticated: !!userId 
+    <DashboardAuthContext.Provider value={{
+      userId,
+      isAuthenticated: true
     }}>
       {children}
     </DashboardAuthContext.Provider>
   );
-}; 
+};

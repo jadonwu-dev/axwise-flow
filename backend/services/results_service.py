@@ -434,6 +434,7 @@ class ResultsService:
                     get_filename_for_data_id,
                     create_ui_safe_stakeholder_intelligence,
                     adjust_theme_frequencies_for_prevalence,
+                    hydrate_theme_statement_documents,
                 )
 
                 flattened = assemble_flattened_results(
@@ -441,6 +442,19 @@ class ResultsService:
                     persona_list,
                     sentiment_overview_default=DEFAULT_SENTIMENT_OVERVIEW,
                 )
+
+                # Enrich theme statements with inferred document_id for prevalence robustness
+                try:
+                    if isinstance(flattened.get("themes"), list):
+                        flattened["themes"] = hydrate_theme_statement_documents(
+                            flattened["themes"], personas_ssot
+                        )
+                    if isinstance(flattened.get("enhanced_themes"), list):
+                        flattened["enhanced_themes"] = hydrate_theme_statement_documents(
+                            flattened["enhanced_themes"], personas_ssot
+                        )
+                except Exception:
+                    pass
 
                 # Fix mis-scaled theme frequencies that look like normalized weights (sum≈1)
                 try:
@@ -591,6 +605,8 @@ class ResultsService:
             # Re-raise HTTP exceptions
             raise
         except Exception as e:
+            # Rollback the transaction to clean up failed state
+            self.db.rollback()
             logger.error(f"Error retrieving results: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Internal server error: {str(e)}"
@@ -666,6 +682,8 @@ class ResultsService:
             return formatted_results
 
         except Exception as e:
+            # Rollback the transaction to clean up failed state
+            self.db.rollback()
             logger.error(f"Error retrieving analyses: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Internal server error: {str(e)}"

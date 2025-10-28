@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -52,7 +51,6 @@ export const SimplePersonaList: React.FC<SimplePersonaListProps> = ({
   const [personas, setPersonas] = useState<SimplePersona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { getToken, isSignedIn } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
   const fetchSimplifiedPersonas = async () => {
@@ -60,16 +58,8 @@ export const SimplePersonaList: React.FC<SimplePersonaListProps> = ({
       setLoading(true);
       setError(null);
 
-      // Check if user is signed in
-      if (!isSignedIn) {
-        throw new Error('Authentication required. Please sign in to view personas.');
-      }
-
-      // Get authentication token from Clerk
-      const token = await getToken();
-      if (!token) {
-        throw new Error('Authentication token not available. Please sign in again.');
-      }
+      // OSS mode: Use development token
+      const token = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 
       const response = await fetch(API_ENDPOINTS.GET_SIMPLIFIED_PERSONAS(resultId), {
         method: 'GET',
@@ -129,26 +119,12 @@ export const SimplePersonaList: React.FC<SimplePersonaListProps> = ({
         <CardContent className="flex items-center justify-center py-12">
           <div className="text-center">
             <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-600" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              {error.includes('Authentication') ? 'Authentication Required' : 'Error Loading Personas'}
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Personas</h3>
             <p className="text-red-600 mb-4">Error loading personas: {error}</p>
-            {error.includes('Authentication') ? (
-              <div className="space-y-2">
-                <Button onClick={() => window.location.href = '/sign-in'} variant="default" size="sm">
-                  Sign In
-                </Button>
-                <Button onClick={fetchSimplifiedPersonas} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Try Again
-                </Button>
-              </div>
-            ) : (
-              <Button onClick={fetchSimplifiedPersonas} variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
-            )}
+            <Button onClick={fetchSimplifiedPersonas} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
           </div>
         </CardContent>
       </Card>
