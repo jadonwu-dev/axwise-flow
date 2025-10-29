@@ -635,7 +635,7 @@ If you determine that questions should be generated, include "GENERATE_QUESTIONS
                     repair_prompt = f"""
 You responded with a validation step before all required fields were present.
 Missing fields: {{'target_customer' if missing_target else ''}} {{'problem' if missing_problem else ''}} {{'location' if missing_location else ''}}.
-Write EXACTLY ONE short question to elicit the missing field: { '{ask_for}' }.
+Write EXACTLY ONE short question to elicit the missing field: {ask_for}.
 - No preface, no summary, no validation prompts
 - 1 sentence, <= 20 words
 Current business idea (if any): {context.business_idea or 'N/A'}

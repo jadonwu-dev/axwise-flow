@@ -61,6 +61,7 @@ class BusinessContext(BaseModel):
     target_customer: str
     problem: str
     industry: Optional[str] = "general"
+    location: Optional[str] = None
 
 
 class Stakeholder(BaseModel):

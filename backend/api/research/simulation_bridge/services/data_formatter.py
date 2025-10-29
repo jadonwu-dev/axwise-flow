@@ -63,6 +63,7 @@ class DataFormatter:
                 "target_customer": business_context.target_customer,
                 "problem": business_context.problem,
                 "industry": business_context.industry,
+                "location": business_context.location,
             },
             "data_source": "ai_simulation",
             "format_version": "1.0",

@@ -594,7 +594,8 @@ export default function InterviewSimulationPage() {
           business_idea: session.business_idea || '',
           target_customer: session.target_customer || '',
           problem: session.problem || '',
-          industry: session.industry || 'general'
+          industry: session.industry || 'general',
+          location: (session as any).location || undefined,
         };
 
         console.log('✅ Transformed questionnaire data:', questionnaireData);
@@ -605,10 +606,11 @@ export default function InterviewSimulationPage() {
         const metaBC: any = (questionnaireMessage as any)?.metadata?.businessContext;
         if (metaBC) {
           businessContext = {
-            business_idea: businessContext.business_idea || metaBC.business_idea || metaBC.businessIdea || '',
-            target_customer: businessContext.target_customer || metaBC.target_customer || metaBC.targetCustomer || '',
-            problem: businessContext.problem || metaBC.problem || '',
-            industry: businessContext.industry || metaBC.industry || 'general'
+            business_idea: businessContext.business_idea || metaBC.business_idea || (metaBC as any).businessIdea || '',
+            target_customer: businessContext.target_customer || metaBC.target_customer || (metaBC as any).targetCustomer || '',
+            problem: businessContext.problem || (metaBC as any).problem || '',
+            industry: businessContext.industry || (metaBC as any).industry || 'general',
+            location: businessContext.location || (metaBC as any).location || (metaBC as any).region || undefined,
           };
           console.log('✅ Business context after metadata fallback:', businessContext);
         }

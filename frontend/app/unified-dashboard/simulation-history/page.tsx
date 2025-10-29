@@ -60,6 +60,7 @@ interface SelectedInterview {
     target_customer?: string;
     problem?: string;
     industry?: string;
+    location?: string;
   };
 }
 
@@ -191,11 +192,11 @@ export default function SimulationHistoryPage(): JSX.Element {
 
             // Try to get detailed data
             let stakeholders: StakeholderGroup[] = [];
-            let businessContext = '';
+            let businessContext: any = '';
 
             if (source === 'localStorage' && simulationData.interviews) {
               // Use localStorage data directly
-              businessContext = simulationData.business_context || '';
+              businessContext = simulationData.business_context || simulationData.metadata?.business_context || '';
 
               // Group interviews by stakeholder type
               const stakeholderMap = new Map<string, InterviewData[]>();
@@ -255,7 +256,7 @@ export default function SimulationHistoryPage(): JSX.Element {
                 const detailResponse = await fetch(`/api/research/simulation-bridge/completed/${simulationId}`);
                 if (detailResponse.ok) {
                   const detailData = await detailResponse.json();
-                  businessContext = detailData.business_context || '';
+                  businessContext = detailData.business_context || detailData.metadata?.business_context || '';
 
                   // Group interviews by stakeholder type
                   const stakeholderMap = new Map<string, InterviewData[]>();
@@ -320,16 +321,17 @@ export default function SimulationHistoryPage(): JSX.Element {
             const totalPersonas = (simulationData?.metadata?.total_personas ?? data.total_personas ?? 0);
             const totalInterviews = (simulationData?.metadata?.total_interviews ?? data.total_interviews ?? 0);
 
+            const businessContextStr = typeof businessContext === 'string' ? businessContext : JSON.stringify(businessContext);
             return {
               id: simulationId,
-              displayName: businessContext
-                ? `${businessContext.split(' ').slice(0, 4).join(' ')}...`
+              displayName: businessContextStr
+                ? `${businessContextStr.split(' ').slice(0, 4).join(' ')}...`
                 : `Simulation ${simulationId.slice(0, 8)}`,
               createdAt,
               status: (source === 'localStorage' ? (simulationData.success ? 'completed' : 'failed') : (data.success ? 'completed' : 'failed')),
               totalPersonas,
               totalInterviews,
-              businessContext,
+              businessContext: businessContextStr,
               stakeholders,
             };
           } catch (error) {
@@ -966,6 +968,10 @@ export default function SimulationHistoryPage(): JSX.Element {
                                   {context.industry && (
                                     <div><span className="font-medium">Industry:</span> {context.industry}</div>
                                   )}
+                                  {context.location && (
+                                    <div><span className="font-medium">Location:</span> {context.location}</div>
+                                  )}
+
                                 </div>
                               );
                             } else {
@@ -983,6 +989,9 @@ export default function SimulationHistoryPage(): JSX.Element {
                                   )}
                                   {parsed.industry && (
                                     <div><span className="font-medium">Industry:</span> {parsed.industry}</div>
+                                  )}
+                                  {parsed.location && (
+                                    <div><span className="font-medium">Location:</span> {parsed.location}</div>
                                   )}
                                 </div>
                               );

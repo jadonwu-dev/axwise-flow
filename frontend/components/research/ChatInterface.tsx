@@ -79,14 +79,14 @@ export function ChatInterface({ onComplete, onBack, loadSessionId }: ChatInterfa
 
     const controller = new AbortController();
     const fallback = [
-      'Venture studios using AI to speed up discovery in Germany and DACH for venture partners burdened by weeks of manual research',
-      'Research automation for B2B SaaS in the UK and DACH for product teams struggling with stakeholder mapping',
-      'Questionnaire generator for EU fintech founders and PMs to accelerate interview planning'
+      'Venture studios in the UK using AI to speed up discovery for partners burdened by weeks of manual research',
+      'Research automation for B2B SaaS product teams in the DACH region struggling with stakeholder mapping',
+      'Questionnaire generator for fintech founders in Berlin to accelerate interview planning'
     ];
 
     (async () => {
       try {
-        const res = await fetch('/api/research/conversation-routines/suggestions', { signal: controller.signal });
+        const res = await fetch('/api/research/conversation-routines/suggestions?prefer_regions=UK,DACH,EU', { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const suggestions = Array.isArray(data?.suggestions) && data.suggestions.length > 0 ? data.suggestions.slice(0,3) : fallback;

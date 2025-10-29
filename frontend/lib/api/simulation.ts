@@ -21,6 +21,7 @@ export interface BusinessContext {
   target_customer: string;
   problem: string;
   industry?: string;
+  location?: string;
 }
 
 export interface Stakeholder {

@@ -78,6 +78,7 @@ export interface ResearchContext {
   questionsGenerated?: boolean;
   multiStakeholderConsidered?: boolean;
   multiStakeholderDetected?: boolean;
+  location?: string; // Added to keep region/location context
   detectedStakeholders?: {
     primary: string[];
     secondary: string[];
@@ -133,6 +134,7 @@ export interface ResearchSession {
   target_customer?: string;
   problem?: string;
   industry: string;
+  location?: string; // Added to store region/location
   stage: string;
   status: string;
   questions_generated: boolean;
@@ -944,6 +946,7 @@ export async function sendResearchChatMessage(request: ChatRequest): Promise<Cha
           target_customer: result.context?.target_customer || result.metadata?.extracted_context?.target_customer || existingSession?.target_customer,
           problem: result.context?.problem || result.metadata?.extracted_context?.problem || existingSession?.problem,
           industry: result.metadata?.extracted_context?.industry || existingSession?.industry || 'general',
+          location: result.context?.location || result.context?.region || result.metadata?.extracted_context?.location || result.metadata?.extracted_context?.region || existingSession?.location,
           stage: result.metadata?.extracted_context?.stage || existingSession?.stage || 'initial',
           status: 'active',
           questions_generated: hasNonEmptyQuestions || existingSession?.questions_generated || false,
