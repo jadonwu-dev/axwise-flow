@@ -21,9 +21,21 @@ export async function GET(
     // Get the backend URL from environment
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-    // Get query parameters
+    // Get and normalize query parameters; treat timestamp/regeneratePRD as force_regenerate
     const { searchParams } = new URL(request.url);
-    const queryString = searchParams.toString();
+    const forwardedParams = new URLSearchParams(searchParams);
+
+    const hasExplicitForce = forwardedParams.get('force_regenerate') === 'true';
+    const hasTimestamp = forwardedParams.has('timestamp');
+    const hasRegenFlag = forwardedParams.get('regeneratePRD') === 'true';
+    if (!hasExplicitForce && (hasTimestamp || hasRegenFlag)) {
+      forwardedParams.set('force_regenerate', 'true');
+    }
+    // Do not forward UI-only flags to backend
+    forwardedParams.delete('timestamp');
+    forwardedParams.delete('regeneratePRD');
+
+    const queryString = forwardedParams.toString();
 
     console.log('PRD API: Using development token (development mode only)');
     console.log('Proxying to backend:', `${backendUrl}/api/prd/${params.id}${queryString ? `?${queryString}` : ''}`);

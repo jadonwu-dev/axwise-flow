@@ -90,6 +90,7 @@ try:
                 max_overflow=DB_MAX_OVERFLOW,
                 pool_timeout=DB_POOL_TIMEOUT,
                 pool_pre_ping=True,  # Verify connections before using them
+                pool_reset_on_return="rollback",  # Always ROLLBACK on connection return
                 connect_args={"application_name": "DesignAId Backend"},
             )
             logger.info("Using PostgreSQL database")
@@ -140,16 +141,39 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def get_db():
     """
     Dependency function to get a database session.
-    Used with FastAPI's dependency injection system.
+    Ensures the connection is in a clean state (rolls back aborted transactions)
+    and always closes the session. This prevents reusing a connection in
+    'InFailedSqlTransaction' state which would break subsequent requests.
 
     Yields:
         Session: A SQLAlchemy database session
     """
     db = SessionLocal()
     try:
+        # Proactively clear any failed transaction state on the checked-out connection
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as e:
+            logger.warning(f"DB ping failed at session start; attempting rollback: {e}")
+            try:
+                db.rollback()
+            except Exception as rb_e:
+                logger.error(f"Rollback after ping failure also failed: {rb_e}")
+            # After rollback, don't swallow the original error if ping still fails later
+
         yield db
+    except Exception:
+        # Make sure to rollback the session if any exception bubbles up through the dependency
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def run_migrations():
@@ -198,12 +222,12 @@ def create_tables():
     """
     try:
         # First try to run migrations
-        if run_migrations():
-            logger.info("Successfully applied migrations")
-            return True
-
-        # If migrations fail, fall back to creating tables directly
-        logger.warning("Falling back to direct table creation")
+        migrations_applied = run_migrations()
+        if migrations_applied:
+            logger.info("Successfully applied migrations; ensuring any missing tables are created via metadata")
+        else:
+            # If migrations fail, fall back to creating tables directly
+            logger.warning("Falling back to direct table creation")
 
         # Import models using centralized import mechanism to avoid registry conflicts
         try:
