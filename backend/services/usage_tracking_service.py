@@ -62,7 +62,7 @@ class UsageTrackingService:
         """
         self.db = db
         self.user = user
-        self.CLERK_...=***REMOVED***
+        self.clerk_service = ClerkService()
 
         # Ensure user has proper usage_data structure
         self._ensure_usage_data_initialized()

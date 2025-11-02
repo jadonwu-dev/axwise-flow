@@ -81,7 +81,7 @@ async def get_current_user(
         logger.info("OSS mode: Using default user_id since no dev token prefix detected")
 
     logger.info(
-        f"🔍 Authentication successful for user_id: {user_id}, ENABLE_CLERK_...=***REMOVED*** IS_PRODUCTION: {IS_PRODUCTION}"
+        f"🔍 Authentication successful for user_id: {user_id}, ENABLE_CLERK_VALIDATION: {ENABLE_CLERK_VALIDATION}, IS_PRODUCTION: {IS_PRODUCTION}"
     )
 
     # Get or create user

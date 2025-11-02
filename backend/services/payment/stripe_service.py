@@ -73,7 +73,7 @@ class StripeService:
 
         self.stripe = stripe
         logger.info("StripeService.__init__ - Initializing ClerkService...")
-        self.CLERK_...=***REMOVED***
+        self.clerk_service = ClerkService()
         logger.info("StripeService.__init__ completed successfully!")
 
     async def get_or_create_customer(self) -> str:

@@ -33,7 +33,7 @@ class AdminService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.CLERK_...=***REMOVED***
+        self.clerk_service = ClerkService()
 
     def is_admin(self, user: User) -> bool:
         """
@@ -55,7 +55,7 @@ class AdminService:
 
         # Check Clerk metadata for admin role
         try:
-            CLERK_...=***REMOVED***
+            clerk_user = self.clerk_service.get_user(user.user_id)
             if (
                 clerk_user
                 and clerk_user.get("publicMetadata", {}).get("role") == "admin"

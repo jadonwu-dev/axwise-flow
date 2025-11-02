@@ -45,7 +45,7 @@ try:
     
     # Try to initialize ClerkService (this might hang)
     print("Initializing ClerkService...")
-    CLERK_...=***REMOVED***
+    clerk_service = ClerkService()
     print("✅ ClerkService initialized successfully")
     
 except Exception as e:
