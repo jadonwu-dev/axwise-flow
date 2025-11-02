@@ -268,7 +268,7 @@ This project is licensed under the terms specified in the [LICENSE](LICENSE) fil
 
 ## 📞 Support
 
-- 📧 Email: support@axwise.de
+- 📧 Email: support@axwise.de or vitalijs@axwise.de
 - 🐛 Issues: [GitHub Issues](https://github.com/AxWise-GmbH/axwise-flow-oss/issues)
 - 📖 Documentation: [Wiki](https://github.com/AxWise-GmbH/axwise-flow-oss/wiki)
 
