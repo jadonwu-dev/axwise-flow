@@ -5,13 +5,14 @@ Get up and running with AxWise Flow in 5 minutes!
 ## Step 1: Prerequisites Check
 
 Ensure you have:
-- ✅ Python 3.11+ installed
-- ✅ PostgreSQL running
-- ✅ Gemini API Key
+- ✅ **Python 3.11** installed (not 3.13 - pandas 2.1.4 requires 3.11)
+- ✅ **Node.js 18+** and npm (for frontend)
+- ✅ **PostgreSQL 12+** running
+- ✅ **Gemini API Key** from Google
 
 ### Get a Gemini API Key
 
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+1. Visit [Google AI Studio](https://aistudio.google.com/app/api_keys)
 2. Sign in with your Google account
 3. Click "Create API Key"
 4. Copy your API key
@@ -33,31 +34,53 @@ psql -U postgres -l | grep axwise
 
 ## Step 3: Configure Environment
 
-The Gemini API key has already been added to `backend/.env.oss`:
+Edit `backend/.env.oss` and add your Gemini API key:
 
 ```bash
-GEMINI_API_KEY=***REMOVED***
+# Replace 'your_gemini_api_key_here' with your actual API key
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-If you need to use a different database configuration, edit `backend/.env.oss`:
+The default database configuration is:
 
 ```bash
-# Example: Different database credentials
-DATABASE_URL=***REDACTED***
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axwise
+DB_USER=postgres
+DB_PASSWORD=postgres
 ```
+
+If you need different database credentials, update these values in `backend/.env.oss`.
 
 ## Step 4: Install Dependencies
+
+### Backend Dependencies
 
 ```bash
 # Navigate to backend directory
 cd backend
 
-# Create virtual environment (recommended)
-python3 -m venv venv
+# Create virtual environment with Python 3.11
+python3.11 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Upgrade pip
+pip install --upgrade pip
 
 # Install Python packages
 pip install -r requirements.txt
+
+# Return to repo root
+cd ..
+```
+
+### Frontend Dependencies
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install npm packages
+npm install
 
 # Return to repo root
 cd ..
@@ -80,11 +103,11 @@ You should see output like:
 Repository root: /path/to/axwise-flow-oss
 Backend directory: /path/to/axwise-flow-oss/backend
 
-Loading environment from .env.oss...
-✓ Environment variables loaded
+Ensuring axwise environment (venv + .env) is loaded...
+✓ Environment variables present
 ✓ OSS_MODE: true
-✓ DATABASE_URL=***REDACTED***
-✓ GEMINI_API_KEY=***REMOVED***
+✓ DATABASE_URL: postgresql://postgres:postgres@localhost:5432/axwise
+✓ GEMINI_API_KEY: AIzaSyAWUU...
 
 ========================================
   Starting Backend Server
@@ -133,33 +156,32 @@ Open your browser and visit:
 2. Explore the available endpoints
 3. Try the "Try it out" feature on any endpoint
 
-### Set Up the Frontend (Optional)
+### Set Up the Frontend
 
-Option A (recommended)
+The frontend provides a web UI for uploading interviews, viewing analysis results, and exploring personas.
+
+**Start the frontend:**
 
 ```bash
 # From repository root
-scripts/oss/run_frontend_oss.sh
-```
-
-This will:
-- Copy frontend/.env.local.oss to frontend/.env.local
-- Ensure NEXT_PUBLIC_...=***REMOVED***
-- Install npm deps if needed
-- Start Next.js on http://localhost:3000
-
-Option B (manual)
-
-```bash
 cd frontend
-npm install
+
+# Copy the OSS environment configuration
 cp .env.local.oss .env.local
-# Ensure:
-# NEXT_PUBLIC_...=***REMOVED***
+
+# Start the development server
 npm run dev
 ```
 
-Then visit http://localhost:3000
+The frontend will be available at **http://localhost:3000**
+
+**Key features:**
+- 📊 **Unified Dashboard** - Overview of all research activities
+- 💬 **Research Chat** - Interactive AI-powered research assistant
+- 🎭 **Interview Simulation** - Simulate stakeholder interviews
+- 📤 **Upload & Analyze** - Upload customer interviews for analysis
+- 📈 **Visualizations** - View personas, insights, and themes
+- 📜 **Activity History** - Track all analysis activities
 
 ## Troubleshooting
 

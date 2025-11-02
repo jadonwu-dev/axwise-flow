@@ -6,26 +6,31 @@ This directory contains helper scripts for running AxWise Flow in OSS (Open Sour
 
 ## Prerequisites
 
-Before running the backend in OSS mode, ensure you have:
+Before running AxWise Flow in OSS mode, ensure you have:
 
-1. **Python 3.11+** installed
-2. **PostgreSQL** installed and running
-3. **Gemini API Key** from Google AI Studio
+1. **Python 3.11** (not 3.13 - pandas 2.1.4 requires Python 3.11)
+2. **PostgreSQL 12+** installed and running
+3. **Node.js 18+** and npm (for frontend)
+4. **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/api_keys)
 
 ## Quick Start
 
 ### 1. Set up the environment
 
-The `.env.oss` file in the `backend/` directory contains the configuration for OSS mode. Update it with your credentials:
+Edit `backend/.env.oss` and add your Gemini API key:
 
 ```bash
-# In repo root
-export OSS_MODE=true \
-  DATABASE_URL=***REDACTED*** \
-  GEMINI_API_KEY=***REMOVED***
+# Get your API key from: https://aistudio.google.com/app/api_keys
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Or edit `backend/.env.oss` directly with your Gemini API key.
+The default database configuration is:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axwise
+DB_USER=postgres
+DB_PASSWORD=postgres
+```
 
 ### 2. Create the PostgreSQL database
 
@@ -37,16 +42,33 @@ createdb axwise
 psql -U postgres -c "CREATE DATABASE axwise;"
 ```
 
-### 3. Install Python dependencies
+### 3. Install dependencies
 
+**Backend:**
 ```bash
-# Create a virtual environment (recommended)
-python -m venv venv
+cd backend
+
+# Create a virtual environment with Python 3.11
+python3.11 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
+# Upgrade pip
+pip install --upgrade pip
+
 # Install dependencies
-cd backend
 pip install -r requirements.txt
+
+cd ..
+```
+
+**Frontend:**
+```bash
+cd frontend
+
+# Install npm packages
+npm install
+
+cd ..
 ```
 
 ### 4. Run the backend
@@ -86,7 +108,7 @@ The following environment variables are configured in `backend/.env.oss`:
 | `UVICORN_PORT` | Backend server port | `8000` |
 | `ENABLE_CLERK_VALIDATION` | Enable Clerk authentication | `false` (disabled in OSS mode) |
 
-##***REMOVED*** Configuration
+### Database Configuration
 
 The default database configuration expects:
 - **Host**: localhost
@@ -97,19 +119,23 @@ The default database configuration expects:
 
 You can modify these in `backend/.env.oss` if your PostgreSQL setup is different.
 
+### Frontend Configuration (Optional)
 
-### Frontend environment (optional)
+The Next.js frontend is configured via `frontend/.env.local.oss`:
 
-For the Next.js UI you also do not need to touch individual `route.ts`/`page.tsx` files. Configure only `frontend/.env.local.oss` and the scripts will copy it to `.env.local`:
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_ENABLE_CLERK_AUTH=false
+NEXT_PUBLIC_ENABLE_ANALYTICS=false
+NEXT_PUBLIC_OSS_MODE=true
+NEXT_PUBLIC_DEV_AUTH_TOKEN=dev_test_token_local
+```
 
-- `NEXT_PUBLIC_...=***REMOVED***
-- `NEXT_PUBLIC_...=***REMOVED***
-- `NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED***
-- Optional: `NEXT_PUBLIC_...=***REMOVED*** (defaults to `DEV_TOKEN_REDACTED`)
-
-Notes:
-- The frontend automatically attaches the dev token via shared API helpers; the backend accepts any token starting with `dev_test_token_` in OSS mode.
-- No per-file edits are required to enable auth-less OSS mode.
+**Notes:**
+- No per-file edits required - all configuration is in environment files
+- The frontend automatically attaches dev tokens via shared API helpers
+- The backend accepts any token starting with `dev_test_token_` in OSS mode
+- Authentication is disabled in OSS mode for simplified local development
 
 ## Troubleshooting
 

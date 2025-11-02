@@ -28,10 +28,10 @@ AxWise Flow OSS is an open‑source, API‑first backend with an optional Next.j
 
 ### Prerequisites
 
-- Python 3.11+
-- PostgreSQL 12+
-- Node.js 18+ (for frontend)
-- Gemini API Key ([Get one here](https://aistudio.google.com/app/api-keys))
+- **Python 3.11** (not 3.13 - pandas 2.1.4 requires Python 3.11)
+- **PostgreSQL 12+** (running and accessible)
+- **Node.js 18+** and npm (for frontend)
+- **Gemini API Key** ([Get one here](https://aistudio.google.com/app/api_keys))
 
 ### Backend Setup
 
@@ -50,21 +50,23 @@ AxWise Flow OSS is an open‑source, API‑first backend with an optional Next.j
 
    Edit `backend/.env.oss` and add your Gemini API key:
    ```bash
-   GEMINI_API_KEY=***REMOVED***
+   # Get your API key from: https://aistudio.google.com/app/api_keys
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
 
-   Or export environment variables:
+   The default database configuration is:
    ```bash
-   export OSS_MODE=true \
-     DATABASE_URL=***REDACTED*** \
-     GEMINI_API_KEY=***REMOVED***
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axwise
+   DB_USER=postgres
+   DB_PASSWORD=postgres
    ```
 
 4. **Install Python dependencies**
    ```bash
    cd backend
-   python -m venv venv
+   python3.11 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install --upgrade pip
    pip install -r requirements.txt
    cd ..
    ```
@@ -90,47 +92,58 @@ AxWise Flow OSS is an open‑source, API‑first backend with an optional Next.j
 
 ### Frontend Setup (Optional)
 
-Option A (recommended)
+The frontend provides a web UI for the AxWise Flow platform.
+
 ```bash
 # From repository root
-scripts/oss/run_frontend_oss.sh
-```
-This will:
-- Copy frontend/.env.local.oss to frontend/.env.local
-- Ensure NEXT_PUBLIC_...=***REMOVED***
-- Install npm deps if needed
-- Start Next.js on http://localhost:3000
-
-Option B (manual)
-```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Copy OSS environment configuration
 cp .env.local.oss .env.local
-# Ensure:
-# NEXT_PUBLIC_...=***REMOVED***
+
+# Start the development server
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser
+Open http://localhost:3000 in your browser to access:
+- 📊 Unified Dashboard
+- 💬 Research Chat
+- 🎭 Interview Simulation
+- 📤 Upload & Analyze Interviews
+- 📈 Visualizations (Personas, Insights, Themes)
+- 📜 Activity History
 
-### Minimal environment you need for a local showcase (no per‑file edits)
+### Environment Configuration
 
-You do not need to set environment variables inside each `route.ts` or `page.tsx`. The code reads configuration from the env files and shared helpers.
+All configuration is managed through environment files - no per-file edits required.
 
-- Backend (edit `backend/.env.oss`):
-  - `OSS_MODE=true`
-  - `DATABASE_URL=***REDACTED***
-  - `GEMINI_API_KEY=***REMOVED***
+**Backend** (`backend/.env.oss`):
+```bash
+OSS_MODE=true
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axwise
+DB_USER=postgres
+DB_PASSWORD=postgres
+GEMINI_API_KEY=your_gemini_api_key_here
+ENABLE_CLERK_VALIDATION=false
+```
 
-- Frontend (edit `frontend/.env.local.oss`):
-  - `NEXT_PUBLIC_...=***REMOVED***
-  - `NEXT_PUBLIC_...=***REMOVED***
-  - `NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED***
-  - Optional: `NEXT_PUBLIC_...=***REMOVED*** (defaults to `DEV_TOKEN_REDACTED` if omitted)
+**Frontend** (`frontend/.env.local.oss`):
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_ENABLE_CLERK_AUTH=false
+NEXT_PUBLIC_ENABLE_ANALYTICS=false
+NEXT_PUBLIC_OSS_MODE=true
+NEXT_PUBLIC_DEV_AUTH_TOKEN=dev_test_token_local
+```
 
-Notes:
-- In OSS mode the backend accepts development tokens that start with `dev_test_token_`; the frontend injects this token automatically into API calls via shared helpers.
-- No changes to individual routes/pages are required for auth in OSS mode.
+**Notes:**
+- In OSS mode, authentication is disabled for simplified local development
+- The backend accepts development tokens starting with `dev_test_token_`
+- The frontend automatically injects auth tokens via shared helpers
+- No changes to individual routes/pages are required
 
 
 ## 📚 Documentation
@@ -255,11 +268,12 @@ This project is licensed under the terms specified in the [LICENSE](LICENSE) fil
 2. Verify database exists: `psql -l | grep axwise`
 3. Check Python dependencies: `pip install -r backend/requirements.txt`
 
-##***REMOVED*** connection errors
+### Database connection errors
 
 1. Verify DATABASE_URL in `backend/.env.oss`
-2. Check PostgreSQL credentials
-3. Ensure database exists: `createdb axwise`
+2. Check PostgreSQL is running: `pg_isready`
+3. Check PostgreSQL credentials (default: postgres/postgres)
+4. Ensure database exists: `createdb axwise`
 
 ### API key errors
 
