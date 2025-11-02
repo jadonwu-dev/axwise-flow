@@ -88,9 +88,9 @@ echo "Repo root: $REPO_ROOT"
 echo "Python:   ${PY_VER:-unknown} ($WHICH_PY)"
 echo "Venv:     ${VENV_DIR:-none}"
 echo "OSS_MODE: ${OSS_MODE:-}"
-echo "DB URL:   ${DATABASE_URL=***REDACTED***
+echo "DB URL:   ${DATABASE_URL:-not set}"
 if [ -n "$GEMINI_API_KEY" ]; then
-  echo "GEMINI:   ${GEMINI_API_KEY=***REMOVED***"
+  echo "GEMINI:   ${GEMINI_API_KEY:0:10}..."
 else
   echo "GEMINI:   (not set)"
 fi
