@@ -37,7 +37,7 @@ declare module '*.svg' {
 // Add support for importing environment variables
 declare namespace NodeJS {
   interface ProcessEnv {
-    NEXT_PUBLIC_...=***REMOVED***
+    NEXT_PUBLIC_ENABLE_ANALYTICS
     NODE_ENV: 'development' | 'production' | 'test'
     // Add other environment variables here
   }

@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     console.log('Proxying research sessions request to backend');
 
     // Auth token: required in production or when Clerk validation is explicitly enabled
-    const requireAuth = process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    const requireAuth = process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
     let authToken = '';
     if (requireAuth) {
       try {

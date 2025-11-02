@@ -1,7 +1,13 @@
 venv_py311/
 venv_py-flow-oss/
+venv/
+backend/venv/
 
 __pycache__/
+
+# SQLite database files
+*.db
+backend/*.db
 
 .next/
 

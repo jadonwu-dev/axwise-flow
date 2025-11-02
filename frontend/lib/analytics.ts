@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAnalytics, logEvent, isSupported } from 'firebase/analytics';
 
 // Respect OSS analytics flag; only enable when explicitly allowed
-const analyticsEnabled = process.env.NEXT_PUBLIC_...=***REMOVED*** 'true';
+const analyticsEnabled = process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
 const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 
 // Initialize analytics (browser-only) when enabled and API key is present

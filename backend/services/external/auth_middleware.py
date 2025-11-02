@@ -26,7 +26,7 @@ security = HTTPBearer(
 
 
 # OSS mode: Clerk validation disabled regardless of environment
-ENABLE_CLERK_...=***REMOVED***
+ENABLE_CLERK_VALIDATION = os.getenv("ENABLE_CLERK_VALIDATION", "false").lower() == "true"
 IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 logger.info("Auth middleware initialized - Clerk validation disabled (OSS mode)")
 

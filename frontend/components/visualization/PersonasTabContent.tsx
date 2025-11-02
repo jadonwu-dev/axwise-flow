@@ -50,7 +50,7 @@ export function PersonasTabContent({
   sourceInfo
 }: PersonasTabContentProps) {
   // Dev-only toggle: visible in development or when NEXT_PUBLIC_SHOW_PERSONA_DEBUG is 'true'
-  const showDebugToggle = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_...=***REMOVED*** 'true';
+  const showDebugToggle = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
   const [showDebug, setShowDebug] = React.useState(false);
 
   // Header tools: add dev-only debug toggle

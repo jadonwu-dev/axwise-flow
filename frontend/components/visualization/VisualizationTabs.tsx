@@ -67,7 +67,7 @@ export default function VisualizationTabsRefactored({
   const searchParams = useSearchParams();
 
   // OSS mode compatibility: provide mock user for development
-  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
   const user = enableClerkValidation ? null : { primaryEmailAddress: { emailAddress: 'oss-user@localhost' } };
 
   const activeTabFromUrl = searchParams.get('visualizationTab') as TabValue | null;
@@ -286,7 +286,7 @@ export default function VisualizationTabsRefactored({
     || !!stakeholderIntelligence?.multi_stakeholder_summary;
 
   // Feature flag: hide Stakeholder Dynamics by default in OSS until ready
-  const dynamicsEnabled = process.env.NEXT_PUBLIC_...=***REMOVED*** 'true';
+  const dynamicsEnabled = process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
   const showStakeholderDynamics = dynamicsEnabled && isMultiStakeholder && hasDynamicsContent;
 
   // Debug logging for stakeholder intelligence (temporarily enabled for production debugging)
@@ -298,8 +298,8 @@ export default function VisualizationTabsRefactored({
   console.log('Dynamics content counts:', dynamicsCounts);
   console.log('Show Stakeholder Dynamics:', showStakeholderDynamics);
   console.log('Environment variables:', {
-    NEXT_PUBLIC_...=***REMOVED***
-    NEXT_PUBLIC_...=***REMOVED***
+    NEXT_PUBLIC_ENABLE_ANALYTICS: process.env.NEXT_PUBLIC_ENABLE_ANALYTICS,
+    NEXT_PUBLIC_ENABLE_CLERK_AUTH: process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH,
     NODE_ENV: process.env.NODE_ENV
   });
 

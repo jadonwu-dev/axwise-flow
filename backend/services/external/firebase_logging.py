@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Environment detection
 IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
-FIREBASE_...=***REMOVED***"FIREBASE_API_KEY", "")
-FIREBASE_...=***REMOVED***"FIREBASE_PROJECT_ID", "")
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "")
 FIREBASE_FUNCTIONS_URL = os.getenv(
-    "FIREBASE_FUNCTIONS_URL", 
+    "FIREBASE_FUNCTIONS_URL",
     f"https://us-central1-{FIREBASE_PROJECT_ID}.cloudfunctions.net"
 )
 

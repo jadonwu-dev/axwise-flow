@@ -122,7 +122,7 @@ async def get_priority_insights(
                 status_code=401, detail="Authentication error. Valid user required."
             )
 
-        ***REMOVED*** query timing
+        # Track query timing
         db_start_time = time.time()
         try:
             # Get analysis result from database

@@ -39,8 +39,8 @@ if [ ! -f "$BACKEND_DIR/.env.oss" ]; then
     echo ""
     echo "Example configuration:"
     echo "  OSS_MODE=true"
-    echo "  DATABASE_URL=***REDACTED***
-    echo "  GEMINI_API_KEY=***REMOVED***"
+    echo "  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axwise"
+    echo "  GEMINI_API_KEY=your_api_key_here"
     exit 1
 fi
 
@@ -50,20 +50,20 @@ if [ -z "${OSS_MODE:-}" ]; then
   export OSS_MODE=true
 fi
 
-if [ -z "${GEMINI_API_KEY=***REMOVED***" ]; then
+if [ -z "${GEMINI_API_KEY:-}" ]; then
   echo -e "${RED}Error: GEMINI_API_KEY not set. Update backend/.env.oss with a valid key.${NC}"
   exit 1
 fi
 
-if [ -z "${DATABASE_URL=***REDACTED*** ]; then
+if [ -z "${DATABASE_URL:-}" ]; then
   echo -e "${RED}Error: DATABASE_URL not set. Update backend/.env.oss.${NC}"
   exit 1
 fi
 
 echo -e "${GREEN}✓ Environment variables present${NC}"
 echo -e "${GREEN}✓ OSS_MODE:${NC} ${OSS_MODE:-false}"
-echo -e "${GREEN}✓ DATABASE_URL=***REDACTED*** ${DATABASE_URL}"
-echo -e "${GREEN}✓ GEMINI_API_KEY=***REMOVED*** ${GEMINI_API_KEY=***REMOVED***"
+echo -e "${GREEN}✓ DATABASE_URL:${NC} ${DATABASE_URL}"
+echo -e "${GREEN}✓ GEMINI_API_KEY:${NC} ${GEMINI_API_KEY:0:10}..."
 echo ""
 
 # Reminder: minimal OSS setup (no per-file edits needed)

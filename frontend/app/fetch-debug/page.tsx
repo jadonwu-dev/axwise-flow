@@ -19,9 +19,9 @@ interface SystemInfo {
   };
   environment: {
     has_gemini_key: boolean;
-    has_CLERK_...=***REMOVED***
+    has_clerk_validation
     has_stripe_key: boolean;
-    enable_CLERK_...=***REMOVED***
+    enable_clerk_validation
     llm_provider: string;
     database_type: string;
   };
@@ -225,7 +225,7 @@ export default function FetchDebugPage() {
                       </div>
                       <div className="flex justify-between">
                         <span>Clerk Validation:</span>
-                        <Badge variant={systemInfo.environment.enable_CLERK_...=***REMOVED*** 'true' ? 'default' : 'secondary'}>
+                        <Badge variant={systemInfo.environment.enable_clerk_validation 'true' ? 'default' : 'secondary'}>
                           {systemInfo.environment.enable_clerk_validation}
                         </Badge>
                       </div>

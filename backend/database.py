@@ -21,7 +21,7 @@ Base = declarative_base()
 # Get database configuration from centralized settings
 settings = Settings()
 db_user = settings.db_user
-DB_PASSWORD=***REMOVED***
+db_password = settings.db_password
 db_host = settings.db_host
 db_port = settings.db_port
 db_name = settings.db_name
@@ -30,7 +30,7 @@ db_name = settings.db_name
 platform_name = os.name  # 'posix' for Mac/Linux, 'nt' for Windows
 
 # Get database URL from settings
-DATABASE_URL=***REDACTED***
+DATABASE_URL = settings.database_url
 
 # If DATABASE_URL is explicitly set to PostgreSQL, use it
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
@@ -50,20 +50,20 @@ else:
     if db_user:
         if db_password:
             safe_password = quote_plus(db_password)
-            DATABASE_URL=***REDACTED***
-                f"postgresql://USER:PASS@HOST:PORT/DB
+            DATABASE_URL = (
+                f"postgresql://{db_user}:{safe_password}@{db_host}:{db_port}/{db_name}"
             )
         else:
-            DATABASE_URL=***REDACTED***
+            DATABASE_URL = f"postgresql://{db_user}@{db_host}:{db_port}/{db_name}"
         logger.info(
             f"Using PostgreSQL database on {platform_name} with URL: {DATABASE_URL}"
         )
     # If no PostgreSQL credentials, fall back to SQLite
     else:
-        DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+        DATABASE_URL = "sqlite:///./axwise.db"  # File-based instead of in-memory
         logger.info(f"Using SQLite database as fallback on {platform_name} platform")
 
-***REMOVED*** engine configuration
+# Database engine configuration
 DB_POOL_SIZE = settings.db_pool_size
 DB_MAX_OVERFLOW = settings.db_max_overflow
 DB_POOL_TIMEOUT = settings.db_pool_timeout
@@ -122,7 +122,7 @@ except Exception as e:
     # Fall back to SQLite if PostgreSQL connection fails
     try:
         logger.warning("Falling back to SQLite file database")
-        DATABASE_URL=***REDACTED***  # File-based instead of in-memory
+        DATABASE_URL = "sqlite:///./axwise.db"  # File-based instead of in-memory
         engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
         logger.info("Successfully connected to SQLite fallback database")
 

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     // Check environment
     const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
 
     console.log('History API: Environment check:', {
       isProduction,

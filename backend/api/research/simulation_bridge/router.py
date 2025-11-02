@@ -363,7 +363,7 @@ async def get_simulation_progress(
         try:
             from backend.services.external.auth_middleware import ENABLE_CLERK_VALIDATION
         except Exception:
-            ENABLE_CLERK_...=***REMOVED***
+            ENABLE_CLERK_VALIDATION = False
 
         if ENABLE_CLERK_VALIDATION:
             try:
@@ -590,7 +590,7 @@ async def get_completed_simulation(
         try:
             from backend.services.external.auth_middleware import ENABLE_CLERK_VALIDATION
         except Exception:
-            ENABLE_CLERK_...=***REMOVED***
+            ENABLE_CLERK_VALIDATION = False
 
         try:
             from backend.infrastructure.persistence.unit_of_work import UnitOfWork

@@ -23,7 +23,7 @@ const firebaseConfig = {
 };
 
 // Check if Firebase integration is enabled
-const isFirebaseEnabled = process.env.NEXT_PUBLIC_...=***REMOVED*** 'true';
+const isFirebaseEnabled = process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Initialize Firebase only if enabled

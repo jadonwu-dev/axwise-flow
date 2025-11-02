@@ -42,7 +42,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
   // Only add auth in production or when explicitly enabled
   const isProduction = process.env.NODE_ENV === 'production';
-  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+  const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
 
   if (isProduction || enableClerkValidation) {
     try {

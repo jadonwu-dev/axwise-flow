@@ -6,7 +6,7 @@ export async function GET(_request: NextRequest, context: { params: { sessionId:
   const { sessionId } = context.params;
   try {
     const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
 
     const authToken = process.env.NEXT_PUBLIC_DEV_AUTH_TOKEN || 'DEV_TOKEN_REDACTED';
 

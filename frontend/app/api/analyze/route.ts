@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check environment
     const isProduction = process.env.NODE_ENV === 'production';
-    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** 'true';
+    const enableClerkValidation = process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === 'true';
 
     console.log('🔄 [ANALYZE] Environment check:', {
       isProduction,

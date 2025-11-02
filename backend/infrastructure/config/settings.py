@@ -55,12 +55,12 @@ class Settings:
         self._env_vars = {}
         self._secrets = {}
 
-        ***REMOVED*** configuration
-        self.DATABASE_URL=***REDACTED***
+        # Database configuration
+        self.database_url = os.getenv(
             "DATABASE_URL", "postgresql://postgres@localhost:5432/interview_insights"
         )
         self.db_user = os.getenv("DB_USER", "postgres")
-        self.DB_PASSWORD=***REMOVED***"DB_PASSWORD", "")
+        self.db_password = os.getenv("DB_PASSWORD", "")
         self.db_host = os.getenv("DB_HOST", "localhost")
         self.db_port = int(os.getenv("DB_PORT", "5432"))
         self.db_name = os.getenv("DB_NAME", "interview_insights")
@@ -129,7 +129,7 @@ class Settings:
         default_origins = [
             "http://localhost:3000",  # Local Next.js dev
             "http://localhost:3001",  # Local Next.js dev (alternative port)
-            "https://axwise-flow--axwise-73425.europe-west4.hosted.app",  ***REMOVED*** App Hosting
+            "https://axwise-flow--axwise-73425.europe-west4.hosted.app",  # Firebase App Hosting
             "https://axwise.de",  # Custom domain
             "*",  # Allow all for development (remove in production)
         ]
@@ -142,7 +142,7 @@ class Settings:
         self.cors_headers = os.getenv("CORS_HEADERS", "*").split(",")
 
         # Authentication settings
-        self.enable_CLERK_...=***REMOVED***
+        self.enable_clerk_validation = (
             os.getenv("ENABLE_CLERK_VALIDATION", "false").lower() == "true"
         )
 
