@@ -51,15 +51,15 @@ echo ""
 export $(grep -v '^#' "$FRONTEND_DIR/.env.local" | xargs)
 
 echo -e "${GREEN}✓ Environment variables loaded${NC}"
-echo -e "${GREEN}✓ NEXT_PUBLIC_...=***REMOVED*** ${NEXT_PUBLIC_...=***REMOVED***"
-echo -e "${GREEN}✓ NEXT_PUBLIC_...=***REMOVED*** ${NEXT_PUBLIC_...=***REMOVED***"
-echo -e "${GREEN}✓ NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED*** ${NEXT_PUBLIC_ENABLE_CLERK_...=***REMOVED***"
+echo -e "${GREEN}✓ NEXT_PUBLIC_API_URL:${NC} ${NEXT_PUBLIC_API_URL:-not set}"
+echo -e "${GREEN}✓ NEXT_PUBLIC_DEV_AUTH_TOKEN:${NC} ${NEXT_PUBLIC_DEV_AUTH_TOKEN:0:20}..."
+echo -e "${GREEN}✓ NEXT_PUBLIC_ENABLE_CLERK_AUTH:${NC} ${NEXT_PUBLIC_ENABLE_CLERK_AUTH:-false}"
 echo ""
 
 # Reminder: minimal OSS setup (no per-file edits needed)
 echo -e "${BLUE}OSS showcase setup:${NC} Configure ${YELLOW}frontend/.env.local.oss${NC}; script copies it to .env.local"
 echo -e "${BLUE}Auth in OSS mode:${NC} Backend accepts dev tokens starting with ${YELLOW}dev_test_token_${NC}"
-echo -e "${BLUE}Frontend token:${NC} Use NEXT_PUBLIC_DEV_AUTH_TOKEN or default ${YELLOW}DEV_TOKEN_REDACTED${NC}"
+echo -e "${BLUE}Frontend token:${NC} Use NEXT_PUBLIC_DEV_AUTH_TOKEN or default ${YELLOW}dev_test_token_oss${NC}"
 
 
 # Check if node_modules exists
